@@ -154,6 +154,17 @@ expect 0 "FEAT-13 clipboard round-trip verified" env HANDOVER_COPY_CMD="cp /dev/
 expect 5 "FEAT-13 clipboard mismatch detected" env HANDOVER_COPY_CMD="cp /dev/stdin $T/clipboard2" HANDOVER_PASTE_CMD="echo other" "$PY" "$BIN" clip --file "$T/clip_src.md"
 expect 6 "FEAT-13 no clipboard tool → fallback signal" env HANDOVER_COPY_CMD="definitely-not-a-cmd-xyz" HANDOVER_PASTE_CMD="definitely-not-a-cmd-xyz" "$PY" "$BIN" clip --file "$T/clip_src.md"
 
+
+# ---------- FEAT-34 git state anchor (branch@HEAD, dirty files named, worktrees) ----------
+R="$T/repo"; git init -q "$R" && git -C "$R" -c user.email=t@t.invalid -c user.name=t commit -q --allow-empty -m init
+printf 'x\n' > "$R/untracked.txt"
+"$PY" "$BIN" git-anchor --repo "$R" --json > "$T/anchor.json" 2>"$T/err"; rc=$?
+if [ "$rc" -eq 2 ] && "$PY" -c 'import json,sys; d=json.load(open(sys.argv[1])); assert "@" in d["anchor"]; assert any("untracked.txt" in f for f in d["dirty"])' "$T/anchor.json"; then
+  ok "FEAT-34 anchor names branch@HEAD and the dirty file (exit 2 = dirty)"; else bad "FEAT-34 anchor (rc=$rc)"; fi
+rm "$R/untracked.txt"
+expect 0 "FEAT-34 clean repo anchors with exit 0" "$PY" "$BIN" git-anchor --repo "$R"
+expect 3 "FEAT-34 non-repo path refused" "$PY" "$BIN" git-anchor --repo "$T/art"
+
 # ---------- FEAT-14 machine output ----------
 "$PY" "$BIN" validate --ledger "$T/ledger.json" --json | "$PY" -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True' \
   && ok "FEAT-14 --json envelope parses" || bad "FEAT-14 --json envelope"

@@ -69,7 +69,7 @@ One JSON file, written by the agent, validated and rendered by the script. Minim
 | # | Phase | Who | Command / output | Fails closed when |
 |---|---|---|---|---|
 | H0 | **Gate: all delegates delivered** | script | `handover.py gate --manifest delegates.json --timeout 900` | any delegate not `delivered`, empty/missing report, empty or unreadable manifest, timeout |
-| H1 | **Recap · review · recon · OODA** | agent | read the reports and the live state (PRs, branches, worktrees, queues) — live state wins over any report | — |
+| H1 | **Recap · review · recon · OODA** | agent + script | `handover.py git-anchor --repo <each touched repo>`, then read the reports and the live state (PRs, worktrees, queues) — live state wins over any report | — (dirty files are named, never discarded) |
 | H2 | **Harvest into the ledger** | agent | one node per prompt/instruction/…/error, with status and parent | — |
 | H3 | **Validate** | script | `handover.py validate --ledger L` | bad kind/status, cycle, dangling parent, silent drop, HITL contract broken |
 | H4 | **Todo / punch-list sync** | script + agent | `handover.py sync-todo --ledger L --todo todo.json` → drift list + punch list; fix the drift on either side, re-run until exit 0 | exit 2 = drift |
@@ -99,10 +99,10 @@ The agent fills it from the delegation records; a delegate that never wrote a re
 
 ## Exit codes (`bin/handover.py`)
 `0` ok · `1` usage/internal/self-test failure · `2` drift · `3` refused (gate, validation, recovery, link) ·
-`4` secret/PII found · `5` clipboard mismatch · `6` no clipboard tool. `--json` gives a machine envelope.
+`2` also = dirty work tree (`git-anchor`) · `4` secret/PII found · `5` clipboard mismatch · `6` no clipboard tool. `--json` gives a machine envelope.
 
 ## Tests
-`bash skills/session-handover/tests/run-tests.sh` — 46 checks over FEAT-1…FEAT-14, fixtures built at
+`bash skills/session-handover/tests/run-tests.sh` — 49 checks over FEAT-1…FEAT-14 and FEAT-34, fixtures built at
 runtime, stdlib only. Written before the code (red), then made green.
 
 ## Feature IDs (stable)
@@ -122,6 +122,7 @@ runtime, stdlib only. Written before the code (red), then made green.
 | FEAT-12 | durable persistence with secret/PII scan, runtime controls, redaction |
 | FEAT-13 | clipboard copy verified byte-for-byte, MCP fallback signal |
 | FEAT-14 | `--json` machine envelope |
+| FEAT-34 | git state anchor per repo: branch@HEAD + UTC time, every uncommitted file named, worktrees listed (`git-anchor`, exit 2 when dirty) |
 
 ## Changelog
 | Version | Date | Change |

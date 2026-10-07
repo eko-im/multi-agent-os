@@ -15,6 +15,7 @@ Stdlib only. Subcommands and exit codes:
   sync-todo   0 in sync · 2 drift
   scan        0 clean (or --self-test passed) · 4 findings · 1 self-test failed
   persist     0 copied (dry-run unless --apply) · 4 findings without --redact · 1 self-test failed
+  git-anchor  0 clean · 2 dirty (files named) · 3 not a git work tree
   clip        0 round-trip verified · 5 mismatch · 6 no clipboard tool (fall back to a clipboard MCP)
 Common: 1 = usage/internal error. Add --json for a machine envelope on stdout.
 """
@@ -472,6 +473,22 @@ def cmd_clip(args):
     return emit(args, True, 0, verified=f"{len(data)} bytes, byte-identical")
 
 
+# ---------------------------------------------------------------- FEAT-34 git state anchor
+def cmd_git_anchor(args):
+    """branch@HEAD + UTC time, every uncommitted file named, worktrees listed. Exit 2 when dirty."""
+    def git(*a):
+        return subprocess.run(["git", "-C", args.repo, *a], capture_output=True, text=True)
+    probe = git("rev-parse", "--is-inside-work-tree")
+    if probe.returncode != 0:
+        return emit(args, False, 3, refused=[f"not a git work tree: {args.repo}"])
+    branch = git("branch", "--show-current").stdout.strip() or "(detached)"
+    head = git("rev-parse", "--short", "HEAD").stdout.strip() or "(no commits)"
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dirty = [ln for ln in git("status", "--porcelain=v1", "--untracked-files=all").stdout.splitlines() if ln]
+    worktrees = [ln[9:] for ln in git("worktree", "list", "--porcelain").stdout.splitlines() if ln.startswith("worktree ")]
+    return emit(args, True, 2 if dirty else 0, anchor=f"{branch}@{head} · {stamp}", dirty=dirty, worktrees=worktrees)
+
+
 # ---------------------------------------------------------------- CLI
 def main(argv=None):
     common = argparse.ArgumentParser(add_help=False)
@@ -492,9 +509,11 @@ def main(argv=None):
     pe.add_argument("--dest", required=True); pe.add_argument("--apply", action="store_true")
     pe.add_argument("--redact", action="store_true")
     c = sub.add_parser("clip", parents=[common]); c.add_argument("--file", required=True)
+    sub.add_parser("git-anchor", parents=[common]).add_argument("--repo", required=True)
     args = p.parse_args(argv)
     handlers = {"gate": cmd_gate, "validate": cmd_validate, "recovery": cmd_recovery, "render": cmd_render,
-                "sync-todo": cmd_sync_todo, "scan": cmd_scan, "persist": cmd_persist, "clip": cmd_clip}
+                "sync-todo": cmd_sync_todo, "scan": cmd_scan, "persist": cmd_persist, "clip": cmd_clip,
+                "git-anchor": cmd_git_anchor}
     try:
         return handlers[args.cmd](args)
     except (OSError, ValueError, KeyError) as exc:
