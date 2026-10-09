@@ -4,9 +4,9 @@
 
 This folder contains reusable Agent Skills for the Multi-Agent OS framework. Skills follow the [Agent Skills open standard](https://agentskills.io) (SKILL.md format) and are compatible with 30+ AI tools including Claude Code, Cursor, Codex, Gemini CLI, Kiro, VS Code, GitHub Copilot, Goose, and others.
 
-> **Inventory provenance**: the 2026-08-25 refresh generated 87 rows from skill frontmatter `description`; `openrig-concierge` was added by hand 2026-09-23, `harness-concierge` by hand 2026-09-24, and `roadmap-tree-projector` on 2026-09-24. **Current snapshot 2026-10-02**: the table lists 92 git-tracked top-level skills, including `live-session-continuity-recovery` and `session-to-vault`. The dependency graph covers the session/agentic-tool/governance core families (edges extracted from `maos:` refs, `[[wikilinks]]`, `skills/` path refs in SKILL.md bodies); it is not an exhaustive dependency inventory.
+> **Inventory provenance**: the 2026-08-25 refresh generated 87 rows from skill frontmatter `description`; `openrig-concierge` was added by hand 2026-09-23, `harness-concierge` by hand 2026-09-24, and `roadmap-tree-projector` on 2026-09-24. **Current snapshot 2026-10-09**: the table lists 93 git-tracked top-level skills, including `live-session-continuity-recovery`, `omp-concierge`, and `session-to-vault`. The dependency graph covers the session/agentic-tool/governance core families (edges extracted from `maos:` refs, `[[...]]`, and relationship keys in `metadata`).
 
-## Available Skills (92)
+## Available Skills (93)
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
@@ -61,6 +61,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `morning-briefing` | `morning-briefing/SKILL.md` | Deterministic SitRep briefing of operator work state (repos/PRs/tasks/memory) for fast context restore. |
 | `mvv-synthesis` | `mvv-synthesis/SKILL.md` | Synthesize Mission, Vision, Values from ontological analysis output |
 | `notebooklm` | `notebooklm/SKILL.md` | Route NotebookLM work between the notebooklm-py CLI, the notebooklm-mcp-cli MCP server, and the `@notebooklm-mcp` Claude Code toggle. |
+| `omp-concierge` | `omp-concierge/SKILL.md` | Evidence-first concierge for OMP health, terminal incidents, update safety, and permanent upstream-fix validation. |
 | `omniroute-concierge` | `omniroute-concierge/SKILL.md` | Concierge / health-check / inventory / router for the operator's **OmniRoute** gateway (v3.8+ local AI proxy). |
 | `ontological-analysis` | `ontological-analysis/SKILL.md` | Analyze repository through 8 philosophical dimensions for MVV extraction |
 | `ooda-loop` | `ooda-loop/SKILL.md` | Run a profile-aware, bounded delivery loop when work arrives through chat, ticket, backlog, specification, PR, hook, webhook, bootstrap or prototype. |

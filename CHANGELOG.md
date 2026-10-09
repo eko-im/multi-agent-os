@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `omp-concierge` incident and update-safety router
+
+- Added `skills/omp-concierge/SKILL.md` as the evidence-first front door for OMP runtime health,
+  terminal-abort diagnosis, safe-update decisions, and upstream permanence checks.
+- Preserved the 2026-10-09 terminal-abort case with explicit proved, disproved, and unresolved
+  claims so future agents do not equate the validated EINTR mitigation with the unresolved full
+  Warp/raw-mode/EOF incident.
+- Added trigger coverage for first-command exits, stdin/raw-mode/SIGHUP signatures, local-patch
+  drift, update risk, and requests to check or notify when an official permanent fix ships.
+
 ### Added — `bin/verdict-at-head`: reviewer verdicts bound to the current head
 
 - New read-only script `bin/verdict-at-head --repo OWNER/REPO --pr N [--primary L1,L2] [--json]`.
