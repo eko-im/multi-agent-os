@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Warp/raw-mode/EOF incident.
 - Added trigger coverage for first-command exits, stdin/raw-mode/SIGHUP signatures, local-patch
   drift, update risk, and requests to check or notify when an official permanent fix ships.
+- Added a fail-soft `session_start` watcher with a six-hour evidence cache, OMP UI notifications,
+  source/issue/tag drift detection, and deterministic success/cache/offline tests.
+- Corrected the EINTR analysis: Bun 1.4.1+ already retries Darwin syscall EINTR; the five-line OMP
+  ignore handler is not an upstream solution, while the distinct raw-mode/EOF path stays unresolved.
 
 ### Added — `bin/verdict-at-head`: reviewer verdicts bound to the current head
 

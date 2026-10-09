@@ -97,3 +97,23 @@ For the next real abort, preserve before restarting:
 
 Do not manufacture the reproduction by backgrounding an interactive process on the same controlling
 TTY. Each contender must be foregrounded in its own independent PTY or terminal tab.
+
+## Runtime-level EINTR correction
+
+A later source review changed the interpretation of the local five-line EINTR handler.
+
+- OMP issue #5328 documents that Bun 1.3.14 destroyed the owning stdin stream before the error
+  reached OMP. Merely swallowing that emitted error can leave input unusable, so the local handler
+  is a mitigation experiment, not an upstream-grade recovery design.
+- Closed OMP PR #5332 demonstrated owner-boundary stream recreation and listener migration for the
+  old runtime. It is historical evidence, not a patch to forward-port blindly.
+- Bun PR oven-sh/bun#41086 moved the correct retry into Darwin syscall wrappers. Git ancestry
+  verifies that the merge commit is present in Bun 1.4.1 and 1.4.2. The active OMP build embeds Bun
+  1.4.2, so the specific Bun-1.3.14 read-EINTR escape is runtime-fixed before reaching OMP.
+- This does not resolve or explain the separately observed `stdin ended`, `setRawMode errno: 2`,
+  `open-elsewhere`, and SIGHUP path. That incident remains `UNRESOLVED`.
+
+Do not submit the five-line handler or the old 81-line recovery port as the current upstream
+solution unless a current Bun runtime first reproduces destroyed stdin after read EINTR. Upstream
+work should instead instrument and reproduce the raw-mode/EOF path, while monitoring Bun and OMP
+release provenance.

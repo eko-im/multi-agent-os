@@ -1,6 +1,6 @@
 ---
 name: omp-concierge
-version: "1.0.0"
+version: "1.1.0"
 description: >-
   Concierge, health-check, incident router, update-safety guard, and upstream-fix watcher for
   can1357/oh-my-pi (`omp`). Use when someone asks whether OMP is healthy or safe to use/update;
@@ -14,7 +14,7 @@ description: >-
   `omp diagnose` commands.
 allowed-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, Skill
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   scope: AAIF cross-vendor
   family: concierge
   lifecycle-stage: operate
@@ -55,6 +55,15 @@ Never turn one proven subpath into a claim about every terminal abort.
 For the preserved 2026-10-09 incident, read
 [`references/terminal-abort-case-2026-10-09.md`](./references/terminal-abort-case-2026-10-09.md)
 before diagnosing or declaring the problem fixed.
+
+The installed startup watcher is versioned at
+[`bin/omp-upstream-watch.ts`](./bin/omp-upstream-watch.ts). It checks a six-hour cache on
+every OMP `session_start`, observes official source/issues/tags, and reports through OMP's own UI.
+It is fail-soft: network, parsing, or notification failure must never block startup. Install it by
+copying the versioned file to `~/.omp/agent/extensions/omp-upstream-watch.ts`; never point the
+installed extension at a disposable worktree. Verify the installed copy SHA after every refresh.
+Local-only upstream preparation lives at
+[`references/upstream-preparation-2026-10-09.md`](./references/upstream-preparation-2026-10-09.md).
 
 ## Modes
 
@@ -183,13 +192,18 @@ Classify:
 Only `PERMANENT-VALIDATED` authorizes “corrigido de forma real e permanente”. A release note, closed
 issue, green unit test, or absence of recent reports is insufficient alone.
 
-### Notification truthfulness
+### Startup review and notification
 
-A skill runs only when invoked. It cannot proactively wake the operator by itself. On invocation,
-run the TTL check above and notify once when the state advances. For unattended notification, hand
-this exact upstream-watch contract to an installed scheduler and persist its last-notified state;
-do not claim monitoring exists until the scheduler and delivery channel are verified. Creating a
-schedule or sending a notification remains operator-gated.
+The installed `session_start` watcher runs this bounded contract outside the critical startup
+path. Every startup reviews cached state; at most once per six hours it refreshes OMP main, latest
+tag, watched issues, terminal-source hashes, and the Bun EINTR fix. It warns when watched evidence
+changes and asks for a full `omp-concierge upstream-watch` review before any update.
+
+The watcher never declares the case permanently fixed. Bun 1.4.1+ contains the verified Darwin
+syscall-level EINTR retry, which makes the old owner-stream recovery proposal historical for that
+specific runtime defect. The distinct `stdin ended` / raw-mode path remains `UNRESOLVED` until an
+official OMP release passes the affected real-terminal scenario. GitHub failure keeps startup alive
+and reports the last cached timestamp when available.
 
 ## Safety invariants
 
