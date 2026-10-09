@@ -1,21 +1,19 @@
 ---
 name: omp-concierge
-version: "1.1.1"
+version: "1.1.2"
 description: >-
   Concierge, health-check, incident router, update-safety guard, and upstream-fix watcher for
-  can1357/oh-my-pi (`omp`). Use when someone asks whether OMP is healthy or safe to use/update;
-  when OMP exits, aborts, returns to the shell after the first command, hangs, leaves a pending
-  session, or logs `stdin ended`, `stdin failed`, `EINTR`, `setRawMode`, `errno: 2`, `SIGHUP`,
-  `Operation aborted`, or `open-elsewhere`; when an MCP/hook/skill/plugin is suspected; or when
-  asked whether the terminal-abort defect is fixed upstream, whether a local patch is still
-  active, or to notify/check when a permanent official fix ships; and for OMP install/reinstall,
-  npm vs Bun vs Volta, embedded-runtime, or omp-web questions. Also triggers for the common
-  misspelling `omp-councierge`. Modes: explain, health, diagnose, update-safe, upstream-watch,
-  and dashboard. Thin router: it reuses OMP specialists and never invents `omp doctor` or
-  `omp diagnose` commands.
+  can1357/oh-my-pi (`omp`). Use for OMP exits, return-to-shell, hangs, pending sessions,
+  `stdin ended`, `stdin failed`, `EINTR`, `setRawMode`, `errno: 2`, `SIGHUP`, `SIGTTIN`,
+  `Operation aborted`, or `open-elsewhere`; suspected MCP/hook/skill/plugin interference;
+  App Tamer or CPU limiter suspension; local patch/update safety; and official terminal-fix
+  status or notification requests. Also covers install/reinstall, npm vs Bun vs Volta,
+  embedded-runtime, omp-web, and the misspelling `omp-councierge`. Modes: explain, health,
+  diagnose, update-safe, upstream-watch, dashboard. Thin router: reuses specialists;
+  never invents `omp doctor` or `omp diagnose`.
 allowed-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, Skill
 metadata:
-  version: "1.1.1"
+  version: "1.1.2"
   scope: AAIF cross-vendor
   family: concierge
   lifecycle-stage: operate
@@ -36,6 +34,7 @@ evals:
     - "Me avise quando houver uma correção oficial e permanente no oh-my-pi"
     - "Será que algum MCP, hook ou skill está derrubando o OMP?"
     - "omp-councierge health"
+    - "App Tamer or a CPU limiter stops OMP with SIGTTIN"
   should_not_trigger:
     - "Configure this specific MCP server in OMP" # omp-mcp-server-setup
     - "Install a Claude Code plugin inside OMP" # installing-claude-code-plugins-in-omp
@@ -151,21 +150,27 @@ independent PTY or web frontend cannot substitute for the affected visible Warp 
 
 ## Diagnose mode — evidence ladder
 
-1. Reproduce in the same terminal class and shell as the report, with the OMP process foregrounded
-   in its own controlling PTY. A background process reading the same TTY can receive normal shell
-   job-control `SIGTTIN`; classify that as harness contamination, not product causality.
-2. Correlate timestamp, PID, TTY/PGID, OMP log, top-level session JSONL, and exit signal.
-3. Distinguish at minimum:
-   - `EINTR` on stdin;
-   - `setRawMode` failure and its errno;
-   - true EOF/`stdin ended`;
-   - ENXIO or another fatal descriptor error;
-   - provider/tool failure with terminal still healthy;
-   - normal shell job control;
-   - process crash or externally delivered signal.
-4. Suspecting an MCP/hook/skill/plugin requires a repeated action → demonstrated signal or FD
-   effect → correlated terminal error. Temporal proximity is not causality.
-5. Use a one-factor isolation matrix only after preserving a full-config control.
+1. Preserve the reported PID/TTY state first. Compare OMP PGID with foreground PGID and
+   correlate timestamps, process state, stop/continue signals, OMP logs, and session JSONL.
+   `SIGTTIN` identifies a terminal-input stop, not who caused the earlier foreground loss.
+   Call it harness contamination only when harness actions are evidenced.
+2. Before patching or reinstalling, inspect active external suspend/CPU-limiting tools
+   (including App Tamer), their OMP-specific rule, and global versus per-process settings.
+   Preserve configuration evidence and a backup before any operator-authorized change.
+   A `SIGSTOP` → shell-foreground → `SIGCONT` → `SIGTTIN` sequence warrants external-suspender
+   investigation; timing alone does not identify the signal sender.
+3. If a discriminating reproduction is needed, use the same terminal class and shell in a
+   dedicated foreground PTY; never resume or steal a TTY occupied by unrelated work. Preserve
+   a full-config control, then vary one authorized factor. Record hashes, flags, instrumentation,
+   and fresh session directories so differences between runs remain visible.
+4. Distinguish stdin `EINTR`, raw-mode errno, true EOF, fatal descriptor errors, provider/tool
+   failure with a healthy terminal, job control, crash, and external suspension. Suspecting an
+   MCP/hook/skill/plugin requires a repeated action → demonstrated signal or FD effect →
+   correlated terminal error; temporal proximity is not causality.
+5. Record exercised behavior and residual uncertainty separately. The case reference preserves
+   two failed launches followed by three selector passes after disabling only App Tamer’s OMP
+   background limit. This supports a local mitigation, not historical EOF/raw-mode closure,
+   proof of the sender, or a permanent upstream fix.
 
 Do not use `omp doctor` or `omp diagnose` unless current `omp --help` proves they are real commands;
 historical builds parsed those words as chat prompts.
@@ -234,6 +239,9 @@ syscall-level EINTR retry, which makes the old owner-stream recovery proposal hi
 specific runtime defect. The distinct `stdin ended` / raw-mode path remains `UNRESOLVED` until an
 official OMP release passes the affected real-terminal scenario. GitHub failure keeps startup alive
 and reports any last cached timestamp through an available UI.
+
+The upstream watcher does not inspect App Tamer preferences, detect local CPU-limiter rules,
+or validate their mitigation. Keep local suspension evidence separate from upstream status.
 
 ## Safety invariants
 

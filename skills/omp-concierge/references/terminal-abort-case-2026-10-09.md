@@ -6,9 +6,9 @@ This record preserves one operator workstation incident involving `can1357/oh-my
 WarpTerminal, and Bun. It intentionally separates proved behavior from hypotheses. It is a case
 record and routing reference, not a claim that every OMP terminal exit shares one cause.
 
-**Case status: OPEN.** The original Warp first-turn/continued-turn abort remains unresolved.
-Launchability, synthetic EINTR handling, and startup notifications are separate observations,
-not closure evidence.
+**Historical EOF/raw-mode case: OPEN.** The later local SIGSTOP/CONT → SIGTTIN occurrence
+has an App Tamer mitigation supported by the A/B checkpoint below. That result does not close
+the older terminal-disconnect path or establish a complete upstream fix.
 
 ## Real recurrence — `omp --yolo`, observed 2026-10-09 18:03 UTC
 
@@ -45,6 +45,53 @@ Next discriminating test must capture foreground PGID and signals around the use
 Do not resume/signal the stopped process while unrelated OMX owns its TTY. Prefer the operator-
 verified web frontend for current work. Never suppress SIGTTIN or steal foreground as a fix.
 
+## App Tamer A/B checkpoint — 2026-10-09 21:39 UTC
+
+**Local suspension: mitigation validated for this trial; App Tamer is the A/B-supported cause.**
+This is a separate outcome from the still-unresolved historical EOF/raw-mode path. No binary
+patch, update, or reinstall occurred. The same local 18.8.6 executable was used throughout:
+SHA-256 `6895c85fafb76ec981f245bf3a01d7e8ed566032c154df8ab3b8097797c82e85`.
+
+The operator authorized a separate Warp window, then explicitly authorized “Testar e manter se
+resolver” for disabling only App Tamer’s OMP background limit. App Tamer PID 1008 and helper
+PID 2656 were active; its GUI showed OMP limited below 51% and red “Stopped”. Before the change,
+`omp.limitInBackground=true`, `omp.cpuLimit=0.5096` (rounded), and global
+`autoStopEnabled=true`. The GUI change set only `omp.limitInBackground=false`.
+A full structural comparison of `~/Library/Preferences/com.stclairsoft.AppTamer.plist` against
+`~/.omp/agent/backups/apptamer-20261009/before.plist` found that single changed leaf:
+other OMP fields, all other 34 top-level keys, Bun/Node/Warp rules, and the global setting were
+preserved. The backup is retained; this is not authorization to disable other limits.
+
+| Trial | UTC evidence | Result |
+| --- | --- | --- |
+| Before 1 — PID 15611, dedicated `ttys021` | Full-config launch, fresh session directory; selector opened before STOP17 and shell foreground were first sampled together at 21:26:48.868339; CONT19 at 21:26:48.951055; first TTIN21 at 21:26:49.237948 | Failed continued foreground operation; this run does not resolve stop-versus-foreground-loss ordering |
+| Before 2 — PID 79797, same terminal | STOP17 at 21:31:44.657760 while still foreground; shell foreground at 21:31:44.778858; CONT19 at 21:31:44.842308; TTIN21 at 21:31:45.240901 | Failed before `/model`; selector opening is not required for this failure |
+| After — PID 12373, same window/TTY and executable | Foreground sample at 21:37:08.640812; `/model` visibly opened at 21:37:58.869, 21:38:23.223, and 21:38:28.094 | Three selector passes in one fresh session; no sampled stop or foreground loss |
+| After — real turn and exit | TUI/accessibility evidence showed `OMP_DIAG_OK`; `/quit` submitted at 21:39:47.468; shell printed `OMP_POST_FIX_STATUS=0` | Real model turn and normal exit completed; observer saw root absent at 21:39:48.191 and children gone by 21:39:51 |
+
+The second before-run and the after-run used the same temporary `process.kill` tracing
+extension and separate fresh session directories. The trace recorded no JS STOP/CONT call;
+its only nonzero calls were self-directed SIGWINCH. It does not trace native, cached-function,
+child-process, or external signal senders, and log-write failures can be silent. The desktop
+harness audit found no direct generated STOP/CONT or Ctrl-Z in the inspected paths, not proof
+that every harness interaction is excluded. The short model turn performed an internal todo
+operation despite the no-tools request; do not describe it as a tool-free turn.
+
+Evidence is preserved at `~/.omp/agent/state/diagnostics/omp-apptamer-20261009/`:
+`omp-warp-foreground-capture.jsonl`, `omp-warp-foreground-capture-2.jsonl`,
+`omp-warp-foreground-capture-3.jsonl`, and `omp-warp-kill-trace.jsonl`. SHA-256 comparison
+confirmed all four copies match their `/private/tmp/` originals. The directory also contains
+the capture/trace scripts and selected screenshots. These are local evidence, not upstream
+artifacts; the App Tamer preference backup remains at the separate path above.
+
+The observer records changed state, nominally polling every 25 ms with one-second PID discovery;
+it can miss brief events and startup activity. Three selector passes are not three independent
+post-change launches, and no reverse A/B/A was run. The controlled setting change strongly
+supports keeping this scoped mitigation, but does not identify the signal sender directly,
+guarantee permanence, or retrospectively prove the cause of PID 87256 or every older abort.
+Original PID 87256 and unrelated OMX on `ttys014` were preserved. If recurrence occurs,
+recapture foreground and suspend state before proposing another OMP patch or reinstall.
+
 ## Operator-visible symptom
 
 Bare `omp` could return to the shell after the first interaction while an `omp-web` launch remained
@@ -79,9 +126,9 @@ an EINTR filter and embedded Bun 1.4.2. The exact executable identity must be re
 trust this dated snapshot or a directory label. The local source was preserved on branch
 `fix/eintr-v18.8.6-local`, commit `0be1fae0c368d0475f3723df67f3f59611fa0dd6`.
 
-Operational classification: **usable cautiously in the exercised independent PTY; the affected
-Warp scenario remains unvalidated**. This is not a guarantee of current or continued use. A fresh
-version/smoke check proves launchability only, not that the original abort has been corrected.
+At that earlier checkpoint, classification was **usable cautiously in the exercised independent
+PTY; affected Warp scenario unvalidated**. The later App Tamer checkpoint above supplies bounded
+visible-Warp mitigation evidence; it does not retroactively validate this EINTR patch.
 
 ### Installer, runtime, and frontend boundaries
 
@@ -116,7 +163,7 @@ source may have changed after this record.
 
 ## Permanent-fix gate
 
-Do not declare this case permanently corrected until all are true:
+For the historical EOF/raw-mode path, do not declare a permanent upstream fix until all are true:
 
 1. The official source contains equivalent handling for the demonstrated recoverable error and any
    separately reproduced raw-mode/EOF defect.
@@ -183,6 +230,8 @@ not by a persistent scheduler. Cache reuse requires the current execution Bun ve
 finite age in `[0, 6 hours)`; missing, stale, invalid, future-dated, or runtime-mismatched state
 triggers refresh. Failed refreshes can retry at a later startup. A cache hit is not a fresh source
 review or verification of the executable's identity.
+It does not inspect local App Tamer preferences or detect CPU-limiter rules; local mitigation
+verification is separate from this upstream monitor.
 
 It observes main/tag, issue, and source/test-hash changes. Initial observation and unrelated
 changes may also alert: a review candidate is not a confirmed fix. It does not automatically

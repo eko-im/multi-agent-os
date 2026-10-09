@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Harmonized cache semantics and separated baseline evidence from repair evidence. No
   installation or terminal-abort closure is implied; the incident remains open.
 
+### Fixed — `omp-concierge` v1.1.2 external-suspension diagnosis
+
+- Added App Tamer, CPU limiter, and SIGTTIN triggers; inspect foreground ownership and external
+  suspension before patching or reinstalling OMP, without assuming every SIGTTIN is harness-caused.
+- Recorded the authorized single-rule App Tamer change, retained backup, two failed launches,
+  three selector passes, completed real model turn, and exit status 0 on the unchanged binary.
+- Bound the A/B-supported local mitigation to its observed scope: historical EOF/raw-mode and
+  complete upstream-fix status remain unresolved; the upstream watcher does not inspect local prefs.
+
 ### Added — `bin/verdict-at-head`: reviewer verdicts bound to the current head
 
 - New read-only script `bin/verdict-at-head --repo OWNER/REPO --pr N [--primary L1,L2] [--json]`.
