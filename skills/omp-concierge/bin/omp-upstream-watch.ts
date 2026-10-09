@@ -183,10 +183,10 @@ async function writeState(path: string, state: WatchState): Promise<void> {
 	await rename(temporary, path);
 }
 
-function isFresh(state: WatchState | null, now: number): boolean {
-	if (!state) return false;
-	const checkedAt = Date.parse(state.checkedAt);
-	return Number.isFinite(checkedAt) && now - checkedAt < CHECK_INTERVAL_MS;
+function isFresh(state: WatchState | null, now: number, bunVersion: string): boolean {
+	if (!state || state.bunVersion !== bunVersion) return false;
+	const age = now - Date.parse(state.checkedAt);
+	return Number.isFinite(age) && age >= 0 && age < CHECK_INTERVAL_MS;
 }
 
 function notify(context: OmpContext, message: { level: "info" | "warning" | "error"; text: string }): void {
@@ -204,13 +204,14 @@ export async function runStartupWatch(
 ): Promise<void> {
 	const statePath = options.statePath ?? DEFAULT_STATE_PATH;
 	const now = options.now ?? new Date();
+	const bunVersion = options.bunVersion ?? Bun.version;
 	const previous = await readState(statePath);
-	if (isFresh(previous, now.getTime())) {
+	if (isFresh(previous, now.getTime(), bunVersion)) {
 		notify(context, statusMessage(previous!, false));
 		return;
 	}
 	try {
-		const current = await collectUpstreamState(options.fetchImpl, options.bunVersion ?? Bun.version, now);
+		const current = await collectUpstreamState(options.fetchImpl, bunVersion, now);
 		const changed = stateChanged(previous, current);
 		await writeState(statePath, current);
 		notify(context, statusMessage(current, changed));

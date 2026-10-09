@@ -6,6 +6,10 @@ This record preserves one operator workstation incident involving `can1357/oh-my
 WarpTerminal, and Bun. It intentionally separates proved behavior from hypotheses. It is a case
 record and routing reference, not a claim that every OMP terminal exit shares one cause.
 
+**Case status: OPEN.** The original Warp first-turn/continued-turn abort remains unresolved.
+Launchability, synthetic EINTR handling, and startup notifications are separate observations,
+not closure evidence.
+
 ## Operator-visible symptom
 
 Bare `omp` could return to the shell after the first interaction while an `omp-web` launch remained
@@ -22,8 +26,8 @@ usable. The initial suspicion was an agentic tool such as an MCP, hook, skill, r
    PTY without disconnect or `Operation aborted`.
 5. The successful PTY used `TERM=xterm-256color`; a clean visible-Warp before/after reproduction was
    not obtained. Therefore, the PTY success does not prove the original Warp incident resolved.
-6. The latest correlated raw-mode/EOF logs did not contain `EINTR`. The EINTR patch is a validated
-   mitigation for one subpath, not proof of the root cause of the full symptom.
+6. The latest correlated raw-mode/EOF logs did not contain `EINTR`. The filter passed the
+   synthetic-error subpath only; that does not prove stream recovery or the full symptom's cause.
 7. Full-config tests did not prove an MCP/hook/skill/plugin caused the terminal failure.
 8. A same-TTY dual-process experiment produced normal shell job-control suspension (`SIGTTIN`).
    Independent-PTY controls falsified the earlier `autoResume` ownership-collision claim.
@@ -35,13 +39,23 @@ usable. The initial suspicion was an agentic tool such as an MCP, hook, skill, r
 
 ## Active local mitigation snapshot
 
-At the close of the investigation, the user's launcher resolved to a locally built OMP 18.8.6 with
-an EINTR filter and Bun 1.4.2. The exact executable identity must be re-measured every time; never
+At the recorded checkpoint, the user's launcher resolved to a locally built OMP 18.8.6 with
+an EINTR filter and embedded Bun 1.4.2. The exact executable identity must be re-measured every time; never
 trust this dated snapshot or a directory label. The local source was preserved on branch
 `fix/eintr-v18.8.6-local`, commit `0be1fae0c368d0475f3723df67f3f59611fa0dd6`.
 
-Operational classification at that point: **healthy with mitigation for cautious normal use**,
-not permanently fixed and not safe to forget.
+Operational classification: **usable cautiously in the exercised independent PTY; the affected
+Warp scenario remains unvalidated**. This is not a guarantee of current or continued use. A fresh
+version/smoke check proves launchability only, not that the original abort has been corrected.
+
+### Installer, runtime, and frontend boundaries
+
+npm, Bun/bunx, and Volta describe package or launcher management, not proof of the runtime inside
+a compiled executable. Global `bun --version` is distinct from embedded Bun; upgrading global Bun
+does not replace an already compiled OMP runtime. Reinstalling the identical artifact leaves its
+code/runtime unchanged, so it is not a fix; replacing the target can also discard a local patch.
+The successful `omp-web` observation concerns a different frontend and possibly a different
+backend launch path; it is a workaround observation, not proof that the Warp TUI is repaired.
 
 ## Update risk proved by inspection
 
@@ -76,11 +90,72 @@ Do not declare this case permanently corrected until all are true:
 3. The fix commit is included in a tagged official release.
 4. The official unmodified release passes the focused behavioral regression.
 5. The official unmodified release passes a clean first-turn/continued-turn scenario in the
-   affected terminal class, with logs showing no disconnect path.
+   affected visible Warp terminal, with logs showing no disconnect path.
 6. The operator launcher resolves to that official build; no local patch is required.
 
-Until then, report the best attained state (`CANDIDATE`, `MERGED`, or `RELEASED`) and retain update
-warnings.
+Until then, keep the case OPEN, report only the best evidenced upstream state (including
+`ABSENT` or inconclusive when appropriate), and retain update warnings.
+
+## Baseline review checkpoint — 2026-10-09 14:33 UTC
+
+Status remains **OPEN / UNRESOLVED**. No patch or installation changed in that baseline round.
+The explicit user launcher still resolves to the recorded local 18.8.6 build, SHA-256
+`6895c85fafb76ec981f245bf3a01d7e8ed566032c154df8ab3b8097797c82e85`.
+Version and smoke commands exited 0 (`omp/18.8.6`, `smoke-test: ok`).
+Installed and versioned watcher SHA-256 matched:
+`9048715ad1c3393b79fe53d9b25321ed23b51589ae916275d7728cc8a986b863`.
+Existing watcher tests passed 5/5 with 13 assertions. The exported startup function reused
+its fresh cache; a separate read-only collection made seven successful HTTP requests.
+No interactive TUI or model execution occurred in this round.
+
+Fresh upstream main was `95d1bef0486d8a6e518fc27972c764c83e7215fe`; observed tag was `v18.8.7`.
+Main changed relative to the cache, but both watched terminal source/test hashes were unchanged.
+This is a broad review signal, not evidence of a terminal-abort fix.
+
+OODA: observe launcher/watcher evidence; orient around the unexplained raw-mode/EOF path;
+retain cautious use rather than add an unproven patch; next capture the affected visible-Warp
+failure and compare candidate source/release evidence. Smoke, fixtures, cache, or generic
+upstream activity cannot close this incident.
+
+## Cache-validity repair checkpoint — 2026-10-09
+
+The later v1.1.1 worktree repair changes warning accuracy, not terminal-abort handling. The
+baseline watcher hash and 5/5 result above describe the pre-fix watcher, not this repaired file.
+Two added behavioral regressions failed before the repair: a runtime downgrade reused cached
+safe-runtime advice (info instead of error), and a future timestamp skipped refresh (0 instead
+of 7 fixture requests). After the repair, the same scoped command passed 7/7 with 18 assertions:
+`bun test skills/omp-concierge/tests/omp-upstream-watch.test.ts`.
+
+An actual exported `runStartupWatch` smoke used temporary cache and fake read-only fetch only.
+Ten cases passed: default execution runtime, zero age, just under six hours, exactly six hours,
+future timestamp, invalid timestamp, runtime mismatch, valid cache offline, runtime mismatch
+offline, and future timestamp offline. Cache hits made no requests; successful refreshes made
+the existing seven fixture GETs. Offline refresh attempts retained the existing five-request
+initial batch and emitted a fail-soft warning without cached safe-runtime advice. No real network,
+model, updater, installation, or interactive-TUI action occurred; the temporary cache was removed.
+The parent then removed an incidental request-count assertion: final suite 7/7, 17 assertions.
+The watcher was installed with a preserved backup and atomic rename at
+`~/.omp/agent/extensions/omp-upstream-watch.ts`. Source and installed SHA-256 both equal
+`abcf072241624c068bf70cff84202b752e223e20277c9e64b193bad64f3341e2`.
+A fresh Bun process imported that installed file and exercised its actual startup export;
+it exited 0 and delivered the unresolved-status message to the notification callback.
+This is module/callback proof, not a new visible-Warp UI test. The incident stays **OPEN / UNRESOLVED**.
+
+## Startup monitor boundaries
+
+The [versioned watcher](../bin/omp-upstream-watch.ts) is triggered by OMP `session_start`,
+not by a persistent scheduler. Cache reuse requires the current execution Bun version and a
+finite age in `[0, 6 hours)`; missing, stale, invalid, future-dated, or runtime-mismatched state
+triggers refresh. Failed refreshes can retry at a later startup. A cache hit is not a fresh source
+review or verification of the executable's identity.
+
+It observes main/tag, issue, and source/test-hash changes. Initial observation and unrelated
+changes may also alert: a review candidate is not a confirmed fix. It does not automatically
+validate source semantics, release inclusion, or Warp behavior, and its permanent status remains
+`UNRESOLVED`. Notifications are OMP-UI-only (`hasUI`); headless runs have no notification delivery,
+UI delivery may fail, and no startup means no check. Network failure leaves startup running and
+can report the last cached timestamp through an available UI. For the full interpretation and
+manual review procedure, use [the concierge](../SKILL.md#startup-review-and-notification).
 
 ## Recurrence capture
 

@@ -87,6 +87,53 @@ describe("OMP startup upstream watch", () => {
 		expect(notifications[1]).toContain("stdin-ended/raw-mode is still unresolved");
 	});
 
+	it("refreshes a runtime-mismatched cache instead of reporting cached safe-runtime advice", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "omp-upstream-watch-"));
+		temporaryDirectories.push(directory);
+		const statePath = join(directory, "state.json");
+		const notifications: { message: string; level: string }[] = [];
+		const context = {
+			hasUI: true,
+			ui: { notify: (message: string, level = "info") => notifications.push({ message, level }) },
+		};
+		await runStartupWatch(context, {
+			statePath,
+			fetchImpl: fixtureFetch() as never,
+			bunVersion: "1.4.2",
+			now: new Date("2026-10-09T12:00:00Z"),
+		});
+		await runStartupWatch(context, {
+			statePath,
+			fetchImpl: fixtureFetch() as never,
+			bunVersion: "1.4.0",
+			now: new Date("2026-10-09T12:01:00Z"),
+		});
+		expect(notifications[1].level).toBe("error");
+		expect(notifications[1].message).toContain("Bun 1.4.0");
+		expect(notifications[1].message).not.toContain("Bun 1.4.2");
+	});
+
+	it("refreshes a future-dated cache and reports new upstream evidence", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "omp-upstream-watch-"));
+		temporaryDirectories.push(directory);
+		const statePath = join(directory, "state.json");
+		const levels: string[] = [];
+		const context = { hasUI: true, ui: { notify: (_message: string, level = "info") => levels.push(level) } };
+		await runStartupWatch(context, {
+			statePath,
+			fetchImpl: fixtureFetch() as never,
+			bunVersion: "1.4.2",
+			now: new Date("2026-10-09T12:01:00Z"),
+		});
+		await runStartupWatch(context, {
+			statePath,
+			fetchImpl: fixtureFetch({ terminalSource: "changed terminal source" }) as never,
+			bunVersion: "1.4.2",
+			now: new Date("2026-10-09T12:00:00Z"),
+		});
+		expect(levels[1]).toBe("warning");
+	});
+
 	it("fails soft when GitHub is unavailable", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "omp-upstream-watch-"));
 		temporaryDirectories.push(directory);

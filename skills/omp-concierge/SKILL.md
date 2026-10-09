@@ -1,6 +1,6 @@
 ---
 name: omp-concierge
-version: "1.1.0"
+version: "1.1.1"
 description: >-
   Concierge, health-check, incident router, update-safety guard, and upstream-fix watcher for
   can1357/oh-my-pi (`omp`). Use when someone asks whether OMP is healthy or safe to use/update;
@@ -8,13 +8,14 @@ description: >-
   session, or logs `stdin ended`, `stdin failed`, `EINTR`, `setRawMode`, `errno: 2`, `SIGHUP`,
   `Operation aborted`, or `open-elsewhere`; when an MCP/hook/skill/plugin is suspected; or when
   asked whether the terminal-abort defect is fixed upstream, whether a local patch is still
-  active, or to notify/check when a permanent official fix ships. Also triggers for the common
+  active, or to notify/check when a permanent official fix ships; and for OMP install/reinstall,
+  npm vs Bun vs Volta, embedded-runtime, or omp-web questions. Also triggers for the common
   misspelling `omp-councierge`. Modes: explain, health, diagnose, update-safe, upstream-watch,
   and dashboard. Thin router: it reuses OMP specialists and never invents `omp doctor` or
   `omp diagnose` commands.
 allowed-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, Skill
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   scope: AAIF cross-vendor
   family: concierge
   lifecycle-stage: operate
@@ -92,6 +93,23 @@ Capture without exposing credentials:
 A directory name containing `patched`, `eintr`, or a version is not proof of the file inside it.
 A package updater can replace the target while leaving the directory name unchanged.
 
+### Installation is not runtime or frontend identity
+
+Separate four layers before suggesting reinstallation or a different launcher:
+
+| Layer | Establish | What it does not prove |
+|---|---|---|
+| Installation provenance | Official release asset, package, or local build; exact version and hash | That the artifact fixes this incident |
+| Package/launcher management | npm, Bun/bunx, Volta shim, symlink, or wrapper actually used | Which runtime a compiled executable embeds |
+| Execution runtime | Embedded Bun, or the runtime actually executing source | Global `bun --version` is not the embedded version |
+| Frontend | Terminal TUI versus `omp-web` and its backend | Web success does not validate the affected Warp TUI path |
+
+Changing global Bun does not replace Bun embedded in an existing compiled OMP executable.
+Reinstalling the same artifact is not a terminal-abort fix; it only changes installation state.
+A reinstallation or update can discard a local patch. Measure the resulting target and hash, rather
+than recommending npm, Bun, or Volta as a cure. Treat `omp-web` as an alternative frontend or
+workaround, not evidence that bare `omp` is repaired.
+
 ## Routing map
 
 Capability-detect these skills; invoke them when present and use this skill's fallback procedure
@@ -111,7 +129,7 @@ Never fabricate a specialist's availability. Never create a second copy of speci
 
 ## Health mode
 
-A safe-to-use verdict requires all applicable checks:
+A bounded current-use assessment requires all applicable checks:
 
 - launcher resolves to the intended executable;
 - version and hash are known;
@@ -122,12 +140,14 @@ A safe-to-use verdict requires all applicable checks:
 
 Report one of:
 
-- **healthy for normal use** — checks pass; still list local-patch/update caveats;
-- **healthy with mitigation** — usable now, but depends on a local patch or wrapper;
+- **healthy for the exercised scenario** — checks pass; state the terminal, scope, and caveats;
+- **usable with mitigation, cautiously** — the exercised scenario works with a patch or wrapper;
 - **degraded** — starts, but the failing scenario is not validated;
 - **unsafe/inconclusive** — identity, logs, or real-scenario evidence is missing.
 
-A smoke test alone never proves an interactive first-turn problem fixed.
+A smoke test alone never proves an interactive first-turn problem fixed. Launchability is not a
+guarantee of continued use. Keep this incident OPEN until the permanent-fix gate passes; an
+independent PTY or web frontend cannot substitute for the affected visible Warp session.
 
 ## Diagnose mode — evidence ladder
 
@@ -153,7 +173,7 @@ historical builds parsed those words as chat prompts.
 ## Update-safe mode
 
 Default to read-only `omp update --check`. Never run an update merely to learn whether it is safe.
-Before an authorized update:
+Before an authorized update or reinstallation:
 
 1. Record current final target, version, SHA, provenance, and whether it is locally patched.
 2. Preserve an executable rollback artifact plus source commit; source alone is slower recovery.
@@ -187,23 +207,33 @@ Classify:
 | `CANDIDATE` | Issue/PR/commit exists but is unmerged, unreleased, or unvalidated |
 | `MERGED` | Equivalent source and regression test are merged to the official branch |
 | `RELEASED` | A tagged official release contains the merged commit |
-| `PERMANENT-VALIDATED` | Official release passes focused regression and the real affected terminal scenario without a local patch |
+| `PERMANENT-VALIDATED` | Official source and relevant regression test are merged, their fix is included in a tagged release, and that unmodified release passes the regression and affected visible-Warp first-turn/continued-turn scenario |
 
 Only `PERMANENT-VALIDATED` authorizes “corrigido de forma real e permanente”. A release note, closed
 issue, green unit test, or absence of recent reports is insufficient alone.
 
 ### Startup review and notification
 
-The installed `session_start` watcher runs this bounded contract outside the critical startup
-path. Every startup reviews cached state; at most once per six hours it refreshes OMP main, latest
-tag, watched issues, terminal-source hashes, and the Bun EINTR fix. It warns when watched evidence
-changes and asks for a full `omp-concierge upstream-watch` review before any update.
+The versioned `session_start` watcher runs outside the critical startup path. It reuses cache only
+when the cached Bun version matches the executing process's `Bun.version` and the cache age is
+finite, nonnegative, and strictly less than six hours. Missing, stale, invalid, future-dated, or
+runtime-mismatched cache triggers the normal refresh of OMP main, the first returned tag,
+watched issues, terminal-source/test hashes, and the Bun EINTR PR. A failed refresh may retry on
+the next startup: this is cache freshness, not a strict six-hour rate limit or a background timer.
+A cache hit confirms the runtime version match, not executable identity or a fresh upstream review.
+Record cache age and verify executable identity separately.
+
+Notifications go only to OMP UI contexts with `hasUI`; there is no email, desktop, or headless
+delivery guarantee. The first successful observation or a watched change can produce a review
+alert, including unrelated changes. This is a candidate signal, not proof of a fix or automatic
+permanent validation. No startup means no startup check. Run the full `omp-concierge upstream-watch`
+review before any update.
 
 The watcher never declares the case permanently fixed. Bun 1.4.1+ contains the verified Darwin
 syscall-level EINTR retry, which makes the old owner-stream recovery proposal historical for that
 specific runtime defect. The distinct `stdin ended` / raw-mode path remains `UNRESOLVED` until an
 official OMP release passes the affected real-terminal scenario. GitHub failure keeps startup alive
-and reports the last cached timestamp when available.
+and reports any last cached timestamp through an available UI.
 
 ## Safety invariants
 

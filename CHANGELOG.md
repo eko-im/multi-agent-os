@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrected the EINTR analysis: Bun 1.4.1+ already retries Darwin syscall EINTR; the five-line OMP
   ignore handler is not an upstream solution, while the distinct raw-mode/EOF path stays unresolved.
 
+### Fixed — `omp-concierge` v1.1.1 startup-cache validity
+
+- Reuse watcher cache only for the current execution Bun version and a finite age in
+  `[0, 6 hours)`; runtime changes and future timestamps now trigger normal refresh.
+- Added two behavioral regressions, observed failing before the fix and passing afterward;
+  the scoped watcher suite passes 7/7. Temporary-cache startup smoke
+  covers time boundaries, invalid timestamps, runtime changes, and fail-soft offline warnings.
+- Harmonized cache semantics and separated baseline evidence from repair evidence. No
+  installation or terminal-abort closure is implied; the incident remains open.
+
 ### Added — `bin/verdict-at-head`: reviewer verdicts bound to the current head
 
 - New read-only script `bin/verdict-at-head --repo OWNER/REPO --pr N [--primary L1,L2] [--json]`.
