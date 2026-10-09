@@ -10,6 +10,30 @@ record and routing reference, not a claim that every OMP terminal exit shares on
 has an App Tamer mitigation supported by the A/B checkpoint below. That result does not close
 the older terminal-disconnect path or establish a complete upstream fix.
 
+## Operator-applied update — 2026-10-09
+
+The operator reports successful `omp update` from 18.8.6 to official 18.8.7, with download
+SHA-256 `cf0227bdefca0c486bd2aed1771de3ab98930266883eb69d341caf5665caee14`.
+The updater reports replacing the executable at
+`~/.local/share/omp/18.8.6-eintr/bin/bun-1.4.2-6895c85f/omp`.
+Those directory labels are now stale: they do not identify the installed version, local
+patch state, or embedded Bun. The reviewed official 18.8.7 source lacks the local EINTR filter.
+Do not continue asserting that the launcher contains the former patched hash.
+
+Post-update agent checks (not a repetition of the operator's successful pre-upgrade test):
+the exact replaced executable returned `smoke-test: ok`; App Tamer's `omp` pause and
+foreground/background limit flags remain false, with global App Tamer control still enabled.
+No additional update, reinstall, configuration change, or session restart was performed.
+The new official binary still needs its own visible-Warp `/model`, real-turn, and normal-quit
+validation in a new process. Existing running processes may retain the old image.
+The updater left `omp.1791585906313.21780.0.bak`; its SHA matched the former patched build.
+It was copied, without executing it, outside the updater sweep namespace to
+`~/.omp/agent/backups/omp-before-18.8.7.vbm5GI/omp` (directory and executable mode 0700).
+The copied SHA was verified as
+`6895c85fafb76ec981f245bf3a01d7e8ed566032c154df8ab3b8097797c82e85`.
+This preserves executable rollback, not a complete snapshot of mutable agent databases.
+The historical EOF/raw-mode case remains open; the App Tamer mitigation remains in place.
+
 ## Real recurrence — `omp --yolo`, observed 2026-10-09 18:03 UTC
 
 The operator reported the same return-to-shell failure. Direct terminal use is now **degraded**;
