@@ -10,6 +10,41 @@ record and routing reference, not a claim that every OMP terminal exit shares on
 Launchability, synthetic EINTR handling, and startup notifications are separate observations,
 not closure evidence.
 
+## Real recurrence — `omp --yolo`, observed 2026-10-09 18:03 UTC
+
+The operator reported the same return-to-shell failure. Direct terminal use is now **degraded**;
+do not repeat the previous general recommendation that the patched TUI is safe for normal use.
+The matched launch in shell history was 17:16:51 UTC, PID 87256, cwd `/private/tmp`, TTY `ttys014`.
+Its executable vnode and SHA matched the recorded local 18.8.6 build (`6895c85f...e85`).
+At capture it remained alive: kernel `KERN_PROC_PID` reported `p_stat=4` (SSTOP),
+`p_xstat=21` (SIGTTIN), with start epoch 1791566211. SDK/compiler-verified ABI, not guessed offsets.
+This establishes its current stop signal, not the sender or the original stop timestamp.
+SIGTTIN is consistent with background-terminal input; an explicit sender is not excluded.
+
+PID 87256 had PGID 87256; foreground PGID 79806 belonged to a later `omx --yolo` launch
+at 17:24:05 UTC under the same parent zsh 75649. Do not disturb that unrelated active session.
+The only recorded action for session `01a121aa-ee61-7609-a5a7-94ad03625a16` was `/model`
+at 17:17:04 UTC. The operator confirmed return occurred on opening `/model`, before selection,
+and did not notice/remember a shell message. Its fresh TTY breadcrumb exists; JSONL was not
+materialized, consistent with lazy persistence before an assistant entry, not evidence of deletion.
+Log `~/.omp/logs/omp.2026-10-09.87256.log` has 43 records and no EOF, EINTR, raw-mode failure,
+SIGHUP, or exit record. Paste-MCP connection, memory429, and compression warnings are co-occurrences,
+not demonstrated causes. Keep this real stopped process separate from historical harness SIGTTIN.
+
+Pinned source `0be1fae0` shows `--yolo` aliases `--auto-approve`, but both also bypass early
+composer prepaint; startup timing differs from bare OMP. No causal relationship is established.
+The explicit Ctrl-Z handler sends SIGSTOP17, not the observed SIGTTIN21. No fix, signal,
+foreground transfer, or interactive reproduction was attempted during this capture.
+Pinned `selector-controller.ts:716-721,877-896,1144-1145,214-224` opens ModelHub and mounts a
+fullscreen overlay. No foreground-transfer or suspend call was found in that inspected opening
+path; this does not exclude deeper dependencies or external actors.
+Missing evidence: who/when changed foreground ownership and which read or sender caused the stop.
+The current SIGTTIN may follow the initial return; it is not proof of its original cause.
+Next discriminating test must capture foreground PGID and signals around the user-confirmed
+`/model` opening in a dedicated Warp terminal, not merely rerun a generic smoke/PTY test.
+Do not resume/signal the stopped process while unrelated OMX owns its TTY. Prefer the operator-
+verified web frontend for current work. Never suppress SIGTTIN or steal foreground as a fix.
+
 ## Operator-visible symptom
 
 Bare `omp` could return to the shell after the first interaction while an `omp-web` launch remained
