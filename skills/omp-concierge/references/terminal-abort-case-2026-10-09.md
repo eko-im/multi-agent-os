@@ -24,8 +24,11 @@ Post-update agent checks (not a repetition of the operator's successful pre-upgr
 the exact replaced executable returned `smoke-test: ok`; App Tamer's `omp` pause and
 foreground/background limit flags remain false, with global App Tamer control still enabled.
 No additional update, reinstall, configuration change, or session restart was performed.
-The new official binary still needs its own visible-Warp `/model`, real-turn, and normal-quit
-validation in a new process. Existing running processes may retain the old image.
+After reporting the completed 18.8.7 update and receiving the post-update checks, the operator
+reported: "estou testando e está funcionando ok". Accept that post-upgrade success report;
+do not relabel it as the earlier pre-upgrade A/B. The exact tested process identity, commands,
+count, and duration were not independently measured. This is operator-reported real-use
+success, not a newly executed agent-controlled 18.8.7 test matrix.
 The updater left `omp.1791585906313.21780.0.bak`; its SHA matched the former patched build.
 It was copied, without executing it, outside the updater sweep namespace to
 `~/.omp/agent/backups/omp-before-18.8.7.vbm5GI/omp` (directory and executable mode 0700).
@@ -33,6 +36,12 @@ The copied SHA was verified as
 `6895c85fafb76ec981f245bf3a01d7e8ed566032c154df8ab3b8097797c82e85`.
 This preserves executable rollback, not a complete snapshot of mutable agent databases.
 The historical EOF/raw-mode case remains open; the App Tamer mitigation remains in place.
+Recovery metadata and the separately named current App Tamer snapshot are recorded in
+`~/.omp/agent/backups/omp-before-18.8.7.vbm5GI/manifest.json` and
+`~/.omp/agent/backups/omp-before-18.8.7.vbm5GI/apptamer-working-20261009T225244Z.plist`.
+Both are private-mode recovery artifacts; the current snapshot is byte-identical to the live
+plist at capture and records `pauseInBackground=false`, `limitInBackground=false`, and
+`limitInForeground=false`. Restoring `before.plist` would be a different, pre-mitigation action.
 
 ## Real recurrence — `omp --yolo`, observed 2026-10-09 18:03 UTC
 

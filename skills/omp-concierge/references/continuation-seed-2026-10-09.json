@@ -1,0 +1,434 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session.continuation",
+  "params": {
+    "kind": "rich-synthesis",
+    "who_you_are": "Read-only continuation steward for the local OMP concierge change; preserve the operator-reported working installation.",
+    "bootstrap_order": [
+      "Read this seed and skills/omp-concierge/references/terminal-abort-case-2026-10-09.md.",
+      "Read skills/omp-concierge/SKILL.md and references/upstream-preparation-2026-10-09.md under that skill.",
+      "Run only read-only git status/log/remote inspection in this worktree; do not sync, fetch, switch or create a worktree.",
+      "Review only publication readiness of the existing local change; stop with a brief identifying any approval needed."
+    ],
+    "inherited_state": {
+      "verified_facts": [
+        "Operator reported working use after the official18.8.7 update: estou testando e está funcionando ok. Exact tested process/commands/duration were not independently measured.",
+        "Earlier agent-controlled App Tamer A/B on18.8.6: two stopped launches, then three model-selector openings in one process, a real model reply and normal exit0 after only omp.limitInBackground=false.",
+        "Recovery manifest and current-working App Tamer snapshot exist; rollback executable hash verified6895c85fafb76ec981f245bf3a01d7e8ed566032c154df8ab3b8097797c82e85.",
+        "Named origin branch absent and no open branch PR at read-only close-out recon. Six local commits preceded this signoff commit.",
+        "Initial worktree clean; this close-out owns only the incident-reference changes and this new seed. Closing commit stages only those paths."
+      ],
+      "branches": [
+        "feat/omp-concierge@868f7f6c3abc28a413e53dd624546b758bffcf89 (pre-signoff baseline; read live HEAD on resume)"
+      ],
+      "env": [
+        "origin=https://github.com/ekson73/multi-agent-os.git; active_world derived as personal.",
+        "Official18.8.7 replaced the executable inside a stale18.8.6-eintr-labelled directory; directory labels are not runtime identity.",
+        "App Tamer OMP pause/foreground/background limits false at backup capture; no preference mutation during signoff."
+      ]
+    },
+    "mission": [
+      "Prepare a read-only publication-readiness brief for the local OMP concierge, without reopening resolved operational work.",
+      "Inspect only the existing scoped change and preserved evidence; do not rerun OMP or its successful user scenario.",
+      "State whether a specific future publication approval is needed; then stop. Conditional historical investigation is not a mandate to invent work."
+    ],
+    "guardrails": [
+      "No OMP launches, updates, installs, live configuration changes, model probes, user-process signals or terminal control.",
+      "No issue/comment/ticket/PR creation, push, merge, publication or external messaging without fresh exact target/text authorization.",
+      "No repository edits in the continuation review. Do not touch unrelated root checkout WIP.",
+      "Do not remove the retained worktree: the active concierge consumer links to it.",
+      "Accept the post-upgrade operator success report; do not invent exact test counts or claim every historical EOF/raw-mode error is solved.",
+      "Do not restore historical App Tamer before.plist: it re-enables the old limiter. Any recovery requires scope review.",
+      "Do not auto-spawn another continuation. One bounded read-only pass, then return findings or wait for operator direction."
+    ],
+    "dod": [
+      "Read-only readiness brief names actual remaining approval/gaps without mutating repository, installation or user processes.",
+      "Any recurrence investigation is explicitly conditional on a genuine new failure and operator authorization.",
+      "All external publication remains unperformed until specifically authorized."
+    ],
+    "dag": [
+      "If operator later authorizes publication: separate governed review/PR workflow for MAOS only.",
+      "If a genuine terminal failure recurs: dedicated foreground/signal capture before any patch.",
+      "Otherwise stop; operational recovery is already reported working."
+    ],
+    "refs": {
+      "git": "https://github.com/ekson73/multi-agent-os.git; feat/omp-concierge; no open branch PR at recon",
+      "ticket": "none",
+      "memory": "skills/omp-concierge/references/terminal-abort-case-2026-10-09.md; ~/.omp/agent/backups/omp-before-18.8.7.vbm5GI/manifest.json",
+      "session": "01a0ee53-ede6-758b-8ea5-42f2a1785cc5"
+    },
+    "goal": "Prepare a read-only publication-readiness brief for the local OMP concierge, without reopening resolved operational work.",
+    "active_world": "personal",
+    "context": "Operational recovery is reported working after official18.8.7 upgrade. Remaining community delivery is local-only; historical EOF/raw-mode causality is conditional follow-up, not a current failure.",
+    "git": {
+      "repo": "ekson73/multi-agent-os",
+      "branch": "feat/omp-concierge",
+      "worktree": "~/Projects/.worktrees/omp-concierge",
+      "prs": []
+    },
+    "locus": "🟡 · feat/omp-concierge · publication-readiness",
+    "objectives": {
+      "primary": [
+        "Close the verified operational recovery honestly and preserve safe continuation."
+      ],
+      "secondary": [
+        "Preserve recovery metadata, complete ten-category hunt and discoverable local handoff."
+      ],
+      "auxiliary": [
+        "Keep publication and recurrence investigations governed and conditional."
+      ]
+    },
+    "done": [
+      "App Tamer scoped mitigation retained; no new environment changes.",
+      "Operator post-upgrade success recorded with provenance limits.",
+      "Rollback executable plus recovery manifest and current preference snapshot preserved.",
+      "Installed concierge1.1.2 and startup watcher were already delivered; this round changes only records/handoff.",
+      "All ten close-out categories dispositioned in data.close_out_hunt."
+    ],
+    "in_flight": [],
+    "gaps": [
+      "Community publication/review is not completed or authorized.",
+      "Historical EOF/raw-mode root cause is not established; revisit only upon recurrence."
+    ],
+    "pendings": [
+      "Local concierge branch is not published; await specific authorization after optional read-only readiness brief."
+    ],
+    "undecided": [
+      "Whether and when to publish the MAOS skill change or communicate upstream."
+    ],
+    "unasked_questions": [
+      "For any future data-affecting recovery, determine whether consistent SQLite/session/blob rollback is needed beyond the preserved executable."
+    ],
+    "next_actions": [
+      {
+        "task": "Perform one read-only publication-readiness review of existing concierge artifacts, report approval residue, then stop.",
+        "eisenhower": "Q2",
+        "blocked_by": null
+      },
+      {
+        "task": "Publish MAOS branch/PR or create a continuation ticket.",
+        "eisenhower": "Q2",
+        "blocked_by": "Exact external publication target/content authorization not given."
+      },
+      {
+        "task": "Investigate old EOF/raw-mode behavior.",
+        "eisenhower": "Q2",
+        "blocked_by": "Only after a genuine new recurrence and authorized investigation."
+      }
+    ],
+    "governance_refs": [
+      "skills/signoff/SKILL.md",
+      "skills/postflight/SKILL.md",
+      "skills/postflight/references/continuation-seed-contract.md",
+      "skills/postflight/references/continuation-broadcast-protocol.md"
+    ],
+    "session_type": "continuation/docs",
+    "dna": {
+      "principles": [
+        "Liberdade com Responsabilidade — proactive autonomy, but every delegated subordinate is your responsibility; the tree returns to the root; audit the output; zero drift.",
+        "Previsibilidade Holistica (Efeito Borboleta) — wait for dependencies/swarms to finish before advancing; cause->effect, action->consequence.",
+        "Independencia Agnostica (Self-Healing) — use the most competent resource in the generic pool; if it does not exist, build it; be the solution; capability-detected, cross-vendor (AAIF)."
+      ],
+      "canonical_ref": "protocols/delegation/delegation-dna-prompt.md",
+      "session_learnings": [
+        "Separate installer, runtime and frontend; identical artifact reinstall is not a terminal fix.",
+        "Capture foreground ownership and stop signals before attributing a return-to-shell; App Tamer A/B supported the local mitigation.",
+        "Synthetic EINTR success is not proof of real stdin recovery or universal historical causality.",
+        "Accept user-reported post-upgrade success with clear limits; do not relabel it as pre-upgrade or fabricate test detail.",
+        "Keep executable rollback provenance and a working-preference snapshot separate from the old problematic backup."
+      ],
+      "learnings_ref": "skills/omp-concierge/references/terminal-abort-case-2026-10-09.md"
+    },
+    "continuation_ticket": {
+      "key": "none",
+      "url": "none",
+      "parent": "none",
+      "link": "none"
+    },
+    "tickets_created": [
+      {
+        "deferred": true,
+        "eisenhower": "Q2",
+        "link": "none",
+        "reason": "GitHub read capability exists, but external publication remains outside the retained local-only authorization. Seed records the residue; no fake ticket created."
+      }
+    ],
+    "resume_instructions": "Read the seed; perform /maos:preflight read-only orientation only (no sync or modifications), then bootstrap_order and the first unblocked next_action. Internalize params.dna. Do not spawn descendants or rerun OMP. After the bounded readiness brief, stop for operator direction.",
+    "risks": [
+      {
+        "risk": "Re-enabling OMP CPU throttling can restore external suspension.",
+        "mitigation": "Retain the current OMP-only exemption; investigate relevant settings on recurrence, not unrelated rules.",
+        "severity": "high"
+      },
+      {
+        "risk": "Current executable resides in a stale-labelled directory and updater resolves mutation target through PATH.",
+        "mitigation": "Before future authorized changes identify exact artifact and preserve rollback; do not infer build/runtime from directory labels.",
+        "severity": "med"
+      },
+      {
+        "risk": "Historical backup restores the old bad App Tamer rule; executable rollback does not recover mutable databases.",
+        "mitigation": "Use manifest and separately named working snapshot; review restore scope and SQLite consistency first.",
+        "severity": "high"
+      },
+      {
+        "risk": "Removing the retained feature worktree breaks the live skill symlink.",
+        "mitigation": "Keep worktree until an authorized migration/merge changes the consumer safely.",
+        "severity": "med"
+      },
+      {
+        "risk": "Startup watcher alert or silence can be mistaken for permanent health proof.",
+        "mitigation": "Watcher is cached/UI-only and does not inspect App Tamer. Official-source/test/release plus actual affected-scenario validation is a separate claim.",
+        "severity": "med"
+      }
+    ]
+  },
+  "data": {
+    "layer": "community",
+    "contract": "skills/postflight/references/continuation-seed-contract.md",
+    "contract_version": "1.4.0",
+    "snapshot_utc": "2026-10-09T22:59:58.512Z",
+    "operator_report": {
+      "sequence": "After the 18.8.7 updater output and post-update smoke/App Tamer checks",
+      "quote": "estou testando e está funcionando ok",
+      "scope": "User report; exact tested process identity and interaction matrix unmeasured."
+    },
+    "close_out_hunt": {
+      "fails": [
+        {
+          "atom": "Historical full TUI run was 3428 pass / 7 skip / 15 fail, not green. Environmental explanation was suspected, not demonstrated.",
+          "evidence": "I §Proven facts, original L140–142.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Only if proposing a future code PR or reusing that run as validation; no full-suite rerun for this successful operational close-out."
+        },
+        {
+          "atom": "Two pre-mitigation foreground runs failed; post-change run completed selectors, real turn, and normal exit.",
+          "evidence": "I §App Tamer A/B checkpoint table, original L91–94.",
+          "disposition": "drop-with-note",
+          "eisenhower": "Q4",
+          "trigger": "No current action: retain historical evidence; do not manufacture another A/B or reverse the working setting."
+        }
+      ],
+      "errors": [
+        {
+          "atom": "Corrected early root claims: autoResume ownership collision was falsified by independent PTYs; same-TTY SIGTTIN was an experimental artifact; synthetic EINTR handling did not establish the real failure cause or destroyed-stream recovery.",
+          "evidence": "I §Proven facts L128–139 and §Runtime-level EINTR correction; U L10–29.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Before any causal summary or upstream draft; preserve corrections rather than resurrecting those claims."
+        },
+        {
+          "atom": "Older stdin-ended/raw-mode errno2/SIGHUP errors remain unexplained and distinct from the later A/B-supported App Tamer suspension.",
+          "evidence": "I §Scope and epistemic status; §Proven facts L126–136; §Runtime-level EINTR correction.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "A genuine fresh recurrence, not operator-success reconfirmation."
+        },
+        {
+          "atom": "Tool-capture failures are observation failures, not proof official18.8.7 currently fails.",
+          "evidence": "Direct assignment explicitly preserves this distinction. This worker additionally encountered unavailable history://Main and hub Main addressing; neither executes OMP. Exact earlier capture-error transcript was not available to this worker.",
+          "disposition": "drop-with-note",
+          "eisenhower": "Q4",
+          "trigger": "Do not infer runtime failure from tool failure; revisit the tool only if a future authorized task actually needs that capture."
+        },
+        {
+          "atom": "Close-out initially invoked Python scorecard via bash; corrected to python3 and help succeeded. No product defect inferred.",
+          "evidence": "Current close-out tool results.",
+          "disposition": "drop-with-note",
+          "eisenhower": "Q4",
+          "trigger": "Use the documented Python entrypoint; no new product task."
+        }
+      ],
+      "warnings": [
+        {
+          "atom": "Watcher is session_start-driven, six-hour cached, UI-only and fail-soft; it does not inspect App Tamer/local CPU rules, executable identity, or prove a permanent repair.",
+          "evidence": "I §Startup monitor boundaries; W collectUpstreamState L93–133, isFresh/notify/runStartupWatch L186–232.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "When interpreting an alert, silence, cache hit, or local mitigation drift; absence of an alert is not health proof."
+        },
+        {
+          "atom": "Paste-MCP, memory429 and compression warnings co-occurred but were not causal evidence. --yolo timing differences and selector opening likewise do not establish causality.",
+          "evidence": "I §Real recurrence L54–66; A/B before-run2 failed before /model.",
+          "disposition": "drop-with-note",
+          "eisenhower": "Q4",
+          "trigger": "No plugin removal, blanket configuration disablement, or special-case patch without new discriminating evidence."
+        }
+      ],
+      "risks": [
+        {
+          "atom": "Original stopped user job PID87256 was preserved; its historical PID is not a current identity guarantee. Signaling it can disturb user work and the unrelated OMX sharing ttys014.",
+          "evidence": "I §Real recurrence L41–49, L69–70; §App Tamer A/B checkpoint L116.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Only an explicit user process-management request; re-identify then. Never kill/resume/foreground-transfer as signoff cleanup."
+        },
+        {
+          "atom": "Stale eintr/version directory labels can misidentify the now-official binary; future updater PATH resolution can target a different launcher and overwrite local artifacts.",
+          "evidence": "I §Operator-applied update L15–21; §Update risk; A updater_risks and advisor_PATH_difference.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Before a future explicitly authorized install/update/rollback; no new identity or version check now."
+        },
+        {
+          "atom": "Preserved executable rollback is not a complete consistent snapshot of mutable agent databases, sessions and blobs.",
+          "evidence": "I §Operator-applied update L29–34; A future_upgrade_prerequisites.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Before future data-affecting upgrade/recovery, determine required snapshot scope; do not restore a live SQLite file piecemeal."
+        }
+      ],
+      "mitigations": [
+        {
+          "atom": "Keep only omp.limitInBackground=false. The A/B comparison changed one leaf; global App Tamer and other Bun/Node/Warp rules were preserved.",
+          "evidence": "I §App Tamer A/B checkpoint L79–87; S confirms current success.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Maintain current working posture; inspect relevant rules only on recurrence or launcher change, never disable unrelated limits speculatively."
+        },
+        {
+          "atom": "Preserved patched executable outside updater sweep namespace: ~/.omp/agent/backups/omp-before-18.8.7.vbm5GI/omp, SHA6895c85fafb76ec981f245bf3a01d7e8ed566032c154df8ab3b8097797c82e85; original App Tamer before.plist retained separately.",
+          "evidence": "I §Operator-applied update L29–34 and §App Tamer A/B checkpoint L84–87; this worker read rollback directory and observed omp present.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Preserve, do not execute or restore. Parent should integrate sibling's recovery metadata/current-setting backup evidence; original before.plist restores the formerly problematic limit."
+        },
+        {
+          "atom": "Official18.8.7 working state is user-verified, not a new agent-controlled test and not proof the historical EOF/raw-mode path is permanently fixed.",
+          "evidence": "S; I historical distinction; U §Startup-watch review records release delta is not a terminal-abort repair.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Use as current operational truth; do not repeat TUI/model/smoke/version checks to reconfirm it."
+        }
+      ],
+      "gaps": [
+        {
+          "atom": "A genuine current-runtime reproduction identifying the older EOF/raw-mode owner boundary, plus continued-input regression proof, is absent.",
+          "evidence": "U §Required reproduction and §Code-change gate; I §Runtime-level EINTR correction.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Fresh real recurrence AND authorized investigation. Not an unmet criterion for using today's working installation."
+        },
+        {
+          "atom": "Inspected incident snapshot still asked for official18.8.7 visible validation and retained dated degraded/web-first recommendations; latest success must explicitly supersede them without erasing history.",
+          "evidence": "I inspected original L27–28, L39–40, L69–70 versus S. Sibling 'Close rollback and confirmation records' confirmed ownership and planned explicit supersession.",
+          "disposition": "fix-now",
+          "eisenhower": "Q1",
+          "trigger": "Completed in this close-out: post-upgrade report and recovery records updated."
+        }
+      ],
+      "pendings": [
+        {
+          "atom": "MAOS concierge work remains local: six cached-ahead commits f4df78b,d2717ea,72a57a3,182f952,275f3f9,868f7f6; named remote branch absent and no open branch PR in live read. Publication is not authorized.",
+          "evidence": "R; cached ancestry is explicitly not a freshly fetched ahead/behind comparison.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Only a future exact publication authorization and applicable review gates; generic signoff does not permit push/merge."
+        },
+        {
+          "atom": "Upstream preparation is NOT PUBLISHED / NOT PR-READY. No incident issue comment, branch push or PR was published by this investigation; existing upstream #5328/#5332 are references, not newly submitted work.",
+          "evidence": "U heading/L3 and §Publication gate; I §Proven facts L143–144; S.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Valid recurrence evidence and exact target/text approval before any upstream communication. No external ticket was created by this worker."
+        }
+      ],
+      "decisions-not-taken": [
+        {
+          "atom": "Whether to publish upstream remains deliberately undecided, not implicitly approved. Do not submit the five-line EINTR filter or blindly forward-port closed #5332.",
+          "evidence": "U §Decision, §Code-change gate and §Publication gate L70–77.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Only after reproducible current-runtime evidence, relevant passing validation, operator review/personal contribution, and point-of-risk target/text confirmation."
+        }
+      ],
+      "unasked-Qs": [
+        {
+          "atom": "Before a future upgrade/recovery: is executable-only rollback sufficient, or is consistent agent.db/WAL plus session/blob/config recovery required?",
+          "evidence": "I explicit executable-only rollback limitation; A supported profile/session isolation and SQLite consistency caveats.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Ask when an authorized future change makes data rollback relevant; not a blocker or new backup campaign now."
+        }
+      ],
+      "unanswered-Qs": [
+        {
+          "atom": "Who sent the suspension signals, precisely when foreground ownership changed in the original job, and whether any older EOF/raw-mode event shares that cause remain unproved. A/B supports scoped mitigation, not universal historical attribution.",
+          "evidence": "I §Real recurrence L43–46, L65–66; §App Tamer A/B limitations L96–115.",
+          "disposition": "seed-field",
+          "eisenhower": "Q2",
+          "trigger": "Only genuine recurrence requiring discrimination; capture foreground/signal/stdin state before restarting in a dedicated terminal."
+        },
+        {
+          "atom": "No outstanding 'does official18.8.7 work?' question remains: the operator answered it affirmatively.",
+          "evidence": "S supersedes older pre-upgrade/canary recommendations in A and stale I validation ask.",
+          "disposition": "drop-with-note",
+          "eisenhower": "Q4",
+          "trigger": "None. Do not ask again or reinterpret the accepted answer as missing validation."
+        }
+      ]
+    },
+    "close_out_hunt_sources": {
+      "I": "skills/omp-concierge/references/terminal-abort-case-2026-10-09.md",
+      "U": "skills/omp-concierge/references/upstream-preparation-2026-10-09.md",
+      "W": "skills/omp-concierge/bin/omp-upstream-watch.ts",
+      "S": {
+        "sequence": "After the 18.8.7 updater output and post-update smoke/App Tamer checks",
+        "quote": "estou testando e está funcionando ok",
+        "scope": "User report; exact tested process identity and interaction matrix unmeasured."
+      },
+      "R": "Read-only git/remote/PR recon at pre-signoff HEAD868f7f6; six local commits, named remote branch absent, no open branch PR.",
+      "A": "Historical pre-upgrade audits summarized in the incident reference; superseded by later operator report where applicable."
+    },
+    "scorecard": {
+      "session": {
+        "title": "OMP: encerramento e continuação local",
+        "id": "01a0ee53-ede6-758b-8ea5-42f2a1785cc5",
+        "date": "2026-10-09"
+      },
+      "verdict": {
+        "state": "warn",
+        "label": "OPERACIONAL CONFIRMADO PELO USUÁRIO · PUBLICAÇÃO DEFERIDA"
+      },
+      "checklist": [
+        {
+          "state": "blue",
+          "label": "Relato pós-upgrade recebido",
+          "note": "Confirmação do operador; identidade do processo e matriz exata não reexecutadas."
+        },
+        {
+          "state": "green",
+          "label": "Recovery e documentação",
+          "note": "Manifesto e snapshot atual preservados; caso atualizado."
+        },
+        {
+          "state": "green",
+          "label": "Hunt e handoff",
+          "note": "Dez categorias dispositionadas em seed estruturado."
+        },
+        {
+          "state": "orange",
+          "label": "Publicação",
+          "note": "Aguarda autorização específica; nenhuma publicação executada."
+        }
+      ],
+      "whats_left": [
+        {
+          "state": "orange",
+          "text": "Revisão local de prontidão e decisão futura de publicação."
+        },
+        {
+          "state": "yellow",
+          "text": "Histórico EOF/raw-mode continua condicional; instalação atual preservada."
+        }
+      ],
+      "autonomy": {
+        "green": 2,
+        "blue": 1,
+        "orange": 1,
+        "red": 0
+      },
+      "metric_note": "Counts describe these four checklist dispositions, not an autonomy-quality score."
+    }
+  }
+}
