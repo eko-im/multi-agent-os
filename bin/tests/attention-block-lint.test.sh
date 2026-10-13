@@ -420,4 +420,151 @@ check "decision rejects foreign need-context token" missing_unresolved_response 
 > 1. **🔶 DECIDIR** — região · **Outra opção:** candidato para análise · `1A` recomendada · `1C: <nova opção>` · `1N` nenhuma opção atende · `1D` preciso de mais contexto · `2D` preciso de mais contexto
 T
 
-echo "--- $pass passed, $fail failed"; [ "$fail" -eq 0 ]
+check "subject PR approval needs no wait line" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — merge PR #463 now · `1 yes` / `1 no`
+T
+
+check "inline subject ref is not a dependency" ok 0 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **🛑 AUTORIZAR** — mesclar o PR `#463` agora · `1 sim` / `1 não`
+T
+
+check "subject and after dependency are distinguished" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — merge PR #463 after PR `#42` · `1 yes` / `1 no`
+> ⏳ #42 — agent: in review · nothing for you
+T
+
+check "dependency clause ends before next subject" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — after #42, merge PR #463 · `1 yes` / `1 no`
+> ⏳ #42 — agent: in review · nothing for you
+T
+
+check "English blocked-on dependency still needs status" dependency_unexplained 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — release blocked-on `#42` · `1A` / `1B` · **Other option:** candidate for analysis · `1C: <new option>` · `1N` none fit · `1D` need context
+T
+
+check "Portuguese blocked dependency still needs status" dependency_unexplained 2 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **🔶 DECIDIR** — release bloqueada pelo PR #42 · `1A` / `1B` · **Outra opção:** candidato para análise · `1C: <nova opção>` · `1N` nenhuma atende · `1D` preciso de contexto
+T
+
+check "English depends-on dependency still needs status" dependency_unexplained 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — release depends on #42 · `1A` / `1B` · **Other option:** candidate for analysis · `1C: <new option>` · `1N` none fit · `1D` need context
+T
+
+check "Portuguese apos dependency still needs status" dependency_unexplained 2 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **🔶 DECIDIR** — publicar após #42 · `1A` / `1B` · **Outra opção:** candidato para análise · `1C: <nova opção>` · `1N` nenhuma atende · `1D` preciso de contexto
+T
+
+MAOS_ATTENTION_TICKET_PREFIXES="ABC" check "configured ticket dependency inside code span" dependency_unexplained 2 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **🔶 DECIDIR** — publicar depois de `ABC-42` · `1A` / `1B` · **Outra opção:** candidato para análise · `1C: <nova opção>` · `1N` nenhuma atende · `1D` preciso de contexto
+T
+
+MAOS_ATTENTION_TICKET_PREFIXES="ABC" check "configured ticket subject needs no wait line" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — close ABC-42 · `1 yes` / `1 no`
+T
+
+MAOS_ATTENTION_TICKET_PREFIXES="ABC" check "configured ticket exact leading wait ref explains dependency" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — publish after `ABC-42` · `1A` / `1B` · **Other option:** candidate for analysis · `1C: <new option>` · `1N` none fit · `1D` need context
+> ⏳ `ABC-42` — agent: in review · nothing for you
+T
+
+MAOS_ATTENTION_TICKET_PREFIXES="ABC" check "unconfigured ticket prefix stays ignored" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — publish after XYZ-42 · `1A` / `1B` · **Other option:** candidate for analysis · `1C: <new option>` · `1N` none fit · `1D` need context
+T
+
+check "grouped replies reject another item number" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — merge release · `1 yes / 2 no`
+T
+
+check "compact grouped letter replies reject another item" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A/2B`
+T
+
+check "grouped same-item authorization needs separate exact spans" malformed_item 2 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **🛑 AUTORIZAR** — mesclar · `1 sim / 1 não`
+T
+
+check "separate choice spans and command spans remain valid" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — run `make deploy` in region · `1A` / `1B` · **Other option:** candidate for analysis · `1C: <new option>` · `1N` none fit · `1D` need context
+T
+
+check "grouped replies reject unnumbered alternative" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — merge · `1 yes / no`
+T
+
+check "letter reply token must match completely" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A-extra`
+T
+
+check "duplicate grouped replies are malformed exact spans" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A/1A`
+T
+
+check "bare numbered reply cannot replace localized authorization pair" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — merge · `1`
+T
+
+check "clear overflow cannot hide a question" inconsistent_clear_with_asks 2 <<'T'
+> **✅ NOTHING NEEDS YOU**
+> ➕ +1 Should I merge the release?
+T
+
+check "clear wellformed wait cannot hide a question" inconsistent_clear_with_asks 2 <<'T'
+> **✅ NOTHING NEEDS YOU**
+> ⏳ #42 — agent: ready · Should I merge the release?
+T
+
+check "clear wait status without an ask remains valid" ok 0 <<'T'
+> **✅ NOTHING NEEDS YOU**
+> ⏳ #42 — agent: in review · nothing for you
+T
+
+check "attention wait and overflow metadata remain valid" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🛑 AUTHORIZE** — release after #42 · `1 yes` / `1 no`
+> ⏳ #42 — agent: in review · nothing for you
+> ➕ +1 deferred to backlog: Should I delete the old branch?
+T
+
+
+check "free-text candidate delimiters are not grouped reply tokens" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A` · **Other option:** candidate only · `1C: east/west or north, south; compare 2B | 3D` · `1N` none fit · `1D` need context
+T
+
+check "candidate dependency language remains proposal text" ok 0 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A` · **Other option:** candidate only · `1C: try east after #42 or west` · `1N` none fit · `1D` need context
+T
+
+check "extra grouped bare numbers cannot hide beside valid decision replies" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A` · **Other option:** candidate only · `1C: east/west` · `1N` none fit · `1D` need context · `1/2`
+T
+
+check "same-item grouped choices cannot hide beside valid decision replies" malformed_item 2 <<'T'
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — region · `1A` · **Other option:** candidate only · `1C: east/west` · `1N` none fit · `1D` need context · `1A/1B`
+T
+
+echo "--- $pass passed, $fail failed"
+[ "$fail" -eq 0 ]
