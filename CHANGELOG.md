@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Pharos open decision alternatives
+
+- 🔶 items require one visible open-option label matched to the recognized header language (“Outra opção” for pt-BR; “Other option” for English), at least one exact item-bound `nA` or `nB` choice, a typed item-bound `nC` candidate, and distinct item-bound `nN`/`nD` replies. Only item-bound A/B/C/N/D token kinds are permitted; candidates are analysis-only, and none-fit/need-context responses leave the decision unresolved. 🛑 authorization tokens must normalize to exactly the item-bound localized pair `n sim`/`n não` (pt-BR) or `n yes`/`n no` (English).
+- Unknown response token kinds or extra numbered authorization tokens are `malformed_item`; duplicate tokens retain `duplicate_reply_token`, and existing open-option/unresolved-response verdicts remain. ✋ remains token-optional; any numbered response it includes must bind to its item. The hook advisory prompts repair. Model scores remain uncalibrated unless validated and never replace human/security/irreversible authority.
+
 ### Added — `operator-attention-block` skill (*Pharos*) + `bin/attention-block-lint` + Stop hook `attention-block-gate`
 
 - **Problem**: operators miss the approvals / decisions / GO requests an agent buries mid-answer ("agulha no palheiro"). A convention alone fails — amnesic agents forget it.

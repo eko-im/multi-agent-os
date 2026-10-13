@@ -1,6 +1,6 @@
 ---
 name: operator-attention-block
-version: 1.0.0
+version: 1.0.1
 description: >
   Pharos — the fixed end-of-message block that surfaces EVERY item a human must act on
   (approval/GO, decision, answer, security alert, manual step) so it is never buried in
@@ -62,8 +62,8 @@ checked, because an amnesic agent forgets conventions.
    more explicit-ask sentences than items + overflow is `unsurfaced_asks`. A bare `?` does not
    count (it is often rhetorical: "Por que falhou? Porque…"). Within one item every reply token
    is unique — `1A` offered twice is `duplicate_reply_token`.
-10. **Self-answer first** (`harmonic` L10 / council-before-HITL): only the irreducible residue
-   goes in the block. The block is not a license to ask more.
+10. **Decision options are open, explicit, and non-authorizing.** Every 🔶 item shows exactly one visible open-option label localized to the operator’s language (`Outra opção` in pt-BR; `Other option` in English), at least one item-bound selectable choice token `nA` or `nB`, and one typed, item-bound free-text candidate token (`nC: <nova opção>` or `nC: <new option>`). The proposed text is only a candidate for analysis; it does not select it or authorize action. Each decision MUST also include distinct, item-bound replies `nN` (reject the offered set) and `nD` (request evidence or clarification); both leave the decision unresolved. Only item-bound A/B, C, N, and D response kinds are permitted; unknown numbered kinds are malformed. A four-response set is a practical default, not a hard cap; `nA` or `nB` supplies the offered choice alongside C/N/D, and additional offered choices may be listed when useful.
+11. **Self-answer first** (`harmonic` L10 / council-before-HITL): only the irreducible residue goes in the block. The block is not a license to ask more.
 
 ### Template — items pending
 
@@ -71,7 +71,7 @@ checked, because an amnesic agent forgets conventions.
 (linha em branco)
 > **🔔 PRECISA DE VOCÊ (2)**
 > 1. **🛑 AUTORIZAR** — encerrar 7 processos órfãos (reversível) · responda `1 sim` / `1 não`
-> 2. **🔶 DECIDIR** — região do deploy · `2A` sa-east-1 (recomendado) · `2B` us-east-1
+> 2. **🔶 DECIDIR** — região (sa-east-1 recomendado; comparação das opções no texto acima) · **Outra opção:** sugira um candidato para análise, não seleção/autorização · `2A` sa-east-1 · `2C: <nova opção>` · `2N` nenhuma opção atende · `2D` preciso de mais contexto
 > ⏳ #463 — comigo (agente): em revisão dos bots; merge automático quando verde · nada a fazer por você
 > ➕ +2 registrados no backlog (não precisam de você agora)
 ```
@@ -88,8 +88,7 @@ heading. The blockquote already separates the block. The `➕` line appears only
 Always the same short line — details belong in the prose above. A line that varies gets
 read; a line that is always identical gets *recognized*, which is the point.
 
-Labels follow the operator's language (en: `🔔 NEEDS YOU (N)` / `✅ NOTHING NEEDS YOU`). The
-linter keys on the emoji markers, so any language works.
+The linter recognizes headers by emoji. For 🔶 items, the required visible bold label matches the header language: “PRECISA DE VOCÊ” (pt-BR) requires “Outra opção:” and “NEEDS YOU” (English) requires “Other option:”. Other header locales fail closed as `missing_open_option`; extend the exact mapping and add cross-locale regressions before supporting another locale.
 
 ### Severity and verbs
 
@@ -102,7 +101,9 @@ linter keys on the emoji markers, so any language works.
 Shapes differ, not only colors: red/orange/yellow circles collapse into one another for
 red-green color-blind readers (WCAG 1.4.1). Order items by severity (🛑 first). Reply tokens
 carry the item number (`1 sim`, `2A`) so a bare "go" is never ambiguous, and use the
-operator's language (`sim`/`não`, not `go`/`no`).
+operator's language (`sim`/`não` in pt-BR; `yes`/`no` in English). For 🛑, the normalized set of numbered reply tokens MUST be exactly the item-bound localized pair `n sim` + `n não` (pt-BR), or `n yes` + `n no` (English); case and whitespace are normalized, and any extra numbered token is malformed. Duplicate tokens still receive `duplicate_reply_token`. Decision replies use only item-bound `nA`/`nB`, `nC: <texto livre>`, `nN`, and `nD`; `nN` and `nD` are both required and leave the decision unresolved. ✋ requires no token, but any numbered reply token provided must carry that item's number; ✋ needs no open option.
+
+Model scores are uncalibrated unless validated against representative task-specific outcomes; never state an uncalibrated score as P(correct) or a percentage chance of correctness. A 90% threshold cannot override human, security, or irreversible-action authority. Candidate models remain recommendation/shadow-only pending that validation.
 
 **Why not colored circles**: 🔴🟡🟠🟢🔵 already mean *progress state* in the unified status
 legend (`end-of-action-briefing-protocol` §4.1). Pharos encodes *what the human must do*, a
@@ -115,7 +116,7 @@ circles as item markers.
 |---|---|---|
 | Linter | `bin/attention-block-lint` | Deterministic: ask-shaped text vs. block presence/position/cap. `--json`, exit 2 on warning. |
 | Stop hook | `plugin-scripts/governance/attention-block-gate.sh` | Every turn: bad verdict ⇒ injects a one-shot reminder so the agent fixes the message before stopping; good block with items ⇒ macOS desktop notification. |
-| Tests | `bin/tests/attention-block-lint.test.sh · tests/governance/test-attention-block-gate.sh` | 69 cases (buried asks pt/en, fences, quotes, trailing prose, cap, malformed/unbound items, unexplained dependencies, misnumbered items, header-count mismatch (incl. a missing `(N)`), bare or incomplete `⏳` lines, a `⏳` explaining only its leading ref, malformed `⏳`/`➕` carrying asks, refs inside code spans, a quote after the block, truncated/duplicate headers, asks after a clear header or unnumbered inside the block, notify on a corrected continuation, notify-disabled not burning the marker, missing `prompt_id`, dependency-missing ledger, path-safety, kill-switch, prose asks the block omits, duplicate reply tokens, max-length ids bounded by a hashed marker name, notify once per distinct pending block without `prompt_id`). |
+| Tests | `bin/tests/attention-block-lint.test.sh · tests/governance/test-attention-block-gate.sh` | Public CLI regressions cover parsing, item binding, localized response tokens, verdict precedence, dependencies, hook continuation/notification behavior, path safety, and kill-switch behavior. |
 
 Activation: **default-on** for every maos install (operator decision 2026-09-28) — wired in
 `hooks/hooks.json` Stop; opt out with `MAOS_ATTENTION_GATE=0`.

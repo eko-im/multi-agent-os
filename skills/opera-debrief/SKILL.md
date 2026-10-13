@@ -134,7 +134,7 @@ Ato … — <resolution>
 ℹ️ Nota de fidelidade: <what was compressed/omitted; "nada inventado">
 
 > **🔔 PRECISA DE VOCÊ (N)**            ← always last; skills/operator-attention-block
-> 1. **🔶 DECIDIR** — <the CTA, if it needs the human> · `1 sim` / `1 não`
+> 1. **🔶 DECIDIR** — <the CTA, if it needs the human> · <compare offered options in prose; include the recommendation> · **Outra opção:** suggest a candidate for analysis only, not selection/authorization · `1A` <recommended choice> · `1C: <nova opção>` · `1N` nenhuma opção atende · `1D` preciso de mais contexto
 ```
 If the CTA needs nothing from the human, close with the bare `> **✅ NADA PRECISA DE VOCÊ**`.
 The drama never goes inside the block — it stays plain and literal (tone-safety gate).

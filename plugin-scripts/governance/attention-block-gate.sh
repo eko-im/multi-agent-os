@@ -74,7 +74,7 @@ case "$items$reds" in *[!0-9]*|'') items=0; reds=0 ;; esac
 
 action=""
 case "$verdict" in
-  missing_block|inconsistent_clear_with_asks|empty_attention_block|block_not_last|over_cap|malformed_item|dependency_unexplained|misnumbered_items|header_count_mismatch|multiple_status_headers|malformed_header|unnumbered_ask_in_block|duplicate_reply_token|unsurfaced_asks) action="inject" ;;
+  missing_block|inconsistent_clear_with_asks|empty_attention_block|block_not_last|over_cap|malformed_item|missing_open_option|missing_unresolved_response|dependency_unexplained|misnumbered_items|header_count_mismatch|multiple_status_headers|malformed_header|unnumbered_ask_in_block|duplicate_reply_token|unsurfaced_asks) action="inject" ;;
   ok) if [ "$items" -gt 0 ]; then action="notify"; fi ;;
 esac
 [ -n "$action" ] || { log "$verdict" false ""; exit 0; }
@@ -151,13 +151,16 @@ This turn asks the operator for something (approval · decision · answer · man
 
 > **🔔 PRECISA DE VOCÊ (N)**
 > 1. **🛑 AUTORIZAR** — <what, 1 line> · responda \`1 sim\` / \`1 não\`
-> 2. **🔶 DECIDIR** — <what> · \`2A\` <option> (recomendado) · \`2B\` <option>
+> 2. **🔶 DECIDIR** — <what> · **Outra opção:** candidate for analysis only, not selection/authorization · \`2A\` <recommended> · \`2C: <texto livre>\` · \`2N\` nenhuma opção atende · \`2D\` preciso de mais contexto
 > 3. **✋ AÇÃO MANUAL** — <what the human must do by hand>
 > ➕ +N registrados em <backlog> (não precisam de você agora)   ← only if >3
+English sample (use for an English reply):
+> **🔔 NEEDS YOU (1)**
+> 1. **🔶 DECIDE** — <decision> · **Other option:** candidate for analysis only, not selection/authorization · \`1A\` <recommended> · \`1C: <new candidate>\` · \`1N\` none fit · \`1D\` need more context
 
 If an item depends on another artifact (a PR, a ticket), add a line \`> ⏳ #N — <owner>: <state> · <what the human must do, or "nada a fazer por você">\` so the dependency is never invisible.
 
-Rules: exactly ONE complete header · blank line before it, NO \`---\` above it · it is the LAST thing in the message (no prose after it) · ≤3 items · reply tokens prefixed with the item number · shape AND word, never color alone (🛑 blocking/security · 🔶 decision · ✋ manual). If after self-answering nothing actually needs him, replace it with the bare line: > **✅ NADA PRECISA DE VOCÊ**
+Rules: exactly ONE complete header · blank line before it, NO \`---\` above it · it is the LAST thing in the message (no prose after it) · ≤3 items · 🔶 offers the recommendation, candidate-only open-option label localized for the operator (pt-BR: Outra opção; English: Other option), and distinct item-bound nN/nD replies for none-fit and need-context; both leave it unresolved · reply tokens prefixed with the item number · shape AND word, never color alone (🛑 blocking/security · 🔶 decision · ✋ manual). If after self-answering nothing actually needs him, replace it with the bare line: > **✅ NADA PRECISA DE VOCÊ**
 
 (Advisory only — nothing is blocked. Heuristic detection. One injection per prompt. Disable: MAOS_ATTENTION_GATE=0.)
 EOF

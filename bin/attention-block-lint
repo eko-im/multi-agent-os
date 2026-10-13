@@ -31,8 +31,9 @@ HEADER_PREFIX = re.compile(r"^\s*>\s*\*\*\s*(🔔|✅)")
 BLOCK_HEADER = re.compile(r"^\s*>\s*\*\*\s*(🔔|✅)\s+([^*()\n]*[^\s*()][^*()\n]*?)\s*(?:\((\d+)\))?\s*\*\*(.*)$")
 ITEM_LINE = re.compile(r"^\s*>\s*\d+\.\s+\*\*\s*(🛑|🔶|✋)")
 # A well-formed item: icon + UPPERCASE verb in bold, then a separator and the ask.
-# Asking items (🛑 blocking, 🔶 decision) must also carry an exact reply token in a
-# code span; a ✋ manual step describes an action, so it needs none.
+# Asking items (🛑 blocking, 🔶 decision) need item-bound numbered reply tokens in a
+# code span. A 🔶 item also requires its locale-matched open-option label, typed nC
+# candidate, distinct nN/nD replies, and at least one item-bound nA/nB offered choice.
 ITEM_WELLFORMED = re.compile(r"^\s*>\s*\d+\.\s+\*\*\s*(🛑|🔶|✋)\s+[A-ZÀ-Ý][A-ZÀ-Ý ]+\*\*\s+[—–-]\s+\S")
 REPLY_TOKEN = re.compile(r"`[^`]+`")
 ANY_NUMBERED = re.compile(r"^\s*>\s*(\d+)\.\s")
@@ -97,6 +98,7 @@ def scan(text: str) -> dict:
     in_fence = False
     in_block = False
     block_kind = None  # "attention" | "clear"
+    block_locale = None
     block_seen_at = None
     items = []
     signals = []
@@ -127,6 +129,13 @@ def scan(text: str) -> dict:
                 m = HEADER_PREFIX.match(raw)
             in_block = True
             block_kind = "attention" if m.group(1) == "🔔" else "clear"
+            header_label = m.group(2) if m.lastindex and m.lastindex >= 2 else ""
+            if re.search(r"\bprecisa de voc[êe]\b", header_label, re.I):
+                block_locale = "pt-BR"
+            elif re.search(r"\bneeds you\b", header_label, re.I):
+                block_locale = "en"
+            else:
+                block_locale = None
             header_count = int(m.group(3)) if m.lastindex and m.lastindex >= 3 and m.group(3) else None
             block_seen_at = i
             block_end = i
@@ -161,22 +170,46 @@ def scan(text: str) -> dict:
                 n = num.group(1)
                 ok_shape = bool(ITEM_WELLFORMED.match(raw))
                 tokens = REPLY_TOKEN.findall(raw)
-                # Reply tokens are spans shaped like "<num>..." (`1 sim`, `2A`). At least one
-                # must carry THIS item's number and none may carry another's; spans that are
-                # not numbered (`make deploy`) are ordinary code and are ignored.
+                # Numbered reply tokens identify exactly one item. Open-option text
+                # tokens are item-bound as well, but a wrong-number C token is a
+                # missing alternative (not a silently valid option).
                 numbered = [t.strip("`") for t in tokens if re.match(r"`\d+(?:[A-Z]\b|\s|`)", t)]
-                ok_token = im.group(1) == "✋" or (
-                    bool(numbered) and all(re.match(re.escape(n) + r"(?:[A-Z]\b|\s|$)", t) for t in numbered))
-                # The reply contract is exact only if each token identifies ONE option:
-                # `1A` offered twice (or `1A`/`1a`) is ambiguous (Codex, PR #463).
-                norm = [" ".join(t.split()).casefold() for t in numbered]
-                dup_token = len(norm) != len(set(norm))
+                open_tokens = [t for t in numbered if re.match(r"\d+C(?:\s|:)", t)]
+                unresolved_tokens = [t for t in numbered if re.fullmatch(r"\d+[ND]", t)]
+                ordinary_numbered = [t for t in numbered if t not in open_tokens and (im.group(1) != "🔶" or t not in unresolved_tokens)]
+                choice_tokens = [t for t in ordinary_numbered if re.fullmatch(re.escape(n) + r"[AB]", t)]
+                expected_open_label = {"pt-BR": "Outra opção", "en": "Other option"}.get(block_locale)
+                has_open_label = bool(expected_open_label) and len(re.findall(r"\*\*" + re.escape(expected_open_label) + r":\*\*", raw)) == 1
+                has_open_token = len(open_tokens) == 1 and bool(re.fullmatch(re.escape(n) + r"C:\s+\S.*", open_tokens[0]))
+                missing_open_option = im.group(1) == "🔶" and not (has_open_label and has_open_token)
+                missing_unresolved_response = im.group(1) == "🔶" and (
+                    not (n + "N" in numbered and n + "D" in numbered)
+                    or any(t not in (n + "N", n + "D") for t in unresolved_tokens))
+                normalized_tokens = [" ".join(t.split()).casefold() for t in numbered]
+                normalized_token_set = set(normalized_tokens)
+                authorization_replies = {"pt-BR": {n + " sim", n + " não"}, "en": {n + " yes", n + " no"}}.get(block_locale, set())
+                has_authorization_pair = bool(authorization_replies) and authorization_replies == normalized_token_set
+                decision_token_matches = [re.fullmatch(r"(\d+)([ABND]|C:\s+\S.*)", t) for t in numbered]
+                decision_tokens_valid = im.group(1) != "🔶" or (
+                    bool(decision_token_matches)
+                    and all(m is not None for m in decision_token_matches)
+                    and all(m.group(2) not in "AB" or m.group(1) == n for m in decision_token_matches))
+                manual_tokens_bound = im.group(1) != "✋" or not numbered or all(
+                    re.match(re.escape(n) + r"(?:[A-Z]\b|\s|$)", t) for t in numbered)
+                ok_token = (im.group(1) == "✋" and manual_tokens_bound) or (
+                    bool(numbered) and all(re.match(re.escape(n) + r"(?:[A-Z]\b|\s|$)", t) for t in ordinary_numbered)
+                    and decision_tokens_valid
+                    and (im.group(1) != "🔶" or (not (has_open_label and has_open_token) or bool(choice_tokens)))
+                    and (im.group(1) != "🛑" or has_authorization_pair))
+                dup_token = (len(normalized_tokens) != len(normalized_token_set) or
+                             (im.group(1) == "🔶" and sum(bool(re.fullmatch(re.escape(n) + r"C:\s+\S.*", t)) for t in open_tokens) > 1))
                 # Drop only reply-token spans; a ref inside ordinary code (`#463`) is
                 # still a dependency (Codex, PR #463).
                 deps = DEP_REF.findall(re.sub(r"`[^`]+`", lambda t: "" if NUMBERED_TOKEN.match(t.group(0)) else t.group(0), raw))
                 items.append({"line": i, "severity": im.group(1),
                               "wellformed": ok_shape and ok_token, "deps": deps, "n": n,
-                              "dup_token": dup_token})
+                              "dup_token": dup_token, "missing_open_option": missing_open_option,
+                              "missing_unresolved_response": missing_unresolved_response})
                 continue
             in_block = False  # block ended by prose or a blank line
         if re.match(r"^\s*(>|\||#)", raw):
@@ -213,6 +246,10 @@ def scan(text: str) -> dict:
         verdict = "malformed_item"
     elif any(x.get("dup_token") for x in items):
         verdict = "duplicate_reply_token"
+    elif any(x.get("missing_open_option") for x in items):
+        verdict = "missing_open_option"
+    elif any(x.get("missing_unresolved_response") for x in items):
+        verdict = "missing_unresolved_response"
     elif [x["n"] for x in items] != [str(k) for k in range(1, len(items) + 1)]:
         verdict = "misnumbered_items"  # duplicates or gaps make "1 sim" ambiguous
     elif block_kind == "attention" and header_count != len(items):  # a missing (N) is a mismatch too
@@ -248,8 +285,8 @@ def scan(text: str) -> dict:
 
 
 WARN = {"missing_block", "inconsistent_clear_with_asks", "empty_attention_block",
-        "block_not_last", "over_cap", "malformed_item",
-        "dependency_unexplained", "misnumbered_items", "header_count_mismatch",
+        "block_not_last", "over_cap", "malformed_item", "missing_open_option",
+        "missing_unresolved_response", "dependency_unexplained", "misnumbered_items", "header_count_mismatch",
         "multiple_status_headers", "malformed_header", "unnumbered_ask_in_block",
         "duplicate_reply_token", "unsurfaced_asks"}
 
