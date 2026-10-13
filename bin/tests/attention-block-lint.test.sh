@@ -386,6 +386,26 @@ check "manual step rejects foreign numbered token" malformed_item 2 <<'T'
 > 1. **✋ AÇÃO MANUAL** — rotacionar a URL do Zapier · `2A`
 T
 
+check "manual step rejects foreign free-text token" malformed_item 2 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **✋ AÇÃO MANUAL** — rotacionar a URL do Zapier · `2C: alternativa`
+T
+
+check "manual step accepts same-item free-text token" ok 0 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **✋ AÇÃO MANUAL** — rotacionar a URL do Zapier · `1C: alternativa A/B ou C; após #42`
+T
+
+check "manual step rejects grouped foreign reply token" malformed_item 2 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **✋ AÇÃO MANUAL** — rotacionar a URL do Zapier · `1A/2B`
+T
+
+check "manual step accepts same-item exact reply token" ok 0 <<'T'
+> **🔔 PRECISA DE VOCÊ (1)**
+> 1. **✋ AÇÃO MANUAL** — rotacionar a URL do Zapier · `1A`
+T
+
 check "English prose mention does not duplicate visible label" ok 0 <<'T'
 > **🔔 NEEDS YOU (1)**
 > 1. **🔶 DECIDE** — deployment region; “Other option” is mentioned in prose · **Other option:** propose a candidate for analysis only, not selection/authorization · `1A` recommended · `1C: <new candidate>` · `1N` none fit · `1D` need more context

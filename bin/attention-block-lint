@@ -203,8 +203,8 @@ def scan(text: str) -> dict:
                     and all(m is not None for m in decision_token_matches)
                     and all(m.group(2) not in "AB" or m.group(1) == n for m in decision_token_matches))
                 manual_tokens_bound = im.group(1) != "✋" or not numbered or all(
-                    re.match(re.escape(n) + r"(?:[A-Z]\b|\s|$)", t) for t in numbered)
-                ok_token = (im.group(1) == "✋" and manual_tokens_bound) or (
+                    re.fullmatch(re.escape(n) + r"(?:[A-Z]|C:\s+\S.*|\s+[A-Za-zÀ-ÿ]+)?", t) for t in numbered)
+                ok_token = manual_tokens_bound if im.group(1) == "✋" else (
                     bool(numbered) and all(re.match(re.escape(n) + r"(?:[A-Z]\b|\s|$)", t) for t in ordinary_numbered)
                     and decision_tokens_valid
                     and (im.group(1) != "🔶" or (not (has_open_label and has_open_token) or bool(choice_tokens)))
