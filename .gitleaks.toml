@@ -50,16 +50,22 @@ description = "vek-db-password documented non-credential references"
 #   1. An AWS Secrets Manager REFERENCE URI (the pointer, not a secret) —
 #      e.g. aws:///vek-sales/env/hml#VEK_DB_PASSWORD. A password that merely
 #      ENDS in such a URI (CorrectHorse1!aws:///foo#BAR) stays detectable.
-#   2. The literal redaction marker `<REDACTED>` (optional text before the
-#      closing `>`). This is the documented placeholder, not a credential.
-#      A real password that merely contains the marker is NOT exempted, and
+#   2. The exact redaction marker `<REDACTED>`. This is the documented
+#      placeholder, not a credential. A real password that merely contains
+#      the marker, or a variant such as `<REDACTED_DB>`, is NOT exempted, and
 #      this is deliberately NOT a path allowlist: the same history holds a
 #      real (now rotated) credential, ignored only by exact fingerprint in
 #      .gitleaksignore so the path keeps firing for anything new.
 regexTarget = "secret"
 regexes = [
     '''^aws:///[^\s'"]+#[A-Z0-9_]+$''',
-    '''^<REDACTED[^>]*>$''',
+    # Whole value is exactly the redaction mask <REDACTED>, the only
+    # angle-bracket placeholder in this repo's history. The value class allows
+    # < and >, so without this exemption the gate flags the mask itself.
+    # Exact literal, fully anchored ^…$ on the extracted value: any other
+    # bracketed value (<s3cr3t!x>, <A1234567>, <REDACTED_DB>) still fires. Only the
+    # placeholder is exempt, never the rule or a path.
+    '''^<REDACTED>$''',
 ]
 # Path exemptions: a CI build-log capture and a test fixture — neither is a
 # credential store. Anchored to the EXACT file end-of-path ($) so a suffixed
@@ -152,7 +158,9 @@ regexTarget = "secret"
 regexes = [
     '''^(?i:changeme|example)$''',
     '''^\*+$''',
-    '''^<[^>\s]*>$''',
+    # Angle-bracket placeholder: only the exact mask <REDACTED> (the single
+    # bracketed form in this repo's history), never any bracketed value.
+    '''^<REDACTED>$''',
     '''^\$\{[^}]+\}$''',
     # Whole value is an AWS Secrets Manager reference, same anchor as
     # app-db-password. A real password that merely contains this text is not
@@ -161,12 +169,21 @@ regexes = [
     '''^aws:///[^\s'"]+#[A-Z0-9_]+$''',
     # Case-sensitive and exact. (?-i) holds even if an earlier alternative
     # in the joined OR-list turned case-folding on. A lowercase or mixed-case
-    # alphanumeric secret must NOT match.
-    '''(?-i)^[A-Z][A-Z0-9_]*$''',
+    # alphanumeric secret must NOT match. At least one '_' segment is required
+    # (identifier shape, SOME_CONSTANT_NAME), so a bare all-caps literal such
+    # as ABABABAB or PASSW0RD still fires.
+    '''(?-i)^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$''',
     # Code reference: UPPER_CONSTANT.attr (SECRET_PARAM_RE.match), not a credential.
     '''(?-i)^[A-Z][A-Z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$''',
     # password = os.getenv("NAME") — the call parenthesis is not part of the value.
     '''^os\.getenv$''',
+    # Code references, not literals: bare shell expansion ($APP_SECRET_VALUE),
+    # os.environ["X"] / os.environ.get("X") (value stops at the quote or '('),
+    # process.env.X, and member access on self/request/settings/config.
+    '''^\$[A-Za-z_][A-Za-z0-9_]*$''',
+    '''^os\.environ(?:\.get)?\[?$''',
+    '''^process\.env\.[A-Za-z_][A-Za-z0-9_]*$''',
+    '''^(?:self|request|settings|config)\.[A-Za-z_][A-Za-z0-9_.]*\[?$''',
 ]
 
 [[rules]]
