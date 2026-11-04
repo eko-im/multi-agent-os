@@ -19,6 +19,7 @@ signal being tested IS the git state.
 """
 
 import json
+import os
 import subprocess
 import sys
 
@@ -184,3 +185,128 @@ def test_engine_does_not_mutate_the_repo_or_swap_the_file(script_path, dirty_rep
     decidir = env["tree"]["hitl_unattached"][0]["decidir"]
     assert "editado no working tree" in decidir, (
         "a human editing the ledger on purpose must still see their own edits")
+
+
+# Execute the real consumer with an isolated HOME; never consult the user's queue.
+def _binding_env(home, **extra):
+    env = {k: v for k, v in os.environ.items() if k not in {
+        "HITL_LEDGER", "MAOS_SELF_SESSION_ID", "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_SESSION_ID", "PI_SESSION_FILE"}}
+    env.update(HOME=str(home), MAOS_SELF_SESSION_ID="binding-session", **extra)
+    return env
+
+
+def _binding_ledger(home, relative, title):
+    path = home / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = (LEDGER.replace("Primeiro item", title)
+            .replace("| Link |", "| Link | Sessão |")
+            .replace("| (sem ticket) |", "| (sem ticket) | binding-session |"))
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def _binding_run(script_path, env, *extra, fmt="json", digest=True):
+    cmd = [sys.executable, "-I", "-B", str(script_path), "--compass-json", "-",
+           "--format", fmt, *extra]
+    if digest:
+        cmd.append("--hitl-only")
+    proc = subprocess.run(cmd, input="{}", capture_output=True, text=True,
+                          env=env, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout) if fmt in {"json", "ask-user-question"} else proc.stdout
+
+
+def test_default_reads_active_vault_not_legacy(script_path, tmp_path):
+    active = _binding_ledger(tmp_path, "Projects/eko-engram/hitl/punch-list.md", "Active")
+    _binding_ledger(tmp_path, "eko-engram/hitl/punch-list.md", "Legacy")
+    result = _binding_run(script_path, _binding_env(tmp_path))
+    assert result["meta"]["hitl_source"] == str(active)
+    assert result["meta"]["hitl_source_available"] is True
+    assert result["meta"]["hitl_session_ids"] == ["binding-session"]
+    assert result["tree"]["hitl_unattached"][0]["decidir"] == "Active"
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_ledger_override_precedence(script_path, tmp_path, explicit):
+    _binding_ledger(tmp_path, "Projects/eko-engram/hitl/punch-list.md", "Default")
+    env_ledger = _binding_ledger(tmp_path, "env.md", "Environment")
+    cli_ledger = _binding_ledger(tmp_path, "cli.md", "CLI")
+    extra = ["--hitl-md", str(cli_ledger)] if explicit else []
+    result = _binding_run(script_path, _binding_env(tmp_path, HITL_LEDGER=str(env_ledger)), *extra)
+    assert result["meta"]["hitl_source"] == str(cli_ledger if explicit else env_ledger)
+    assert result["tree"]["hitl_unattached"][0]["decidir"] == ("CLI" if explicit else "Environment")
+
+
+@pytest.mark.parametrize("override", [False, True])
+def test_command_invocation_uses_active_binding(script_path, tmp_path, override):
+    root = script_path.parents[3]
+    active = _binding_ledger(tmp_path, "Projects/eko-engram/hitl/punch-list.md", "Active")
+    _binding_ledger(tmp_path, "eko-engram/hitl/punch-list.md", "Legacy")
+    other = _binding_ledger(tmp_path, "override.md", "Override")
+    env = _binding_env(tmp_path, CLAUDE_PLUGIN_ROOT=str(root))
+    if override:
+        env["HITL_LEDGER"] = str(other)
+    # The markdown command is an instruction surface, not an executable file:
+    # execute its default invocation, stopping before the alternative examples.
+    command = (root / "commands" / "hitl-digest.md").read_text(encoding="utf-8")
+    invocation = command.split("```bash\n", 1)[1].split("\n```", 1)[0].split("# MESMO digest", 1)[0]
+    proc = subprocess.run(["bash", "-c", invocation], capture_output=True, text=True,
+                          env=env, cwd=tmp_path, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    assert str(other if override else active) in proc.stdout
+    assert ("Override" if override else "Active") in proc.stdout
+    assert "Legacy" not in proc.stdout
+
+
+@pytest.mark.parametrize("fmt", ["tree", "mermaid", "html", "json", "ask-user-question"])
+@pytest.mark.parametrize("digest", [False, True])
+def test_missing_default_is_unavailable_not_empty(script_path, tmp_path, fmt, digest):
+    # A legacy/other queue exists but must never be silently substituted.
+    _binding_ledger(tmp_path, "eko-engram/hitl/punch-list.md", "Legacy")
+    _binding_ledger(tmp_path, "Projects/backup/hitl/punch-list.md", "Backup")
+    result = _binding_run(script_path, _binding_env(tmp_path), fmt=fmt, digest=digest)
+    if isinstance(result, dict):
+        meta = result.get("meta", result)
+        assert meta["hitl_source_available"] is False
+        assert meta["hitl_ledger_total"] is None
+        assert meta["hitl_source"] == str(tmp_path / "Projects/eko-engram/hitl/punch-list.md")
+        assert "NOT an empty queue" in meta["hitl_warning"]
+        if fmt == "ask-user-question":
+            assert result["no_decisions"] is False
+            assert result["ask_user_question"] is None
+            assert "nenhuma decisão pendente" not in "\n".join(result["preamble"])
+    else:
+        assert "NOT an empty queue" in result
+    assert "Legacy" not in json.dumps(result) and "Backup" not in json.dumps(result)
+
+
+def test_missing_explicit_source_does_not_fall_back(script_path, tmp_path):
+    _binding_ledger(tmp_path, "Projects/eko-engram/hitl/punch-list.md", "Active")
+    missing = tmp_path / "missing.md"
+    result = _binding_run(script_path, _binding_env(tmp_path), "--hitl-md", str(missing),
+                          fmt="ask-user-question")
+    assert result["hitl_source"] == str(missing)
+    assert result["hitl_source_available"] is False
+    assert result["no_decisions"] is False
+
+
+@pytest.mark.parametrize("kind", ["md", "json", "json-stdin"])
+def test_available_empty_sources_remain_valid(script_path, tmp_path, kind):
+    source = tmp_path / "empty"
+    source.write_text("", encoding="utf-8")
+    args = ["--hitl-json", "-"] if kind == "json-stdin" else [
+        "--hitl-md" if kind == "md" else "--hitl-json", str(source)]
+    # A stdin HITL source cannot share stdin with the compass.
+    compass = tmp_path / "compass.json"
+    compass.write_text("{}", encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, "-I", "-B", str(script_path), "--hitl-only",
+         "--compass-json", str(compass), "--format", "ask-user-question", *args],
+        input="", capture_output=True, text=True, env=_binding_env(tmp_path), timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["hitl_source_available"] is True
+    assert result["hitl_ledger_total"] == 0
+    assert result["no_decisions"] is True
+    assert result["hitl_warning"] is None

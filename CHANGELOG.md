@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `hitl-digest`: active vault binding and unavailable source
+
+- Command and synopsis engine default to `~/Projects/eko-engram/hitl/punch-list.md`
+  after the vault migration; explicit `--hitl-md` overrides `HITL_LEDGER`, which
+  overrides the default. Missing defaults never discover another clone or backup.
+- Missing markdown preserves the general panel's nonfatal degradation but reports
+  source availability explicitly, leaves ledger totals unknown, and cannot claim
+  `no_decisions` in AskUserQuestion. Available empty markdown/JSON remains valid.
+- The decision-engine pipe preserves source availability, unknown totals and the
+  warning in JSON; its tree output names an unavailable source instead of reporting
+  an ordinary empty queue. Real CLI pipe fixtures distinguish missing from empty.
+- Behavioral CLI and command-recipe fixtures cover default selection, override
+  precedence, missing/empty sources and session ownership. Ledger data is unchanged.
+  Refs #568.
+
 ### Fixed — `decision-engine`: explicit human-authority acts in technical items
 
 - `R2-guard` now keeps account permissions/settings, MFA changes, provider-safety

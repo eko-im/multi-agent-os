@@ -295,6 +295,57 @@ def test_end_to_end_with_the_real_synopsis_fuse(tmp_path):
     assert routes == {"H-0001": ("HITL", False), "H-0002": ("DIY", True)}
 
 
+@pytest.mark.skipif(not FUSE.is_file(), reason="synopsis-panel not installed")
+@pytest.mark.parametrize("available", [False, True], ids=["missing", "empty"])
+@pytest.mark.parametrize("fmt", ["json", "tree"])
+def test_default_source_missing_vs_empty_through_real_pipe(
+        tmp_path, monkeypatch, available, fmt):
+    """The default fixture ledger stays unavailable or valid-empty across both CLIs."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    for key in ("HITL_LEDGER", "MAOS_SELF_SESSION_ID", "CLAUDE_CODE_SESSION_ID",
+                "CLAUDE_SESSION_ID", "PI_SESSION_FILE"):
+        monkeypatch.delenv(key, raising=False)
+    ledger = tmp_path / "Projects" / "eko-engram" / "hitl" / "punch-list.md"
+    if available:
+        ledger.parent.mkdir(parents=True)
+        ledger.write_text("", encoding="utf-8")
+    compass = tmp_path / "compass.json"
+    compass.write_text("{}", encoding="utf-8")
+    with subprocess.Popen(
+            [sys.executable, "-I", "-B", str(FUSE), "--hitl-only",
+             "--compass-json", str(compass), "--session-id", "source-fixture",
+             "--format", "json"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as fuse:
+        proc = subprocess.run(
+            [sys.executable, "-I", "-B", str(SCRIPT), "-", "--format", fmt, "--sort", "gut"],
+            stdin=fuse.stdout, capture_output=True, text=True, timeout=60)
+        fuse.stdout.close()
+        _, fuse_stderr = fuse.communicate(timeout=60)
+    assert fuse.returncode == 0, fuse_stderr
+    assert proc.returncode == 0, proc.stderr
+    if fmt == "json":
+        out = json.loads(proc.stdout)
+        assert out["source"]["hitl_source_available"] is available
+        assert out["source"]["hitl_source"] == str(ledger)
+        assert out["source"]["hitl_ledger_total"] == (0 if available else None)
+        assert out["source"]["hitl_session_resolved"] is True
+        assert out["source"]["hitl_scope"] == "session"
+        assert out["verdicts"] == []
+        assert out["counts"] == {"DIY": 0, "COMPUTE": 0, "HITL": 0}
+        warning = out["source"]["hitl_warning"]
+        assert warning is None if available else "NOT an empty queue" in warning
+    elif available:
+        assert proc.stdout == "decision-engine: 0 itens HITL na entrada\n"
+    else:
+        assert str(ledger) in proc.stdout
+        assert "NOT an empty queue" in proc.stdout
+        assert "0 itens HITL na entrada" not in proc.stdout
+    assert ledger.exists() is available
+    if available:
+        assert ledger.read_text(encoding="utf-8") == ""
+
+
 def test_mutation_check_the_guard_is_load_bearing(monkeypatch):
     """Inject the defect (remove the human types) and prove a gate stops escalating;
     a test that passes with and without the defect would prove nothing."""

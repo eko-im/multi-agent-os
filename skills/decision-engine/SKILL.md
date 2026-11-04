@@ -146,6 +146,10 @@ Saída JSON:
 ```
 
 Exit `2` = entrada inválida. Exit `0` em qualquer outra situação, inclusive 0 itens.
+O envelope JSON preserva em `source` a disponibilidade, o total e o aviso da fonte.
+Com `hitl_source_available: false`, a árvore nomeia a fonte indisponível e mantém o
+aviso antes de qualquer resultado vazio; exit `0` não significa fila verificada.
+Fonte disponível vazia continua sendo um resultado válido de zero itens.
 
 ## Decisões de forja (agentic-tool-pipeline, resumidas)
 
