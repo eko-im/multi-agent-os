@@ -433,12 +433,13 @@ def _route(item: dict, policy: dict | None, today: dt.date) -> dict:
 
 
 SCOPE_KEYS = ("hitl_scope", "hitl_scope_reason", "hitl_scope_unresolved",
-              "hitl_session_resolved", "hitl_ledger_total", "hitl_source", "hitl_warning")
+              "hitl_session_resolved", "hitl_ledger_total", "hitl_source",
+              "hitl_source_available", "hitl_warning")
 
 
 def scope_info(doc) -> dict:
-    """Carry the digest's scope metadata through, so an unresolved scope is never
-    read as an empty queue."""
+    """Carry scope and source metadata through, so unresolved scope or an
+    unavailable ledger is never read as an empty queue."""
     meta = doc.get("meta") if isinstance(doc, dict) else None
     if not isinstance(meta, dict):
         return {}
@@ -471,10 +472,15 @@ def main(argv: list[str] | None = None) -> int:
         verdicts.sort(key=lambda v: -v["priority"]["score"])  # stable on ties
     source = scope_info(doc)
     if args.format == "tree":
+        if source.get("hitl_source_available") is False:
+            print(f"decision-engine: fonte HITL indisponível: {source.get('hitl_source')}"
+                  " (isto NÃO é fila vazia)")
+            if source.get("hitl_warning"):
+                print(f"    aviso: {source['hitl_warning']}")
         if source.get("hitl_scope_unresolved"):
             print(f"decision-engine: escopo não resolvido no digest: {source['hitl_scope_unresolved']}"
                   " (isto NÃO é fila vazia)")
-        elif not verdicts:
+        elif not verdicts and source.get("hitl_source_available") is not False:
             total = source.get("hitl_ledger_total")
             extra = f" (ledger tem {total}; escopo {source.get('hitl_scope')})" if total else ""
             print(f"decision-engine: 0 itens HITL na entrada{extra}")

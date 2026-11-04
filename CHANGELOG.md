@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Missing markdown preserves the general panel's nonfatal degradation but reports
   source availability explicitly, leaves ledger totals unknown, and cannot claim
   `no_decisions` in AskUserQuestion. Available empty markdown/JSON remains valid.
+- The decision-engine pipe preserves source availability, unknown totals and the
+  warning in JSON; its tree output names an unavailable source instead of reporting
+  an ordinary empty queue. Real CLI pipe fixtures distinguish missing from empty.
 - Behavioral CLI and command-recipe fixtures cover default selection, override
   precedence, missing/empty sources and session ownership. Ledger data is unchanged.
   Refs #568.
