@@ -25,9 +25,9 @@ Usage
   --compass-json  path to a pre-captured `work-compass-aggregate.py --json` payload,
                   or '-' for stdin. If omitted, the script CALLS the engine itself
                   (slower: it runs the live collectors).
-  --hitl-md       path to the HITL SSOT markdown (default: discover the punch-list.md).
-                  Discovery resolves the WORKING-TREE copy, which is correct for a human
-                  editing the ledger on purpose. Every render therefore NAMES the file it
+  --hitl-md       path to the HITL SSOT markdown (default: HITL_LEDGER, then the active
+                  ~/Projects/eko-engram/hitl/punch-list.md). Reads the WORKING-TREE copy
+                  as is, preserving human edits. Every render therefore NAMES the file it
                   read, and WARNS when that file is modified relative to HEAD or its repo
                   is behind its upstream — an item count can match while the items differ.
   --hitl-json     path to a pre-parsed HITL JSON array, or '-' for stdin (skips the md parse).
@@ -112,17 +112,10 @@ def find_hitl_script() -> Path | None:
     return None
 
 
-def find_hitl_md() -> Path | None:
-    cands = [
-        Path.home() / "Projects" / "eko-engram" / "hitl" / "punch-list.md",
-    ]
-    hit = _first_existing(cands)
-    if hit:
-        return hit
-    for base in (Path.home() / "Projects",):
-        for g in base.glob("**/hitl/punch-list.md"):
-            return g
-    return None
+def find_hitl_md() -> Path:
+    # The active vault is authoritative even when absent: never discover a
+    # different clone or backup and present its queue as the operator's.
+    return Path.home() / "Projects" / "eko-engram" / "hitl" / "punch-list.md"
 
 
 # ── ledger PROVENANCE (say which file was read; warn when it is not the tracked one) ─
@@ -157,10 +150,13 @@ def ledger_provenance(path: Path | None, kind: str = "md") -> dict:
     is unavailable — an absent signal is reported as unknown, never as "clean".
     """
     prov: dict = {"kind": kind, "path": str(path) if path else None,
+                  "available": path.is_file() if path else kind == "json-stdin",
                   "in_git": False, "dirty": None, "behind": None, "warning": None}
-    if not path:
-        prov["warning"] = "HITL ledger not found (rendering a tree with zero HITL items)"
+    if not prov["available"]:
+        prov["warning"] = "HITL ledger not found — source unavailable; this is NOT an empty queue"
         return prov
+    if not path:
+        return prov  # explicit JSON stdin is an available source without a file
     d = path.parent
     top = _git(d, "rev-parse", "--show-toplevel")
     if not top:
@@ -574,15 +570,15 @@ def load_hitl(args) -> tuple[list[dict], dict]:
     if args.hitl_json:
         p = Path(args.hitl_json)
         raw = p.read_text(encoding="utf-8").strip()
-        # empty file == no HITL ledger (valid)
+        # An available empty JSON file is a valid empty queue.
         items = json.loads(raw) if raw else []
         return _with_sessions(items), ledger_provenance(p, kind="json")
     md = Path(args.hitl_md) if args.hitl_md else find_hitl_md()
     explicit = bool(args.hitl_md)
-    if not md or not md.is_file():
-        # HITL ledger absent is not fatal — a tree with zero HITL is valid
-        return [], ledger_provenance(None, kind="md")
     prov = ledger_provenance(md, kind="md-explicit" if explicit else "md-discovered")
+    if not prov["available"]:
+        # Preserve the general panel's nonfatal degradation, not an empty-queue claim.
+        return [], prov
     return parse_hitl_md(md), prov
 
 
@@ -694,6 +690,7 @@ def fuse(compass: dict, hitl: list[dict], *, hitl_only: bool, pending_only: bool
             # this envelope must be able to tell a stale queue from a fresh one.
             "hitl_source": (hitl_prov or {}).get("path"),
             "hitl_source_kind": (hitl_prov or {}).get("kind"),
+            "hitl_source_available": (hitl_prov or {}).get("available"),
             "hitl_source_dirty": (hitl_prov or {}).get("dirty"),
             "hitl_source_behind": (hitl_prov or {}).get("behind"),
             "hitl_warning": (hitl_prov or {}).get("warning"),
@@ -1152,6 +1149,8 @@ def render_ask_user_question(fused: dict, title: str, raw_hitl: list[dict], *,
         pre.extend(_wrap_cols(f"HITL scope: session — {meta.get('hitl_scope_reason')}"))
     if meta.get("hitl_scope_unresolved"):
         pre.extend(_wrap_cols(f"⚠ session scope unresolved: {meta['hitl_scope_unresolved']}"))
+    elif meta.get("hitl_source_available") is False:
+        pre.append("fonte HITL indisponível — fila não verificada; não abra AskUserQuestion")
     elif not cards:
         pre.append("nenhuma decisão pendente — não abra AskUserQuestion")
         # "0 shown" must never read as "0 exist": an empty slice of a full ledger
@@ -1182,11 +1181,13 @@ def render_ask_user_question(fused: dict, title: str, raw_hitl: list[dict], *,
         "code": code,
         "preamble": pre,
         "ask_user_question": {"questions": questions} if questions else None,
-        "no_decisions": not questions and not meta.get("hitl_scope_unresolved"),
+        "no_decisions": (not questions and not meta.get("hitl_scope_unresolved")
+                         and meta.get("hitl_source_available") is not False),
         "cards": card_meta,
         "overflow": [h.get("id", "") for h in overflow],
         "hitl_source": meta.get("hitl_source"),
         "hitl_source_kind": meta.get("hitl_source_kind"),
+        "hitl_source_available": meta.get("hitl_source_available"),
         "hitl_source_dirty": meta.get("hitl_source_dirty"),
         "hitl_source_behind": meta.get("hitl_source_behind"),
         "hitl_warning": meta.get("hitl_warning"),
@@ -1223,7 +1224,8 @@ def self_heal_envelope(exc: Exception, ctx: dict) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="synopsis-panel — fuse pendencies N-Tree + HITL into one view")
     ap.add_argument("--compass-json", default=None, help="work-compass --json path, '-' for stdin, or omit to call the engine")
-    ap.add_argument("--hitl-md", default=None, help="punch-list.md path (default: discover)")
+    ap.add_argument("--hitl-md", default=os.environ.get("HITL_LEDGER") or None,
+                    help="punch-list.md path (default: HITL_LEDGER or ~/Projects/eko-engram/hitl/punch-list.md)")
     ap.add_argument("--hitl-json", default=None, help="pre-parsed HITL JSON array path or '-'")
     ap.add_argument("--format", choices=list(RENDERERS) + [AUQ_FORMAT], default="tree")
     ap.add_argument("--consumer", choices=["human-live", "human-deferred", "machine"], default="human-live",
@@ -1286,7 +1288,7 @@ def main(argv=None) -> int:
             "session_resolved": identity["resolved"],
             "session_source": identity["source"],
             "unresolved": None,
-            "ledger_total": len(hitl),
+            "ledger_total": len(hitl) if hitl_prov["available"] else None,
         }
         if scope == "session":
             if not identity["resolved"]:

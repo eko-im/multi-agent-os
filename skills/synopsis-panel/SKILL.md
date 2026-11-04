@@ -115,14 +115,14 @@ bin/synopsis-fuse.py --scope all --include pending --format tree
 
 # caminho barato: passe payloads já capturados (sem re-rodar coletores)
 work-compass-aggregate.py --json --sort eisenhower --pendency-scope repo --include pending > /tmp/wc.json
-bin/synopsis-fuse.py --compass-json /tmp/wc.json --hitl-md ~/eko-engram/hitl/punch-list.md --format html > painel.html
+bin/synopsis-fuse.py --compass-json /tmp/wc.json --hitl-md ~/Projects/eko-engram/hitl/punch-list.md --format html > painel.html
 
 # só o painel HITL (os gates humanos), em árvore.
 # O `--compass-json -` com `{}` no stdin NÃO é opcional aqui: sem ele o script invoca o
 # work-compass vivo e roda os coletores (minutos). O digest HITL não precisa da N-Tree.
-# O ledger é o vault NORMAL, passado explicitamente (o comando /hitl-digest faz o mesmo):
-# a descoberta padrão do motor resolve ~/Projects/eko-engram, que é OUTRO clone.
-echo '{}' | bin/synopsis-fuse.py --hitl-only --compass-json - --hitl-md ~/eko-engram/hitl/punch-list.md --format tree
+# O default é o vault ativo ~/Projects/eko-engram; HITL_LEDGER e --hitl-md
+# permitem escolher explicitamente outro arquivo, sem fallback para outras filas.
+echo '{}' | bin/synopsis-fuse.py --hitl-only --compass-json - --format tree
 
 # envelope JSON unificado para outro agente consumir
 bin/synopsis-fuse.py --format json
@@ -132,8 +132,8 @@ bin/synopsis-fuse.py --format json
 | Flag | Default | Significado |
 |---|---|---|
 | `--compass-json F\|-` | — (chama o motor) | payload `work-compass --json` pronto, ou `-` stdin; omitido ⇒ chama o motor vivo |
-| `--hitl-md F` | descobre (o comando `/hitl-digest` passa o **vault normal** `~/eko-engram/hitl/punch-list.md` explicitamente) | caminho do `punch-list.md` SSOT. A descoberta resolve a cópia do **working tree** — certo para quem está editando o ledger de propósito. Por isso todo render **diz qual arquivo leu** e **avisa** quando ele está modificado contra o `HEAD` ou o repo está atrás do upstream (ver abaixo) |
-| `--hitl-json F\|-` | — | array HITL já parseado (pula o parse do md); vazio/ausente = sem ledger (válido) |
+| `--hitl-md F` | `HITL_LEDGER` ou `~/Projects/eko-engram/hitl/punch-list.md` | caminho do `punch-list.md` SSOT, igual ao default de `/hitl-digest`. CLI explícito vence ambiente. Lê o **working tree**, nomeia a fonte e avisa sobre divergência ou indisponibilidade; ausência não busca outro clone ou backup |
+| `--hitl-json F\|-` | — | array HITL já parseado (pula o parse do md); arquivo/stdin vazio é uma fonte disponível e vazia; arquivo JSON ausente continua sendo erro |
 | `--format` | `tree` | `tree` · `mermaid` · `html` · `json` |
 | `--scope` | `all` (pendências) · `session` (ledger HITL, em `--hitl-only`) | `current\|session\|repo\|vault\|all`. Escopo de **pendência** (repassado ao work-compass) e, em `--hitl-only`, escopo do **ledger HITL**: sem `--scope` o digest mostra só os itens desta conversa; `--scope all` traz o ledger inteiro, legados inclusive; qualquer outro valor **nunca** amplia |
 | `--session-id ID[,ID]` | resolvido do ambiente | identidade da conversa que invocou o render (comparação **exata** — um id é opaco, `A` ≠ `a`). Ordem: `--session-id` → `MAOS_SELF_SESSION_ID` → `CLAUDE_CODE_SESSION_ID` → `CLAUDE_SESSION_ID` → headers nativos de `PI_SESSION_FILE` com ancestrais `parentSession` explícitos. `PI_SESSION_ID` é deliberadamente ignorado: é por *processo*. Overrides não expandem para ancestrais. Sem identidade resolvida o escopo de sessão **falha fechado** (nada mostrado + motivo) |
@@ -199,7 +199,7 @@ consentimento, aprovação ou resolução do gate.
 Todo render nomeia o ledger que leu, e avisa quando ele diverge da versão rastreada:
 
 ```
-> HITL ledger: `/Users/<you>/eko-engram/hitl/punch-list.md`
+> HITL ledger: `/Users/<you>/Projects/eko-engram/hitl/punch-list.md`
 >
 > ⚠ ledger read from the WORKING TREE and it diverges from the tracked version:
 >   MODIFIED relative to HEAD; the repo is 21 commit(s) BEHIND its upstream.
@@ -207,7 +207,10 @@ Todo render nomeia o ledger que leu, e avisa quando ele diverge da versão rastr
 ```
 
 No envelope JSON os mesmos fatos vêm em `meta.hitl_source`, `meta.hitl_source_kind`,
-`meta.hitl_source_dirty`, `meta.hitl_source_behind` e `meta.hitl_warning`.
+`meta.hitl_source_available`, `meta.hitl_source_dirty`, `meta.hitl_source_behind` e
+`meta.hitl_warning`. Markdown ausente preserva a degradação não fatal do painel,
+mas informa fonte indisponível, `hitl_ledger_total: null` e, no modo AskUserQuestion,
+`no_decisions: false`. Uma fonte disponível sem itens continua sendo fila vazia válida.
 
 **Por que avisar e não trocar o arquivo.** Medido em 2026-10-26: um vault 21 commits
 atrás do upstream, com o ledger modificado, rendeu **16 abertos** — exatamente o mesmo

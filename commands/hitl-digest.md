@@ -50,7 +50,7 @@ operator-gated no próprio ledger (só o humano resolve; silêncio nunca é acei
 | `--format` | `tree` | `tree` (chat/terminal) · `mermaid` · `html` (página autônoma) · `json` (envelope p/ agente) · `ask-user-question` (payload p/ a ferramenta AskUserQuestion — ver §Modo AskUserQuestion) |
 | `--consumer` | `human-live` | só com `ask-user-question`: classe de consumidor do §7.0 (`human-live` · `human-deferred` · `machine`) — o agente decide |
 | `--with-pendencies` | off | inclui a N-Tree de pendências com os HITL anexados; **off = só o ramo HITL** (o digest puro) |
-| `--hitl-md PATH` | o vault normal (`~/eko-engram/hitl/punch-list.md`) | caminho do `punch-list.md` SSOT. O digest passa esse caminho **explicitamente** — a descoberta padrão do motor resolve `~/Projects/eko-engram`, que é **outro clone** com outro conteúdo. Para ler outro ledger, passe o path explícito (ou defina `HITL_LEDGER`). O digest sempre diz **qual arquivo leu** e **avisa** quando ele divergir da versão rastreada — leia o aviso antes de citar a fila |
+| `--hitl-md PATH` | vault ativo (`~/Projects/eko-engram/hitl/punch-list.md`) | caminho do `punch-list.md` SSOT. Override explícito vence `HITL_LEDGER`, que vence o default. Command e motor usam o mesmo vault ativo; ausência não busca outro clone ou backup. O digest nomeia a fonte e avisa quando ela está indisponível ou diverge da versão rastreada |
 | `--title TEXT` | *(pt-BR default)* | rótulo do digest |
 
 > **Por que o default é a sessão, e não o ledger inteiro.** O `punch-list.md` é UMA fila
@@ -85,16 +85,12 @@ operator-gated no próprio ledger (só o humano resolve; silêncio nunca é acei
 > "0 existem"; e identidade não resolvida é dita como tal ("this is NOT an empty
 > queue"), nunca como fila vazia.
 
-**Decisão explícita do SSOT de runtime HITL:** A = `$HOME/eko-engram/hitl/punch-list.md`,
-o vault normal, preserva o WIP local por cutover aditivo autorizado; B =
-`$HOME/Projects/eko-engram` é outro clone Git, não um destino implícito para HITLs ativos.
-Produtores usam o mesmo `HITL_LEDGER` com `--file "$HITL_LEDGER"`; abertura direta
-informa `--session-id`, e novos eventos declaram `session_id=ID` por evento
-(no sync, `--session-id` só afirma igualdade, não atribui um dono ao lote).
-Código é publicado via worktree/PR Git; dados de A só são conciliados por CAS aditivo
-revisado pelo root/maintainer, nunca por pull ou espelhamento cego do WIP. Usar uma nota
-já publicada em B (decisão operacional do H-0054) não move o SSOT nem afirma que HOME
-foi atualizado. A descoberta B do painel geral é um caso separado, não uma migração.
+**SSOT de runtime HITL após a migração:** `$HOME/Projects/eko-engram/hitl/punch-list.md`.
+O caminho antigo `$HOME/eko-engram` não é fallback. A seleção muda o binding,
+não copia, concilia nem altera decisões. Produtores que usam `HITL_LEDGER`
+continuam passando `--file "$HITL_LEDGER"`; a autoria da sessão continua explícita.
+Fonte ausente mantém o painel disponível, mas a fila fica **não verificada**:
+o aviso não equivale a zero decisões, e `no_decisions` permanece falso.
 
 ## Parte cognitiva (o agente decide antes de rodar o script)
 A skill é **híbrida**: antes do script determinístico, o agente interpreta —
@@ -147,12 +143,10 @@ if [ -z "$FUSE" ]; then
 fi
 [ -n "$FUSE" ] || { echo "hitl-digest: synopsis-fuse.py não encontrado" >&2; exit 2; }
 
-# LEDGER do digest: o vault NORMAL, passado EXPLICITAMENTE. A descoberta padrão do
-# motor (find_hitl_md) resolve ~/Projects/eko-engram — OUTRO clone, com outro
-# conteúdo; o digest tem de ler o vault normal (~/eko-engram), que é onde o
-# ledger é mantido. Para ler outro ledger, o operador passa --hitl-md <path>
-# explícito (o parâmetro já existe) ou define HITL_LEDGER.
-LEDGER="${HITL_LEDGER:-$HOME/eko-engram/hitl/punch-list.md}"
+# LEDGER do digest: o vault ativo após a migração. Overrides explícitos
+# (--hitl-md PATH) vencem esta seleção; HITL_LEDGER continua tendo precedência
+# sobre o default. Ausência não autoriza ler outro clone ou backup.
+LEDGER="${HITL_LEDGER:-$HOME/Projects/eko-engram/hitl/punch-list.md}"
 
 # DIGEST PURO (default) — só os gates humanos, sem rodar o coletor de pendências.
 # O compass vazio ({} via stdin) curto-circuita a agregação: o digest HITL não
@@ -207,7 +201,7 @@ python3 "$FUSE" --hitl-md "$LEDGER" --this-session-only --include pending --pend
 > quando ele divergir da versão rastreada:
 >
 > ```
-> > HITL ledger: `/Users/<you>/eko-engram/hitl/punch-list.md`
+> > HITL ledger: `/Users/<you>/Projects/eko-engram/hitl/punch-list.md`
 > >
 > > ⚠ ledger read from the WORKING TREE and it diverges from the tracked version:
 > >   MODIFIED relative to HEAD; the repo is 21 commit(s) BEHIND its upstream.
@@ -217,12 +211,8 @@ python3 "$FUSE" --hitl-md "$LEDGER" --this-session-only --include pending --pend
 > rendeu **16 abertos** — o mesmo total da versão rastreada, com três itens já fechados
 > aparecendo e três reais escondidos, um deles o mais grave da fila. **O total bater é o
 > que esconde o erro**, então o total nunca serve de prova de frescura. Se o aviso
-> aparecer, meça a versão rastreada antes de reportar:
->
-> ```bash
-> git -C ~/eko-engram show '@{upstream}:hitl/punch-list.md' > /tmp/ledger.md
-> echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md /tmp/ledger.md --format tree
-> ```
+> aparecer, reporte a divergência junto com o caminho lido. Ela não autoriza
+> substituir a fila ativa por uma cópia de outro clone, backup ou versão Git.
 
 ## Passo 2 opcional: rotear com o `decision-engine`
 
