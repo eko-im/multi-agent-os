@@ -117,19 +117,33 @@ def has_stop(folded: str) -> bool:
 
 
 def scan_secrets(text: str, allow: set[str]) -> list[dict]:
+    allowed = {a.casefold() for a in allow}
     out = []
     for kind, rx in SECRETS:
         for m in rx.finditer(text):
-            if m.group(0) in allow:
+            if m.group(0).casefold() in allowed:
                 continue
             out.append({"kind": kind, "masked": mask(m.group(0)), "offset": m.start()})
     return out
 
 
+def _named(name: str, folded: str) -> bool:
+    return re.search(r"(?<![\w-])" + re.escape(fold(name)) + r"(?![\w-])", folded) is not None
+
+
 def sinks(folded: str, public: list[str], private: list[str]) -> dict:
-    pub = [s for s in public if fold(s) in folded]
-    pri = [s for s in private if fold(s) in folded]
-    return {"public": pub, "private": pri, "split_required": bool(pub and pri)}
+    """A sink passed by the caller IS a destination, named in the dump or not.
+
+    `declared_*` drives the halt (a secret bound for a declared public sink must stop
+    even if the dump calls it "the OSS repo"). `mentioned_*` is information only.
+    """
+    return {
+        "declared_public": list(public),
+        "declared_private": list(private),
+        "mentioned_public": [s for s in public if _named(s, folded)],
+        "mentioned_private": [s for s in private if _named(s, folded)],
+        "split_required": bool(public and private),
+    }
 
 
 def lint(text: str, bindings: set[str], public: list[str], private: list[str],
@@ -147,7 +161,7 @@ def lint(text: str, bindings: set[str], public: list[str], private: list[str],
     halts, warnings = [], []
     if ph["unbound"]:
         halts.append("unbound-placeholder")
-    if secrets and sk["public"]:
+    if secrets and sk["declared_public"]:
         halts.append("secret-or-pii-with-public-sink")
     elif secrets:
         warnings.append("secret-or-pii-present")
@@ -212,8 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             with open(args.dump, encoding="utf-8") as fh:
                 text = fh.read()
-    except OSError as exc:
-        print(json.dumps({"status": "usage-error", "error": str(exc)}))
+    except (OSError, UnicodeDecodeError) as exc:
+        # Not a content halt (exit 1) and not a script bug (exit 3): the input is unreadable.
+        print(json.dumps({"status": "usage-error", "error": f"{type(exc).__name__}: {exc}"}))
         return 2
 
     try:

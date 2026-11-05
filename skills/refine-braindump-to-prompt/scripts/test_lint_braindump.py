@@ -119,11 +119,25 @@ class Sanitize(unittest.TestCase):
         r = run("mail someone@example.org", allow={"someone@example.org"})
         self.assertEqual(r["secrets"], [])
 
+    def test_allow_list_ignores_case(self):
+        r = run("mail Someone@Example.org", allow={"someone@example.org"})
+        self.assertEqual(r["secrets"], [])
+
 
 class Sinks(unittest.TestCase):
     def test_world_split(self):
         r = run(META_DUMP, bind={"braindump"}, public=["public-repo"], private=["private-vault"])
         self.assertTrue(r["sinks"]["split_required"])
+        self.assertEqual(r["sinks"]["mentioned_public"], ["public-repo"])
+
+    def test_declared_public_sink_halts_even_when_not_named(self):
+        r = run("note someone@example.org for the OSS repo", public=["public-repo"])
+        self.assertIn("secret-or-pii-with-public-sink", r["halts"])
+        self.assertEqual(r["sinks"]["mentioned_public"], [])
+
+    def test_mention_uses_word_edges(self):
+        r = run("see the repository", public=["repo"])
+        self.assertEqual(r["sinks"]["mentioned_public"], [])
 
 
 class Cli(unittest.TestCase):
@@ -149,6 +163,17 @@ class Cli(unittest.TestCase):
     def test_missing_file_is_usage_error(self):
         code, out = self._cli(["/nonexistent/dump.md"])
         self.assertEqual((code, out["status"]), (2, "usage-error"))
+
+    def test_non_utf8_file_is_usage_error_not_halt(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile("wb", suffix=".md", delete=False) as fh:
+            fh.write(b"Braindump: caf\xe9")
+        try:
+            code, out = self._cli([fh.name])
+        finally:
+            os.unlink(fh.name)
+        self.assertEqual((code, out["status"]), (2, "usage-error"))
+        self.assertIn("UnicodeDecodeError", out["error"])
 
     def test_internal_error_emits_self_heal(self):
         with mock.patch.object(lb, "collapse_verbs", side_effect=RuntimeError("boom")):

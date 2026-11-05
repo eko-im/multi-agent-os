@@ -284,18 +284,18 @@ that must give the same answer on every run are a script, run **before RECOVER**
 | Self-reference | `self_reference.meta` | dump whose object is this pipeline → meta-depth rule (M1) |
 | Stop rule / DoD | `stop_rule_present` | absent → REFINE must add one; never render a prompt without it |
 | Secret / PII scan | `secrets[]` (values masked) | with a PUBLIC sink → **halt**; otherwise a warning carried into RENDER |
-| Sink split | `sinks.split_required` | public and private sinks both named → RENDER splits content per sink (M4) |
+| Sink split | `sinks.declared_*` · `sinks.split_required` | a sink passed by the caller IS a destination, named in the dump or not; public + private both passed → RENDER splits content per sink (M4). `mentioned_*` is information only |
 
 ```text
 python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py <dump|-> \
     [--bind NAME]... [--public-sink NAME]... [--private-sink NAME]... [--allow STR]...
-exit 0 ok · 1 halt (-> STOP-HITL with the halts list) · 2 usage · 3 internal error
+exit 0 ok · 1 halt (-> STOP-HITL with the halts list) · 2 unreadable input (missing, non-UTF-8) · 3 internal error
 ```
 
 Sink names are **arguments**, never constants: the script knows no repo, vault or org. Exit `3`
 prints a `self_heal` block (traceback, input hash, a repair prompt for an AI harness): the harness
 fixes the script and adds a failing-first regression test; the run never proceeds unlinted.
-Tests: `scripts/test_lint_braindump.py` (23 cases; six guards were mutation-checked — removing any
+Tests: `scripts/test_lint_braindump.py` (27 cases; ten guards were mutation-checked — removing any
 one makes at least one test fail).
 
 ## Meta-dumps, placeholders and compound intent (binding, v0.4.0)
@@ -783,7 +783,7 @@ python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py dump.md --bi
   refine-a-braindump meta-prompt itself) exposed five gaps: no anti-recursion rule, unbound
   `{{placeholder}}`, 22-token synonym soup with repeats, compound prompt+tool intent forced into a
   `wrong-tool` stop, and no public/private sink split. Added §Deterministic pre-pass
-  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 23 tests with six guards
+  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 27 tests with ten guards
   mutation-checked, CI workflow) and §Meta-dumps M1–M5. Boy-scout: `commands/refine-braindump-to-prompt.md` was cited
   by §Validation but absent; created. Prior art compared: Anthropic prompt improver, OpenAI
   meta-prompting cookbook, Self-Refine (arXiv 2303.17651), APE (arXiv 2211.01910), DSPy,
