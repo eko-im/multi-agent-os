@@ -160,9 +160,10 @@ agent, hook, script, rule…), do not list or hand-roll one. Send the intent to
 `agentic-tool-pipeline`: it searches similars, lets forge pick the type and anima the name, and
 trains it by dogfood. Do not pre-decide the type here.
 
-Before any item becomes HITL: run `request-carried-authorization` on it. Verdict A → act; B →
-act with a verified undo; C → it stays HITL only if it is on the I3 floor (`kind=hard`), else
-hand it to `council-gate`. Record the grant, its basis and the undo.
+Before any item becomes HITL: run `request-carried-authorization` on it and route on its verdict.
+A → act; B → act with a verified undo; C `kind=hard` → never act: it is blocked human residue
+(file it under the closest I3 value; an operator refusal is already the answer, close it as
+answered); C `kind=ladder` → hand it to `council-gate`. Record the grant, its basis and the undo.
 
 Only then build ONE HITL digest (`/hitl-digest`): at most 3 cards, high urgency and human domain
 first, each with WHAT IT IS · WHAT IT IS FOR · IMPACT OF YES / IMPACT OF NO and a
@@ -202,6 +203,7 @@ the guard is removed from a temp copy and the scenario must flip.
 | A8 | a legitimate close | exit 0 |
 | A10 | a delegated "done" counted on the worker's word | exit 3 |
 | A11 | a delegated "done" the delegator re-measured | exit 0 |
+| A12 | `remeasured: "false"` (a string) slipping past the guard | exit 3 |
 
 ## Anti-patterns
 

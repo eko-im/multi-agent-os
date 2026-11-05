@@ -17,7 +17,7 @@ Input schema (stdlib-only validation):
   {"items": [{"id": str, "kind": "HOTL"|"HITL", "state": "open"|"done",
               "evidence": str (required when HOTL done),
               "delegated": bool (HOTL done by a worker/subagent),
-              "remeasured": bool (required true when delegated and done: the delegator
+              "remeasured": bool (required boolean true when delegated and done: the delegator
                                   re-measured the claim at source),
               "floor": one of HITL_FLOOR (required when kind=HITL),
               "digest": bool (HITL only: is it in the HITL DIGEST?)}]}
@@ -71,7 +71,7 @@ def validate(items):
             errors.append(f"{tag}: state must be open or done")
         if kind == "HOTL" and state == "done" and not str(it.get("evidence", "")).strip():
             errors.append(f"{tag}: HOTL marked done without evidence (a worker's word is not evidence)")
-        if kind == "HOTL" and state == "done" and it.get("delegated") and not it.get("remeasured"):
+        if kind == "HOTL" and state == "done" and it.get("delegated") and it.get("remeasured") is not True:
             errors.append(
                 f"{tag}: delegated HOTL marked done without the delegator's own re-measurement "
                 "(delegating does not waive responsibility: set remeasured=true only after "
