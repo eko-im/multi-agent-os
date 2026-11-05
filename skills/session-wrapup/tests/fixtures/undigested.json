@@ -1,0 +1,4 @@
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged"},
+ {"id": "h1", "kind": "HITL", "state": "open", "floor": "credential", "digest": false}
+]}

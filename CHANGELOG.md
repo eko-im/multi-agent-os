@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `session-wrapup` skill + `/session-wrapup` command + `bin/scoreboard.py`
+
+- `skills/session-wrapup/` (new): conductor verb that drives a delegating session to 100% and
+  only then closes it. Thin composition of `pulse` + `goal-recovery` + `quiesce` +
+  `council-gate` + `/hitl-digest` + `signoff`. Owns only the HOTL/HITL scoreboard, the
+  HOTL-before-HITL ordering and the per-lens triggers. Type chosen by the `agentic-tool-forge`
+  router (recurring multi-step workflow -> skill + command); name chosen by `anima`
+  (runner-up `helm` rejected).
+- `skills/session-wrapup/bin/scoreboard.py` (stdlib): prints `%HOTL`, `%HITL`, `%SESSION` as
+  n/d; refuses HOTL done without evidence and HITL outside the six-value floor (exit 3), a
+  shrinking denominator (exit 4), and an early close (`--gate close`, exit 5).
+- `skills/session-wrapup/tests/run-tests.sh`: 9 acceptance scenarios + 4 mutation checks.
+- `commands/session-wrapup.md`: `/session-wrapup` entry point.
+- `docs/dogfood/2026-11-05-session-wrapup-dryrun.md`: dry-run on the forging task itself.
+
 ### Fixed — `hitl-digest`: active vault binding and unavailable source
 
 - Command and synopsis engine default to `~/Projects/eko-engram/hitl/punch-list.md`
