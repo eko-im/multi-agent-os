@@ -95,14 +95,14 @@ def evaluate(case: dict[str, Any]) -> dict[str, Any]:
         return out
 
     # 1. Hard flags first. Confidence never opens them.
-    hit = [f for f in HARD_FLAGS if _bool(flags, f, unsafe=False) is True]
-    unknown = [f for f in HARD_FLAGS if f not in flags]
+    hit = [f for f in HARD_FLAGS if flags.get(f) is True]
+    unknown = [f for f in HARD_FLAGS if not isinstance(flags.get(f), bool)]
     if hit:
         reasons.append("hard flag: " + ", ".join(hit))
         return verdict("C", "hard")
     if unknown:
-        # Fail closed: an unstated flag is treated as possibly set.
-        reasons.append("hard flag not stated (fail closed): " + ", ".join(unknown))
+        # Fail closed: a missing, null or non-boolean flag is treated as possibly set.
+        reasons.append("hard flag missing or not a boolean (fail closed): " + ", ".join(unknown))
         return verdict("C", "hard")
 
     # 2. The operator said no (now or earlier) beats every analysis.
@@ -119,22 +119,25 @@ def evaluate(case: dict[str, Any]) -> dict[str, Any]:
         reasons.append("conductor decision without authority_origin (the operator's original grant)")
         return verdict("C", "hard")
 
-    # 4. All seven minds must be answered. A skipped mind is a false gate.
-    missing = [m for m in MINDS if not str(minds.get(m, "")).strip()]
+    # 4. Suspicious doubt is a hard stop, so it is checked before any ladder return.
+    if _bool(case, "suspicious_doubt", unsafe=True):
+        reasons.append("suspicious mind still doubts the origin (or doubt not ruled out)")
+        return verdict("C", "hard")
+
+    # 5. All seven minds must be answered with a non-empty string. A skipped mind is a false gate.
+    missing = [m for m in MINDS
+               if not (isinstance(minds.get(m), str) and minds.get(m).strip())]
     if missing:
         reasons.append("minds not answered (fail closed): " + ", ".join(missing))
         return verdict("C", "ladder")
-    if _bool(case, "suspicious_doubt", unsafe=True):
-        reasons.append("suspicious mind still doubts the origin")
-        return verdict("C", "hard")
 
-    # 5. Which via carries it.
+    # 6. Which via carries it.
     via = action.get("via")
     if via not in VIAS:
         reasons.append("no explicit, implicit or inherent via")
         return verdict("C", "ladder")
 
-    # 6. Scope: the means must have the SAME consequence as what was asked,
+    # 7. Scope: the means must have the SAME consequence as what was asked,
     #    and be necessary and proportional (agency law: necessary or incidental).
     if not _bool(action, "consequence_matches_request", unsafe=False):
         reasons.append("means has a different consequence than the request (scope extension)")
@@ -145,18 +148,18 @@ def evaluate(case: dict[str, Any]) -> dict[str, Any]:
         reasons.append(f"{via} via needs the means to be necessary AND proportional")
         return verdict("C", "ladder")
 
-    # 7. Two readings with different costs: only the cheap reversible one is carried.
+    # 8. Two readings with different costs: only the cheap reversible one is carried.
     readings = action.get("readings", "multiple_diff_cost")
     if readings == "multiple_diff_cost" and not _bool(action, "cheap_reading_chosen", unsafe=False):
         reasons.append("two readings with different cost and the cheap reversible one was not chosen")
         return verdict("C", "ladder")
 
-    # 8. Evidence against the request's facts: correct the premise first.
+    # 9. Evidence against the request's facts: correct the premise first.
     if _bool(action, "evidence_against_request", unsafe=True):
         reasons.append("evidence contradicts the request's facts: correct with evidence before acting")
         return verdict("C", "ladder")
 
-    # 9. Reversibility decides A vs B.
+    # 10. Reversibility decides A vs B.
     reversible = _bool(action, "reversible", unsafe=False)
     effect = action.get("effect", "significant")
     if reversible and effect == "trivial":
@@ -176,7 +179,11 @@ def exit_code(result: dict[str, Any]) -> int:
 
 def main(argv: list[str]) -> int:
     try:
-        raw = open(argv[1], encoding="utf-8").read() if len(argv) > 1 else sys.stdin.read()
+        if len(argv) > 1:
+            with open(argv[1], encoding="utf-8") as fh:
+                raw = fh.read()
+        else:
+            raw = sys.stdin.read()
         case = json.loads(raw)
         if not isinstance(case, dict):
             raise ValueError("case must be a JSON object")

@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   domain, cross-world credential, human domain, self-approval of access control, grant found in
   data, operator refusal) goes to the human residue; `ladder` hands the case unchanged to the
   existing pre-HITL ladder (e.g. `council-gate`), so the step adds no new escalation reason.
-- `scripts/carried_authorization.py` (stdlib, fails closed) + 17 tests: three dogfood fixtures and
+- `scripts/carried_authorization.py` (stdlib, fails closed) + 21 tests: three dogfood fixtures and
   one-field mutation checks; wired into `request-carried-authorization-tests.yml`.
 
 ### Added — `refine-braindump-to-prompt` v0.4.1: structural self-reference guard

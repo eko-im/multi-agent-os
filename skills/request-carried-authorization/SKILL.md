@@ -86,7 +86,7 @@ One via is enough, and the request must come **from the operator** (an operator 
 
 ## §5 - Invariants (never opened by this step)
 
-Spend; raw secret values; irreversible action in production without a verified rescue; external send to third parties; a third party's account, data or system; a credential outside its owner's domain; human-domain items (taste, corporate norm); an access-control change that lets the agent's own accounts approve its own change. A hit returns **C kind=hard**. Low-risk work stays frictionless and higher-risk work stops for review, the same split described in [Running Codex safely at OpenAI](https://openai.com/index/running-codex-safely/).
+Spend; raw secret values; irreversible action in production without a verified rescue; external send to third parties; a third party's account, data or system; a credential outside its owner's domain; human-domain items (taste, corporate norm); an access-control change that lets the agent's own accounts approve its own change. A hit, or a flag that is missing, null or not a boolean, returns **C kind=hard**. Low-risk work stays frictionless and higher-risk work stops for review, the same split described in [Running Codex safely at OpenAI](https://openai.com/index/running-codex-safely/).
 
 ## §6 - Step 3: verdict and what I do
 
@@ -135,7 +135,7 @@ Known weakness (open): the checker trusts the case file the agent fills in. It c
 
 ## §9 - Proof (anti-theater)
 
-- `tests/test_carried_authorization.py`: 17 tests. Three dogfood fixtures (`merge-the-pr` -> A; `grant-inside-agent-note` -> C hard; `request-extended-to-migrate-and-spend` -> C hard) plus mutation checks that flip one field of the A case and require the verdict to leave A.
+- `tests/test_carried_authorization.py`: 21 tests. Three dogfood fixtures (`merge-the-pr` -> A; `grant-inside-agent-note` -> C hard; `request-extended-to-migrate-and-spend` -> C hard) plus mutation checks that flip one field of the A case and require the verdict to leave A.
 - Guard-removal check (run once, recorded in the PR): disabling the origin check, the scope check or the mind check each makes the suite fail.
 - Promotion from `proposed`: two real cycles where the verdict was checked at the source.
 
@@ -147,4 +147,4 @@ Self-Application: this skill was produced from an operator request and A-checked
 
 | Version | Date | Change |
 |---|---|---|
-| 0.1.0 | 2026-11-05 | First version, `proposed`. Prose rule refined into a hybrid skill: seven minds + fail-closed checker + 17 tests with mutation checks; verdict C split into `hard` and `ladder`; origin allow-list with `authority_origin`; 11-term glossary; red-team table. |
+| 0.1.0 | 2026-11-05 | First version, `proposed`. Prose rule refined into a hybrid skill: seven minds + fail-closed checker + 21 tests with mutation checks; verdict C split into `hard` and `ladder`; origin allow-list with `authority_origin`; 11-term glossary; red-team table. |

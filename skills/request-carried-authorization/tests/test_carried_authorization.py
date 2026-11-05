@@ -79,6 +79,30 @@ class MutationChecks(unittest.TestCase):
     def test_missing_hard_flag_fails_closed(self):
         self.assert_off_a(lambda c: c["action"]["flags"].pop("spend"), kind="hard")
 
+    def test_malformed_hard_flag_fails_closed(self):
+        for bad in (None, "true", "false", 1, 0):
+            with self.subTest(value=bad):
+                self.assert_off_a(lambda c, v=bad: c["action"]["flags"].__setitem__("spend", v),
+                                  kind="hard")
+
+    def test_null_or_non_string_mind_fails_closed(self):
+        for bad in (None, 0, [], {}):
+            with self.subTest(value=bad):
+                self.assert_off_a(lambda c, v=bad: c["minds"].__setitem__("thomas", v),
+                                  kind="ladder")
+
+    def test_suspicious_doubt_wins_over_missing_minds(self):
+        self.assert_off_a(lambda c: c.update(minds={}, suspicious_doubt=True), kind="hard")
+
+    def test_cli_file_path_under_resource_warning_error(self):
+        p = subprocess.run(
+            [sys.executable, "-W", "error::ResourceWarning", str(SCRIPT),
+             str(FIXTURES / "merge-the-pr.json")],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn("ResourceWarning", p.stderr)
+
     def test_every_data_origin_blocks(self):
         for origin in sorted(ca.DATA_ORIGINS):
             with self.subTest(origin=origin):
