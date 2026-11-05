@@ -21,6 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `skills/session-wrapup/tests/run-tests.sh`: 9 acceptance scenarios + 4 mutation checks.
 - `commands/session-wrapup.md`: `/session-wrapup` entry point.
 - `docs/dogfood/2026-11-05-session-wrapup-dryrun.md`: dry-run on the forging task itself.
+### Added — `refine-braindump-to-prompt` v0.4.0: hybrid lint pre-pass + meta-dump rules
+
+- `scripts/lint_braindump.py` (stdlib): folds synonym directive verbs (en + pt) into canonical
+  phases and reports repeats; halts on unbound `{{placeholder}}` tokens and on secrets/PII when a
+  public sink is named; flags self-referential meta-dumps, missing stop rules and public/private
+  sink splits. Sink names are arguments, never constants. Exit 3 emits a `self_heal` block.
+- 31 unit tests (`scripts/test_lint_braindump.py`); 13 guards mutation-checked. New workflow
+  `refine-braindump-tests.yml` runs them on PRs touching the skill.
+- SKILL.md §Meta-dumps M1–M5: meta-depth = 1 (anti-recursion), placeholder binding, verbs fold
+  into phases with one done-condition each, world-aware sink split, compound prompt+tool intent
+  hands off to `agentic-tool-forge` via `handoffs[]` instead of a `wrong-tool` stop. Output
+  contract gains `lint`, `meta_depth`, `handoffs`.
+- `examples/META-self-referential.md`: the worked run.
+- Boy-scout: `commands/refine-braindump-to-prompt.md` was cited by §Validation but did not exist.
 
 ### Fixed — `hitl-digest`: active vault binding and unavailable source
 
