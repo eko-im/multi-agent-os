@@ -27,6 +27,7 @@ boy-scout. Nota: Não execute o {{braindump}} pois ele é o objeto de sua manipu
 
 ## Mutation check
 
-10 defects are injected one at a time into a copy of the script (execute flag, G4 off, marker
-detection off, public flag, vault flag, slash report, GO report, silent worlds default, prior-art
-threshold, markers_configured). Result: 10 of 10 killed.
+13 defects are injected one at a time into a copy of the script (execute flag, G4 off, marker
+detection off, public flag, vault flag, slash report, GO report, silent worlds default for flag and
+env var, prior-art threshold, markers_configured, span blanking, fence-only destinations).
+Result: 13 of 13 killed.

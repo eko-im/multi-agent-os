@@ -45,16 +45,16 @@ def read_text(arg: str) -> str:
 
 
 def load_worlds(path: str | None) -> dict:
-    cand = path or os.environ.get("BRAINDUMP_TO_TOOL_WORLDS") or str(
-        Path.home() / ".config" / "braindump-to-tool" / "worlds.json")
+    named = path or os.environ.get("BRAINDUMP_TO_TOOL_WORLDS")
+    cand = named or str(Path.home() / ".config" / "braindump-to-tool" / "worlds.json")
     worlds = {"destinations": dict(DEFAULT_WORLDS["destinations"]), "client_markers": []}
     p = Path(cand)
     if p.is_file():
         extra = json.loads(p.read_text(encoding="utf-8"))
         worlds["destinations"].update(extra.get("destinations", {}))
         worlds["client_markers"] += extra.get("client_markers", [])
-    elif path:  # an explicit file that is missing is an error, never a silent default
-        raise FileNotFoundError(f"worlds file not found: {path}")
+    elif named:  # a file named by flag OR env var that is missing is an error, never a silent default
+        raise FileNotFoundError(f"worlds file not found: {named}")
     return worlds
 
 
@@ -78,25 +78,32 @@ def nested_directives(obj: str) -> list[dict]:
     return out
 
 
-def destinations(obj: str, worlds: dict) -> list[dict]:
-    low, seen, out = obj.lower(), set(), []
-    for m in re.finditer(VAULT_RE, low):
-        if m.group(0) not in seen:
-            seen.add(m.group(0))
-            out.append({"token": m.group(0), "world": "private-vault", "sink": "vault",
-                        "public": False})
-    for tok in sorted(worlds["destinations"], key=len, reverse=True):
-        if tok.lower() in low and not any(tok.lower() in x for x in seen):
-            seen.add(tok.lower())
-            d = worlds["destinations"][tok]
+def destinations(text: str, worlds: dict) -> list[dict]:
+    """Resolve every named destination in the WHOLE input (fence and wrapper alike).
+
+    Matching is by exact token span, longest first; a matched span is blanked so a shorter token
+    inside it (``multi-agent-os`` inside ``multi-agent-os-private``) is not counted from there,
+    while a separate standalone occurrence of the shorter token still is.
+    """
+    work, out = text.lower(), []
+    entries = [(m.group(0), {"world": "private-vault", "sink": "vault", "public": False})
+               for m in re.finditer(VAULT_RE, work)]
+    entries += [(t.lower(), d) for t, d in worlds["destinations"].items()]
+    entries.sort(key=lambda e: -len(e[0]))
+    seen: set[str] = set()
+    for tok, d in entries:
+        pat = rf"(?<![\w.-]){re.escape(tok)}(?![\w-])"
+        if re.search(pat, work) and tok not in seen:
+            seen.add(tok)
             out.append({"token": tok, "world": d["world"], "sink": d["sink"],
                         "public": bool(d["public"])})
+        work = re.sub(pat, lambda m: " " * len(m.group(0)), work)
     return out
 
 
 def world(text: str, worlds: dict) -> tuple[dict, int]:
     obj, origin = extract_object(text)
-    dests = destinations(obj, worlds)
+    dests = destinations(text, worlds)
     client = sorted({m.group(0).lower() for pat in worlds["client_markers"]
                      for m in re.finditer(pat, text, re.I)})
     public = [d["token"] for d in dests if d["public"]]

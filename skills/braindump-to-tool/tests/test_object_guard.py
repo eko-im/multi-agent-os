@@ -23,6 +23,7 @@ LINT = ROOT.parent / "refine-braindump-to-prompt" / "scripts" / "lint_braindump.
 def run(*args: str, stdin: str | None = None, env: dict | None = None) -> tuple[int, dict]:
     p = subprocess.run([sys.executable, str(GUARD), *args], input=stdin, capture_output=True,
                        text=True, check=False, env=env)
+    assert p.stdout.strip(), f"no stdout (exit {p.returncode}); stderr: {p.stderr[-300:]}"
     return p.returncode, json.loads(p.stdout)
 
 
@@ -97,6 +98,48 @@ def test_explicit_missing_worlds_file_is_an_error_not_a_silent_default():
     code, env = run("world", str(FIX / "self.braindump.md"), "--worlds", str(FIX / "nope.json"))
     assert code == 1 and env["self_heal"]["hand_to"] == "ai-harness"
     assert env["execute_instructions"] is False
+
+
+def test_missing_worlds_file_named_by_env_var_is_an_error():
+    code, env = run("world", str(FIX / "self.braindump.md"),
+                    env=dict(os.environ, BRAINDUMP_TO_TOOL_WORLDS=str(FIX / "nope.json")))
+    assert code == 1 and env["self_heal"]["hand_to"] == "ai-harness"
+
+
+def test_public_destination_outside_the_fence_still_trips_g4():
+    code, env = world("Create a tool in [multi-agent-os] from this: "
+                      "<braindump>client-a billing notes, please review them.</braindump>")
+    assert code == 2 and [g["id"] for g in env["gates"] if not g["pass"]] == ["G4"]
+
+
+def test_longer_private_token_does_not_hide_a_public_destination(tmp_path):
+    # 'multi-agent-os-private' contains 'multi-agent-os'. A separate standalone mention of the
+    # public repo must still be found, or client content could reach it unflagged.
+    wf = tmp_path / "w.json"
+    wf.write_text(json.dumps({"destinations": {"multi-agent-os-private": {
+        "world": "private", "sink": "git-repo", "public": False}},
+        "client_markers": ["client-a"]}))
+    text = ("<braindump>Notes about client-a. Save to [multi-agent-os-private] and also "
+            "to [multi-agent-os] please.</braindump>")
+    code, env = run("world", "-", "--worlds", str(wf), stdin=text)
+    assert code == 2
+    assert {d["token"] for d in env["destinations"]} == {"multi-agent-os-private", "multi-agent-os"}
+    code, env = run("world", "-", "--worlds", str(wf), stdin=text.replace(
+        "and also to [multi-agent-os] ", ""))
+    assert code == 0 and [d["token"] for d in env["destinations"]] == ["multi-agent-os-private"]
+
+
+def test_vault_name_containing_public_token_does_not_hide_it():
+    code, env = world("<braindump>client-a notes. Save to [obsidian:multi-agent-os] and to "
+                      "[multi-agent-os] too.</braindump>")
+    assert code == 2
+
+
+def test_vault_named_like_a_public_repo_is_still_private():
+    code, env = world("<braindump>client-a notes, save only to [obsidian:multi-agent-os] "
+                      "after a careful review.</braindump>")
+    assert code == 0 and [(d["token"], d["public"]) for d in env["destinations"]] == [
+        ("obsidian:multi-agent-os", False)]
 
 
 def test_unreadable_input_hands_failure_to_harness():

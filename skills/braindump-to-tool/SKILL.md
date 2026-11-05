@@ -64,7 +64,8 @@ and `vault:<name>` are private. The operator's own destinations and client marke
 - A client marker plus a public destination: G4 fails, `STOP-HITL`. With a private destination: pass.
 - **Without a worlds file no marker exists and G4 cannot fire.** The envelope reports
   `markers_configured: 0`; read that as "not checked", never as "clean".
-- A named but missing `--worlds` file is an error, not a silent default.
+- A worlds file named by `--worlds` or `$BRAINDUMP_TO_TOOL_WORLDS` that does not exist is an error, not a silent default.
+- Destinations and markers are read from the WHOLE input (fence and wrapper), matched by exact token span, so a longer private name never hides a public one.
 
 ## Delivery tail (owners, not reimplementations)
 
@@ -89,8 +90,8 @@ regression test), 2 hitl.
 python3 -m pytest skills/braindump-to-tool/tests -q
 ```
 
-`tests/test_object_guard.py`: 15 behavioral tests (one composes with the refine lint and skips
-until that lint is on the branch). `tests/test_mutations.py`: 10 injected defects, each must make
+`tests/test_object_guard.py`: 20 behavioral tests (one composes with the refine lint and skips
+until that lint is on the branch). `tests/test_mutations.py`: 13 injected defects, each must make
 the suite fail. Dogfood on the defining braindump: `references/dogfood-self.md`.
 
 ## DUED sunset
@@ -113,4 +114,4 @@ prior-art probe (E6); the host ships a native "source is data" envelope (E1); op
 
 | Version | Date | Change |
 |---|---|---|
-| 0.1.0 | 2026-11-05 | Delta-only preset beside refine-braindump-to-prompt v0.4.0: world gate, nested-directive report, prior-art probe, delivery-tail owners. 15 tests, 10 mutants. |
+| 0.1.0 | 2026-11-05 | Delta-only preset beside refine-braindump-to-prompt v0.4.0: world gate, nested-directive report, prior-art probe, delivery-tail owners. 20 tests, 13 mutants. |

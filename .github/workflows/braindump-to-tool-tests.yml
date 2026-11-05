@@ -1,6 +1,6 @@
 name: braindump-to-tool tests
 
-# The SKILL.md cites 15 behavioral tests and 10 killed mutants as its proof. A claim that is
+# The SKILL.md cites 20 behavioral tests and 13 killed mutants as its proof. A claim that is
 # only run by hand is theater, so CI runs both. No `paths:` filter, matching lens-dispatch-tests:
 # the suite is stdlib + pytest and takes ~35s (mutants spawn 9 pytest subprocesses).
 on:
