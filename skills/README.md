@@ -27,6 +27,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `auto-pilot` | `auto-pilot/SKILL.md` | Autonomous unattended orchestration entry point. |
 | `bitbucket-pipeline-watch` | `bitbucket-pipeline-watch/SKILL.md` | Use when an agent needs to WAIT for a Bitbucket Cloud pipeline/build to finish and act on the outcome — instead of fixed-interval polling. |
 | `bot-finding-arbiter` | `bot-finding-arbiter/SKILL.md` | Soul-name **Praetor**. |
+| `braindump-to-tool` | `braindump-to-tool/SKILL.md` | Compose-only preset for a braindump that is the OBJECT of a tool-forging run: world gate, nested-directive report, prior-art probe. |
 | `chief-of-staff` | `chief-of-staff/SKILL.md` | Operator-facing work-focus conductor — the human twin of the agent-facing reactivate/Entelecheia. |
 | `claude-concierge` | `claude-concierge/SKILL.md` | Front desk for the Claude product surfaces (claude.ai web, desktop, Claude Code, Projects, bots/agents, Duet): picks the surface, loads its reference, researches current docs, routes to the specialist tool. Guarded Claude Code install. Successor of `claude-code-concierge` |
 | `claude-code-concierge` | `claude-code-concierge/SKILL.md` | Deprecated alias of `claude-concierge` |
