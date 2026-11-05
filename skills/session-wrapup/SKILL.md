@@ -128,7 +128,10 @@ Report a lens only when it changed a decision.
 ### Step 3 — Scoreboard (same denominator for the whole round)
 
 Items = decisions, actions and tasks of this session, each `HOTL` (the agent resolves) or `HITL`
-(only the human resolves, I3). Write them to a JSON file and run:
+(only the human resolves, I3). Mark every HOTL item a worker or subagent completed with
+`"delegated": true`, and add `"remeasured": true` only after you checked it at source yourself
+(I5). The gate cannot see whether you really re-measured: an omitted or false flag is the honest
+default. Write them to a JSON file and run:
 
 ```bash
 python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.round-start.json

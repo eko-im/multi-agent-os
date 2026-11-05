@@ -16,7 +16,8 @@ It is a GATE, not a calculator: it refuses inputs that would let the agent fake 
 Input schema (stdlib-only validation):
   {"items": [{"id": str, "kind": "HOTL"|"HITL", "state": "open"|"done",
               "evidence": str (required when HOTL done),
-              "delegated": bool (HOTL done by a worker/subagent),
+              "delegated": bool (producer contract: set true on every HOTL item a worker/
+                                 subagent completed; omitted = done by the conductor itself),
               "remeasured": bool (required boolean true when delegated and done: the delegator
                                   re-measured the claim at source),
               "floor": one of HITL_FLOOR (required when kind=HITL),
