@@ -90,8 +90,8 @@ regression test), 2 hitl.
 python3 -m pytest skills/braindump-to-tool/tests -q
 ```
 
-`tests/test_object_guard.py`: 20 behavioral tests (one composes with the refine lint and skips
-until that lint is on the branch). `tests/test_mutations.py`: 13 injected defects, each must make
+`tests/test_object_guard.py`: 20 behavioral tests (one runs the refine lint, then this
+script, on the same dump; it skips only if the lint file is absent). `tests/test_mutations.py`: 13 injected defects, each must make
 the suite fail. Dogfood on the defining braindump: `references/dogfood-self.md`.
 
 ## DUED sunset
