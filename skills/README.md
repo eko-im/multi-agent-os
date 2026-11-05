@@ -6,7 +6,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 
 > **Inventory provenance**: the 2026-08-25 refresh generated 87 rows from skill frontmatter `description`; `openrig-concierge` was added by hand 2026-09-23, `harness-concierge` by hand 2026-09-24, and `roadmap-tree-projector` on 2026-09-24. **Current snapshot 2026-10-08**: the table lists 93 git-tracked top-level skills (`person-agent-creator` added by hand 2026-10-08), including `live-session-continuity-recovery` and `session-to-vault`; `spec-backlog-ticket-reconciler` added by hand 2026-10-13 brings it to 94, and `ratchet-loop` by hand 2026-10-25 to 95; `claude-concierge` (successor, old name kept as an alias) on 2026-10-26 brings it to 96, and `fleet-campaign` by hand 2026-10-21 to 97, `virtuous-spiral` by hand 2026-10-25 to 98, and `verified-agentic-session-model` (by hand 2026-10-19, PR #421) to 99, and `instrument-self-heal-relay` by hand 2026-10-30 to 100, and `session-catalog` (added by hand 2026-09-24 on its branch, landed 2026-10-30) to 101. The dependency graph covers the session/agentic-tool/governance core families (edges extracted from `maos:` refs, `[[wikilinks]]`, `skills/` path refs in SKILL.md bodies); it is not an exhaustive dependency inventory.
 
-## Available Skills (101)
+## Available Skills (102)
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
@@ -93,6 +93,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `session-catalog` | `session-catalog/SKILL.md` | Read-only catalog of PAST AI-harness sessions (Claude Code, Codex, Gemini, omp, Antigravity, prime-agent, ChatGPT/claude.ai exports) into one private index, with topic-scoped, redacted extraction for continuity ledgers. |
 | `session-fission` | `session-fission/SKILL.md` | On-demand splitter for a tangled Claude session. |
 | `session-reentry` | `session-reentry/SKILL.md` | Cold/foreign-thread RE-ENTRY orchestrator (soul-name Anamnesis). |
+| `session-wrapup` | `session-wrapup/SKILL.md` | Conductor verb that drives a delegating session to 100% and only then closes it. |
 | `session-to-vault` | `session-to-vault/SKILL.md` | Preserve an agent session's history as a durable, dated, tagged note in a markdown vault, optionally casting it into a human-readable medium; does not reseed the session or decide what to do next. |
 | `signoff` | `signoff/SKILL.md` | The operator's END-OF-SESSION SIGN-OFF (encerramento) verb — invoked when you are DONE and want the session closed out AND its pending work left disco |
 | `skill-writer` | `skill-writer/SKILL.md` | Creates and maintains Agent Skills following the open standard (compatible with 30+ AI tools). |
@@ -117,7 +118,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 ## Skill families (by name-cluster)
 
 - **Agentic-tool lifecycle**: `agentic-tool-forge` (genesis) · `agentic-tool-intake` (adopt-or-not) · `agentic-tool-evaluator` (score/QA) · `agentic-tool-trainer` (improve/distill) · `agentic-tool-pipeline` (conductor)
-- **Session lifecycle**: `preflight` → `morning-briefing` → `postflight` (+ `quiesce` · `signoff` · `sync-to-git` · `session-fission` · `session-reentry` · `live-session-continuity-recovery` · `session-to-vault` · `reactivate` · `context-prep` · `verified-agentic-session-model`)
+- **Session lifecycle**: `preflight` → `morning-briefing` → `postflight` (+ `quiesce` · `signoff` · `session-wrapup` · `sync-to-git` · `session-fission` · `session-reentry` · `live-session-continuity-recovery` · `session-to-vault` · `reactivate` · `context-prep` · `verified-agentic-session-model`)
 - **Concierge routing**: `maos-concierge` · `claude-concierge` · `harness-concierge` · `9router-concierge` · `omniroute-concierge` · `opendesign-concierge` · `openrig-concierge` · `walkthrough-concierge`
 - **Governance & convergence**: `council-gate` · `convergence-engine` · `converge` · `red-team` · `delegate-governance` · `worktree-policy` · `anti-conflict` · `hierarchical-merge` · `ttl-policy` · `pii-masking`
 - **Loops & recovery**: `ooda-loop` · `gap-loop` · `ratchet-loop` · `virtuous-spiral` · `goal-recovery` · `live-session-continuity-recovery` · `auto-pilot`
