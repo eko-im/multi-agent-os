@@ -1,0 +1,4 @@
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "worker reported PR merged", "delegated": true},
+ {"id": "h1", "kind": "HITL", "state": "open", "floor": "spend", "digest": true}
+]}

@@ -1,0 +1,4 @@
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "gh pr view: MERGED, merge sha read at source", "delegated": true, "remeasured": true},
+ {"id": "h1", "kind": "HITL", "state": "open", "floor": "spend", "digest": true}
+]}

@@ -8,11 +8,14 @@ description: |
   deterministic HOTL/HITL scoreboard with a fixed denominator (`bin/scoreboard.py`); clear all
   HOTL work first (stop-bleeding → root-cause → no-loose-ends → session goals); consolidate the
   human residue into ONE HITL digest; then close with git-cycle → DIY PR review → house-keeping
-  → boy-scout → lessons → `signoff`. Thin composition: `pulse` + `goal-recovery` + `quiesce` +
-  `council-gate` + `/hitl-digest` + `signoff`; reimplements none of them.
+  → boy-scout → lessons → `signoff`. Delegating does not waive responsibility: the delegator
+  re-measures every delegated "done" at source before counting it. Missing agentic-tools go to
+  `agentic-tool-pipeline`; every HITL candidate first passes `request-carried-authorization`.
+  Thin composition: `pulse` + `goal-recovery` + `quiesce` + `request-carried-authorization` +
+  `council-gate` + `/hitl-digest` + `agentic-tool-pipeline` + `signoff`; reimplements none.
   Triggers: "session-wrapup", "wrap up the session", "drive this session to 100%",
   "recap + score + close", "fechamento da sessão", "conduza até 100% e feche".
-version: 0.1.0
+version: 0.2.0
 triggers:
   - session-wrapup
   - wrap up the session
@@ -21,7 +24,7 @@ triggers:
   - fechamento da sessão
   - conduza até 100% e feche
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
   scope: AAIF cross-vendor
   family: worktree-lifecycle
   lifecycle-stage: operate
@@ -29,7 +32,8 @@ metadata:
   type: skill
   status: active
   owner: maos-community
-  composes: [pulse, goal-recovery, quiesce, council-gate, hitl-digest, signoff]
+  composes: [pulse, goal-recovery, quiesce, request-carried-authorization, council-gate, hitl-digest, agentic-tool-pipeline, signoff]
+  source_prompt: "operator wrap-up prompt v4 (private vault, `pages/session-wrapup.prompt.v4.md`); pointer only, no content copied"
   naming: "Anima-named (agent register, descriptive-canonical, family-aligned with signoff/quiesce/pulse) — `session-wrapup`; rejected runner-up `helm` (needs a gloss; collides with the Kubernetes package manager)."
   dogfooding_validation:
     cycles_completed: 0
@@ -89,6 +93,10 @@ session-wrapup [--scope <session|repo:...|ticket:...>] [--dry-run]
   production, external send, operator taste/business call, third-party governance. Everything
   else is decided by the agent (the same six values are `HITL_FLOOR` in `bin/scoreboard.py`).
 - **I4 No secret, PII or customer data in output.** Paths with `~`.
+- **I5 Shared responsibility.** Delegating passes on execution, never accountability
+  (`agentic-delegation`). The delegate measures; the delegator re-measures at source (`gh`,
+  `git`, the file, the API) before reporting or counting it. If they diverge, trust the
+  measurement and say so. In the scoreboard: `delegated: true` + `done` needs `remeasured: true`.
 
 ## Steps
 
@@ -112,14 +120,18 @@ north-star · expected result · feedback. A node with no path to a purpose: tra
 | before writing to anything shared | blast radius + impact estimate |
 | > 1 owner | RACI |
 | plan ≠ measurement | route adjustment (say what changed and why) |
-| before escalating | avoid-HITL: `council-gate`, then the four questions — measured? mine? undoable? would someone see my error? |
+| before escalating | `request-carried-authorization` first (did the request already carry it?), then avoid-HITL: `council-gate` and the four questions — measured? mine? undoable? would someone see my error? |
+| a needed agentic-tool is missing or recurs ≥ 3× | `agentic-tool-pipeline` (forge decides the type, `anima` names it; dogfood before promotion) |
 
 Report a lens only when it changed a decision.
 
 ### Step 3 — Scoreboard (same denominator for the whole round)
 
 Items = decisions, actions and tasks of this session, each `HOTL` (the agent resolves) or `HITL`
-(only the human resolves, I3). Write them to a JSON file and run:
+(only the human resolves, I3). Mark every HOTL item a worker or subagent completed with
+`"delegated": true`, and add `"remeasured": true` only after you checked it at source yourself
+(I5). The gate cannot see whether you really re-measured: an omitted or false flag is the honest
+default. Write them to a JSON file and run:
 
 ```bash
 python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.round-start.json
@@ -131,7 +143,8 @@ python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.roun
 %SESSION = (HOTL done + HITL answered) / all items
 ```
 
-The script refuses: a HOTL marked done without evidence (exit 3); a HITL outside the floor —
+The script refuses: a HOTL marked done without evidence (exit 3); a delegated HOTL marked done
+without the delegator's own re-measurement (exit 3, I5); a HITL outside the floor —
 a tactical question is HOTL, decide it (exit 3); an item that vanished from the baseline instead
 of being closed (exit 4). New items are allowed: they grow the denominator. An empty
 denominator reads `0/0 = 100%` (nothing waits on that side). Always show
@@ -144,6 +157,16 @@ Exhaust HOTL first: delegate independent work in parallel, dependent work in seq
 work recursively (`quiesce` drives PRs green). An approval block is removed only by a legitimate
 path (e.g. a second account approves when author ≠ approver); never bypass a protection, a
 required check or a security review.
+
+Missing capability: if the work needs an agentic-tool that does not exist (a skill, command,
+agent, hook, script, rule…), do not list or hand-roll one. Send the intent to
+`agentic-tool-pipeline`: it searches similars, lets forge pick the type and anima the name, and
+trains it by dogfood. Do not pre-decide the type here.
+
+Before any item becomes HITL: run `request-carried-authorization` on it and route on its verdict.
+A → act; B → act with a verified undo; C `kind=hard` → never act: it is blocked human residue
+(file it under the closest I3 value; an operator refusal is already the answer, close it as
+answered); C `kind=ladder` → hand it to `council-gate`. Record the grant, its basis and the undo.
 
 Only then build ONE HITL digest (`/hitl-digest`): at most 3 cards, high urgency and human domain
 first, each with WHAT IT IS · WHAT IT IS FOR · IMPACT OF YES / IMPACT OF NO and a
@@ -161,7 +184,8 @@ lessons learned (only a durable defect or fact, once) → `signoff`.
 
 ## Definition of Done
 
-`%HOTL = 100%` with evidence · every open HITL is in the digest with a recommendation · zero
+`%HOTL = 100%` with evidence · every delegated "done" re-measured by the delegator at source
+(I5) · every HITL passed `request-carried-authorization` first · every open HITL is in the digest with a recommendation · zero
 orphan worktree/branch created by this session · lessons saved · `signoff` emitted.
 If the DoD does not close this round: report the score and the next step, and keep going.
 
@@ -180,18 +204,26 @@ the guard is removed from a temp copy and the scenario must flip.
 | A6 | closing while HOTL is still open | exit 5 |
 | A7 | closing with a HITL the human never saw | exit 5 |
 | A8 | a legitimate close | exit 0 |
+| A10 | a delegated "done" counted on the worker's word | exit 3 |
+| A11 | a delegated "done" the delegator re-measured | exit 0 |
+| A12 | `remeasured: "false"` (a string) slipping past the guard | exit 3 |
 
 ## Anti-patterns
 
 1. Reimplementing recap, PR convergence, the digest or the close-out — compose the siblings.
 2. Running every lens every time — that is ceremony, not analysis.
-3. Asking the human anything outside the I3 floor.
-4. Reporting a % computed by hand.
+3. Asking the human anything outside the I3 floor, or anything the request already authorized.
+4. Treating "I delegated it" as "it is done" (I5).
+5. Enumerating new tool kinds by hand instead of routing to `agentic-tool-pipeline`.
+6. Reporting a % computed by hand.
 
 ## Related
 
 - `skills/pulse/SKILL.md`, `skills/goal-recovery/SKILL.md` — Step 1.
 - `skills/quiesce/SKILL.md`, `skills/council-gate/SKILL.md` — Step 4.
+- `skills/request-carried-authorization/SKILL.md` — pre-HITL step 0.
+- `skills/agentic-tool-pipeline/SKILL.md` — create/train a missing agentic-tool.
+- `skills/agentic-delegation/SKILL.md` — accountability stays with the delegator (I5).
 - `commands/hitl-digest.md` — the single digest.
 - `skills/signoff/SKILL.md` — Step 5 close-out.
 - `commands/session-wrapup.md` — the `/session-wrapup` entry point.
