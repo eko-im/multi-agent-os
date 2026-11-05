@@ -104,10 +104,15 @@ def find_placeholders(text: str, bindings: set[str]) -> dict:
 
 def self_reference(folded: str, phases: list[str], self_name: str) -> dict:
     reasons = []
-    if self_name in folded:
+    if fold(self_name) in folded:
         reasons.append("names-self")
     pipeline_phases = [p for p in phases if p.split(".")[0] in ("RECOVER", "REFINE")]
-    if "braindump" in folded and len(pipeline_phases) >= 3:
+    # "braindump" alone is ordinary ("analyse the braindump and validate it"). The dump is
+    # meta only when it is a TEMPLATE over braindumps ({{braindump}}), or when it spells out
+    # most of the refine pipeline itself (>= 5 of the 7 RECOVER/REFINE phases).
+    if "{{braindump" in folded.replace(" ", ""):
+        reasons.append("templates-over-braindumps")
+    elif "braindump" in folded and len(pipeline_phases) >= 5:
         reasons.append("object-is-braindump+pipeline-verbs")
     return {"meta": bool(reasons), "reasons": reasons}
 

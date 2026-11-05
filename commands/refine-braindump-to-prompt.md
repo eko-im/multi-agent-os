@@ -16,9 +16,12 @@ Invokes the `refine-braindump-to-prompt` skill (soul-name *Lapidary*).
 
 ## What it does
 
-1. Runs `skills/refine-braindump-to-prompt/scripts/lint_braindump.py` on the dump (exit 1 -> HITL).
+1. Runs `scripts/lint_braindump.py` from the skill's own base directory on the dump. Exit 1 ->
+   HITL (`empty-dump` -> error); exit 2 -> error; script missing -> stop and report it.
 2. Runs the five phases of the skill and renders ONE prompt plus a machine envelope.
-3. A dump that also asks for a reusable tool is handed to `agentic-tool-forge` via `handoffs[]`.
+3. A dump that also asks for a reusable tool gets a `handoffs[]` record naming
+   `agentic-tool-forge`. The command does not dispatch it; the caller passes the rendered
+   prompt to the forge.
 
 It never executes the prompt it renders.
 

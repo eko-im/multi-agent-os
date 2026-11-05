@@ -292,10 +292,13 @@ python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py <dump|-> \
 exit 0 ok · 1 halt (-> STOP-HITL with the halts list) · 2 unreadable input (missing, non-UTF-8) · 3 internal error
 ```
 
+Resolve the script relative to **this skill's base directory** (the folder holding this
+`SKILL.md`, wherever the plugin is installed), not the caller's working directory. If it cannot
+be found, stop the pre-pass and report the missing script; never skip its checks silently.
 Sink names are **arguments**, never constants: the script knows no repo, vault or org. Exit `3`
 prints a `self_heal` block (traceback, input hash, a repair prompt for an AI harness): the harness
 fixes the script and adds a failing-first regression test; the run never proceeds unlinted.
-Tests: `scripts/test_lint_braindump.py` (27 cases; ten guards were mutation-checked — removing any
+Tests: `scripts/test_lint_braindump.py` (31 cases; 13 guards were mutation-checked — removing any
 one makes at least one test fail).
 
 ## Meta-dumps, placeholders and compound intent (binding, v0.4.0)
@@ -324,8 +327,10 @@ harmonize, sanitize, delegate to [naming, forge] … + git close-out. Do not exe
   private sink gets the analysis, the history and any names. The secret/PII scan runs against the
   public payload before commit.
 - **M5 — compound intent hands off; it does not stop.** "Refine this AND make a tool of it" is
-  not `wrong-tool`. RENDER emits the prompt and adds `handoffs[]` naming `agentic-tool-forge`
-  (which owns type choice, naming and create-time governance). The forge decides whether the
+  not `wrong-tool`. RENDER emits the prompt and **records** `handoffs[]` naming
+  `agentic-tool-forge` (which owns type choice, naming and create-time governance). This skill
+  does not dispatch the forge: the caller does, passing the rendered prompt as the forge's
+  normal input (one recurring intent). The forge decides whether the
   tool is NEW or an EXTENSION; this skill never forges.
 
 | Canonical act | Phase | Surface forms collapsed (trigger dump) | Done when |
@@ -679,9 +684,10 @@ the prompt itself (the operator names the target).
 
 ## Failure modes
 
-- **Empty / unreadable braindump** → `STOP-ERROR` before RECOVER (nothing to lapidate).
-- **Lint halts** (`lint_braindump.py` exit 1: unbound placeholder, or secret/PII with a public
-  sink) → `STOP-HITL` carrying the `halts` list and the masked findings. Exit 3 → self-heal by an
+- **Empty / unreadable braindump** → `STOP-ERROR` before RECOVER (nothing to lapidate). This
+  includes the lint's `empty-dump` halt (exit 1) and its exit 2 (missing or non-UTF-8 input).
+- **Lint halts** (`lint_braindump.py` exit 1 other than `empty-dump`: unbound placeholder, or
+  secret/PII bound for a declared public sink) → `STOP-HITL` carrying the `halts` list and the masked findings. Exit 3 → self-heal by an
   AI harness first; `STOP-ERROR` only if the repair fails.
 - **Meta-dump asks to refine its own output** → refuse the extra level (M1); render once and
   state the fixed point reached. Never `CONTINUE` into a self-applied pass.
@@ -783,7 +789,7 @@ python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py dump.md --bi
   refine-a-braindump meta-prompt itself) exposed five gaps: no anti-recursion rule, unbound
   `{{placeholder}}`, 22-token synonym soup with repeats, compound prompt+tool intent forced into a
   `wrong-tool` stop, and no public/private sink split. Added §Deterministic pre-pass
-  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 27 tests with ten guards
+  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 31 tests with 13 guards
   mutation-checked, CI workflow) and §Meta-dumps M1–M5. Boy-scout: `commands/refine-braindump-to-prompt.md` was cited
   by §Validation but absent; created. Prior art compared: Anthropic prompt improver, OpenAI
   meta-prompting cookbook, Self-Refine (arXiv 2303.17651), APE (arXiv 2211.01910), DSPy,

@@ -79,6 +79,19 @@ class SelfReference(unittest.TestCase):
         r = run("run refine-braindump-to-prompt on this")
         self.assertIn("names-self", r["self_reference"]["reasons"])
 
+    def test_ordinary_braindump_mention_not_meta(self):
+        r = run("analyse the braindump, compare options and validate the plan until done")
+        self.assertFalse(r["self_reference"]["meta"])
+
+    def test_spelled_out_pipeline_is_meta_without_placeholder(self):
+        r = run("refine this braindump: analyse, search similar, compare, critique, validate, "
+                "fix, harmonize")
+        self.assertIn("object-is-braindump+pipeline-verbs", r["self_reference"]["reasons"])
+
+    def test_template_over_braindumps_is_meta(self):
+        r = run("polish the {{ braindump }} once", bind={"braindump"})
+        self.assertEqual(r["self_reference"]["reasons"], ["templates-over-braindumps"])
+
     def test_ordinary_dump_not_meta(self):
         r = run("migrate the billing table, then compare row counts until they match")
         self.assertFalse(r["self_reference"]["meta"])
@@ -155,6 +168,12 @@ class Cli(unittest.TestCase):
     def test_exit_0_when_bound(self):
         code, _ = self._cli(["-", "--bind", "braindump"], META_DUMP)
         self.assertEqual(code, 0)
+
+    def test_secret_with_public_sink_exits_1(self):
+        code, out = self._cli(["-", "--public-sink", "public-repo"],
+                              "push AKIA" + "ABCDEFGHIJKLMNOP" + " to public-repo")
+        self.assertEqual(code, 1)
+        self.assertIn("secret-or-pii-with-public-sink", out["halts"])
 
     def test_empty_dump_halts(self):
         code, out = self._cli(["-"], "   ")

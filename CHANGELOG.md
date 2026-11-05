@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   phases and reports repeats; halts on unbound `{{placeholder}}` tokens and on secrets/PII when a
   public sink is named; flags self-referential meta-dumps, missing stop rules and public/private
   sink splits. Sink names are arguments, never constants. Exit 3 emits a `self_heal` block.
-- 27 unit tests (`scripts/test_lint_braindump.py`); ten guards mutation-checked. New workflow
+- 31 unit tests (`scripts/test_lint_braindump.py`); 13 guards mutation-checked. New workflow
   `refine-braindump-tests.yml` runs them on PRs touching the skill.
 - SKILL.md §Meta-dumps M1–M5: meta-depth = 1 (anti-recursion), placeholder binding, verbs fold
   into phases with one done-condition each, world-aware sink split, compound prompt+tool intent
