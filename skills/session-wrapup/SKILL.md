@@ -15,7 +15,7 @@ description: |
   `council-gate` + `/hitl-digest` + `agentic-tool-pipeline` + `signoff`; reimplements none.
   Triggers: "session-wrapup", "wrap up the session", "drive this session to 100%",
   "recap + score + close", "fechamento da sessão", "conduza até 100% e feche".
-version: 0.2.0
+version: 0.2.1
 triggers:
   - session-wrapup
   - wrap up the session
@@ -24,7 +24,7 @@ triggers:
   - fechamento da sessão
   - conduza até 100% e feche
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
   scope: AAIF cross-vendor
   family: worktree-lifecycle
   lifecycle-stage: operate
@@ -85,8 +85,8 @@ session-wrapup [--scope <session|repo:...|ticket:...>] [--dry-run]
 
 ## Invariants (hold from start to end)
 
-- **I1 Preserve behavior.** Code, configs and processes keep their behavior unless the operator
-  asks. "More autonomy" changes HOW the agent decides, never WHAT the system does.
+- **I1 Preserve content and behavior.** Existing text (notes, docs) keeps its content, and code,
+  configs and processes keep their behavior, unless the operator asks to change one of them. "More autonomy" changes HOW the agent decides, never WHAT the system does.
 - **I2 Measure at source.** A fact without evidence is `[U]` unknown, not a guess. A worker's
   "done" is a claim until re-measured.
 - **I3 HITL floor.** Only these reach the human: new credential, spend, irreversible in

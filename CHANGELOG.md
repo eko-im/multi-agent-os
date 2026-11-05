@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `session-wrapup` v0.2.1: I1 also preserves existing content
+
+- I1 now covers existing text (notes, docs) as well as behavior, matching the operator's re-sent
+  wrap-up prompt (v4.0.1). No other change.
+
 ### Changed — `session-wrapup` v0.2.0: covers the operator's wrap-up prompt v4
 
 - New invariant I5 (shared responsibility): delegating passes on execution, not accountability.
