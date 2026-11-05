@@ -1,0 +1,29 @@
+name: refine-braindump lint tests
+
+on:
+  pull_request:
+    paths:
+      - "skills/refine-braindump-to-prompt/**"
+      - ".github/workflows/refine-braindump-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/refine-braindump-to-prompt/**"
+      - ".github/workflows/refine-braindump-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-braindump-tests:
+    name: Run lint_braindump unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Run tests (stdlib only)
+        working-directory: skills/refine-braindump-to-prompt/scripts
+        run: python3 -m unittest -v test_lint_braindump.py

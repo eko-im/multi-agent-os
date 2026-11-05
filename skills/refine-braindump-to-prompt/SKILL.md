@@ -1,6 +1,6 @@
 ---
 name: refine-braindump-to-prompt
-version: "0.3.1"
+version: "0.4.0"
 description: >-
   Lapidate ONE raw operator braindump into ONE polished, ready-to-execute PROMPT. Five phases:
   RECOVER (dissect - relate - catalogue - prism - distill; emits the parts map and the drop-list
@@ -10,7 +10,9 @@ description: >-
   multi-sink emission). Use when a dump must become executable work rather than a ledger, an
   envelope or a PR. Parameterized by architecture profiles (--architecture, incl. gauntlet-loop)
   and by output sinks (--output-target: stdout, clipboard, vault, git-repo, agentic-tool).
-  Composes in-repo primitives; reimplements nothing.
+  Hybrid: a deterministic pre-pass (scripts/lint_braindump.py) collapses synonym verbs, halts on
+  unbound {{placeholders}} and secrets bound for a public sink, and flags self-referential
+  meta-dumps (meta-depth = 1). Composes in-repo primitives; reimplements nothing.
 allowed-tools: Task, Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -50,7 +52,9 @@ do the neighbour's job. Each ends the run with `STOP-DONE` · `skipped.condition
 one shape for every non-entry.
 
 - "What in this dump is already done?" → `directive-braindump-triage` (classification ledger).
-- "Make this dump into a reusable TOOL" → `agentic-tool-forge` (forges an artifact, not a prompt).
+- "Make this dump into a reusable TOOL" (and nothing else) → `agentic-tool-forge` (forges an artifact,
+  not a prompt). A dump asking for BOTH a prompt and a tool is compound intent: render the prompt
+  and hand off to the forge via `handoffs[]` (§Meta-dumps M5) — not a `wrong-tool` stop.
 - "File this dump as vault knowledge" → the operator's vault protocol (`braindump-distill`).
 - "Ship this feature idea end-to-end" → `enhance-pipeline` (delivers a PR, not a prompt).
 - "Re-target existing content for another audience" → `content-recast`.
@@ -267,6 +271,76 @@ the rendered prompt's **method section — whatever the active profile calls it*
 `gauntlet-loop`, `SCOPE` in `default`) — must require the executing agent to **decompose the target
 and name what is out of scope** before building — never to begin shaping an undifferentiated goal. A prompt that skips this
 reproduces, one level down, the exact failure this skill exists to prevent.
+
+## Deterministic pre-pass (`scripts/lint_braindump.py`) — the hybrid split
+
+The skill is **hybrid**. Judgement (typing parts, drafting, critiquing) stays cognitive. Six checks
+that must give the same answer on every run are a script, run **before RECOVER**:
+
+| Check | Output field | Effect |
+|---|---|---|
+| Verb collapse (en + pt, accent-folded) | `verbs.canonical` · `verbs.redundant` | synonyms fold into ONE named phase; repeats are reported, not executed twice |
+| Placeholder binding | `placeholders.unbound` | `{{name}}` with no binding → **halt** (see §Meta-dumps M2) |
+| Self-reference | `self_reference.meta` | dump whose object is this pipeline → meta-depth rule (M1) |
+| Stop rule / DoD | `stop_rule_present` | absent → REFINE must add one; never render a prompt without it |
+| Secret / PII scan | `secrets[]` (values masked) | with a PUBLIC sink → **halt**; otherwise a warning carried into RENDER |
+| Sink split | `sinks.split_required` | public and private sinks both named → RENDER splits content per sink (M4) |
+
+```text
+python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py <dump|-> \
+    [--bind NAME]... [--public-sink NAME]... [--private-sink NAME]... [--allow STR]...
+exit 0 ok · 1 halt (-> STOP-HITL with the halts list) · 2 usage · 3 internal error
+```
+
+Sink names are **arguments**, never constants: the script knows no repo, vault or org. Exit `3`
+prints a `self_heal` block (traceback, input hash, a repair prompt for an AI harness): the harness
+fixes the script and adds a failing-first regression test; the run never proceeds unlinted.
+Tests: `scripts/test_lint_braindump.py` (22 cases; each guard was mutation-checked — removing it
+makes at least one test fail).
+
+## Meta-dumps, placeholders and compound intent (binding, v0.4.0)
+
+Measured trigger: a dump that is itself the meta-prompt *"analyse the {{braindump}}, search similar,
+cross, compare, critique, validate, meta-critique, validate, fix, solve, improve, enhance, expand,
+harmonize, sanitize, delegate to [naming, forge] … + git close-out. Do not execute the
+{{braindump}}"*. v0.3.1 had no rule for five properties of it:
+
+- **M1 — meta-depth = 1 (anti-recursion).** When `self_reference.meta` is true, the dump is
+  refined **once**, as an object. The rendered prompt MUST NOT instruct its executor to run this
+  skill on the rendered prompt itself, and it MUST carry an explicit stop rule. A second pass
+  happens only through the existing RED-TEAM → REFINE return (bounded by `--max-redteam-cycles`).
+  A fixed point is reached when a pass changes nothing load-bearing; there is no "refine the
+  refiner of the refiner".
+- **M2 — placeholder binding.** `{{name}}` binds to the object the caller wrapped (e.g. a
+  `<braindump>…</braindump>` block passed as `--bind braindump`). No wrapper → `STOP-HITL` with
+  the resolution path *"what is `name`?"*. The skill never guesses a binding.
+- **M3 — verbs fold into phases, not into steps.** Measured by the lint on the trigger dump: 22 directive
+  tokens fold into 10 canonical acts under 5 top-level phases (table below). Each canonical act appears **once** in the rendered
+  prompt, with its own done-condition. A verb with no artifact it produces is session-meta and
+  goes to the drop-list.
+- **M4 — world-aware sinks.** A dump that names a public sink (open-source repo) and a private
+  one (personal vault) is split at RENDER: the public sink gets only the generic mechanism; the
+  private sink gets the analysis, the history and any names. The secret/PII scan runs against the
+  public payload before commit.
+- **M5 — compound intent hands off; it does not stop.** "Refine this AND make a tool of it" is
+  not `wrong-tool`. RENDER emits the prompt and adds `handoffs[]` naming `agentic-tool-forge`
+  (which owns type choice, naming and create-time governance). The forge decides whether the
+  tool is NEW or an EXTENSION; this skill never forges.
+
+| Canonical act | Phase | Surface forms collapsed (trigger dump) | Done when |
+|---|---|---|---|
+| analyze | RECOVER.dissect | analise | parts table exists |
+| reuse-scan | RECOVER.reuse-scan | busque semelhantes (internal + external) | prior-art list with verifiable sources |
+| relate | RECOVER.relate | cruze, compare | relation map exists |
+| critique | REFINE.critique | critique, meta-critique | N distinct lenses applied, findings listed |
+| validate | REFINE.validate | valide ×2 | each claim measured at its source |
+| correct | REFINE.correct | fix, solve, improve, enhance, expand | zero open craft findings |
+| harmonize | REFINE.harmonize | harmonize | terms consistent with the host corpus |
+| sanitize | RENDER.sanitize | sanitize | lint secret/PII scan clean on public payload |
+| delegate | HANDOFF | delegue, [naming, forge] | `handoffs[]` names the forge (M5) |
+| close-out | CLOSEOUT | git-cycle, diy-pr-review, house-cleaning, boy-scout | PR merged with required checks green; own worktrees removed |
+
+Worked result: `examples/META-self-referential.md`.
 
 ## How it works
 
@@ -526,6 +600,12 @@ a change to *how* a run emits belongs here.
   "prompt": "<the rendered prompt, or null under --dry-run>",
   "dropped_session_meta": [],
 
+  // v0.4.0: the deterministic pre-pass report, verbatim from scripts/lint_braindump.py,
+  // and the compound-intent hand-offs (§Meta-dumps M5). The skill records; the forge decides.
+  "lint": { "status": "ok|halt|error", "halts": [], "warnings": [] },
+  "meta_depth": 0,                                  // 1 when lint.self_reference.meta (M1)
+  "handoffs": [ { "to": "agentic-tool-forge", "why": "", "payload": "<rendered prompt ref>" } ],
+
   // Emission outcome — every halt on this axis is BOTH marked and fielded (v0.3.0 eval, D2).
   // A marker with no field is unreadable by a machine; a field with no marker is unreadable
   // by the loop. The three below had NEITHER before this repair.
@@ -599,6 +679,11 @@ the prompt itself (the operator names the target).
 ## Failure modes
 
 - **Empty / unreadable braindump** → `STOP-ERROR` before RECOVER (nothing to lapidate).
+- **Lint halts** (`lint_braindump.py` exit 1: unbound placeholder, or secret/PII with a public
+  sink) → `STOP-HITL` carrying the `halts` list and the masked findings. Exit 3 → self-heal by an
+  AI harness first; `STOP-ERROR` only if the repair fails.
+- **Meta-dump asks to refine its own output** → refuse the extra level (M1); render once and
+  state the fixed point reached. Never `CONTINUE` into a self-applied pass.
 - **RECOVER cannot find a goal** → `STOP-HITL` carrying **ranked resolution-paths** — the specific
   referents that must be resolved for a goal to exist — never candidate goals. On a referentially
   empty dump any content-level hypothesis *is* the guess this clause forbids; the only honest
@@ -663,6 +748,8 @@ attached"*. No fourth marker is minted; the discriminator is the field, not a ne
 /maos:refine-braindump-to-prompt "<dump>" --dry-run --output=json
 /maos:refine-braindump-to-prompt "<dump>" --min-revisions=5 --clean-rounds=2 --lenses=4
 /maos:refine-braindump-to-prompt "<dump>" --persist=./prompts/migration.prompt.md
+python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py dump.md --bind braindump \
+    --public-sink <open-source-repo> --private-sink <personal-vault>   # pre-pass, before RECOVER
 ```
 
 ## Validation
@@ -677,6 +764,8 @@ attached"*. No fourth marker is minted; the discriminator is the field, not a ne
 ## Related
 
 - `commands/refine-braindump-to-prompt.md` — operator-facing command surface
+- `scripts/lint_braindump.py` · `scripts/test_lint_braindump.py` — deterministic pre-pass + tests
+- `examples/META-self-referential.md` — the meta-dump refined under M1–M5
 - `profiles/default.md` · `profiles/gauntlet-loop.md` — architecture profiles
 - `skills/goal-recovery/SKILL.md` — PHASE 1 recovery (braindump source)
 - `skills/decompose-abstract-to-measurable/SKILL.md` — PHASE 1 DoD measurement (Prisma)
@@ -689,6 +778,17 @@ attached"*. No fourth marker is minted; the discriminator is the field, not a ne
 
 ## Versioning
 
+- v0.4.0 (2026-11-05) — **Hybrid pre-pass + meta-dump rules.** A self-referential dump (the
+  refine-a-braindump meta-prompt itself) exposed five gaps: no anti-recursion rule, unbound
+  `{{placeholder}}`, 22-token synonym soup with repeats, compound prompt+tool intent forced into a
+  `wrong-tool` stop, and no public/private sink split. Added §Deterministic pre-pass
+  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 22 mutation-checked tests, CI
+  workflow) and §Meta-dumps M1–M5. Boy-scout: `commands/refine-braindump-to-prompt.md` was cited
+  by §Validation but absent; created. Prior art compared: Anthropic prompt improver, OpenAI
+  meta-prompting cookbook, Self-Refine (arXiv 2303.17651), APE (arXiv 2211.01910), DSPy,
+  meta-prompting scaffold (arXiv 2401.12954). They optimise prompt quality; none of them folds
+  directive verbs deterministically, binds placeholders, bounds meta-depth or splits sinks by
+  visibility, which is what this release adds.
 - v0.3.1 (2026-08-18) — **Boundary note: the `agentic-tool` sink is NOT tool-genesis.** Comparative
   audit against the `agentic-tool-*` family found this sink's "RENDER DEFINED" criterion satisfied
   only illustratively (frontmatter-vs-`name:`-vs-`[CXX]` contrast, no worked spec) and silent on its
