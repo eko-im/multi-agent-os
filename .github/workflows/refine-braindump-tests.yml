@@ -27,3 +27,6 @@ jobs:
       - name: Run tests (stdlib only)
         working-directory: skills/refine-braindump-to-prompt/scripts
         run: python3 -m unittest -v test_lint_braindump.py
+
+      - name: Run self-reference guard tests (incl. mutation checks)
+        run: python3 -W error::ResourceWarning skills/refine-braindump-to-prompt/tests/test_self_reference_guard.py

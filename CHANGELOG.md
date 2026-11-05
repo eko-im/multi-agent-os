@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `refine-braindump-to-prompt` v0.4.1: structural self-reference guard
+
+- `scripts/self_reference_guard.py` (stdlib, no model call, single pass) makes M1 (meta-depth = 1)
+  executable. It reads the object (inside `<braindump>`) apart from the envelope and reports
+  `envelope_copy` (ratio or containment ≥ 0.85, a quine), `self_pointer` (a `{{slot}}` naming its
+  own wrapping tag), `unfilled_placeholder` and `empty_object`. On a quine it emits a depth-1
+  `base_case_prompt` that is a fixed point; `--depth 1` on a still self-referential input returns
+  `recursion_limit` (exit 4).
+- `tests/test_self_reference_guard.py`: 12 tests on the quine plus two neighbours (normal dump,
+  filled slot), fixed point, depth bound and mutation checks; wired into
+  `refine-braindump-tests.yml`. Worked case `examples/DOGFOOD-self-reference.md`.
+- Measured: the v0.4.0 lint marks a real dump as meta when its envelope carries pipeline verbs;
+  the guard returns `clean` on it. The lint keeps verbs, the M2 halt and sinks.
+
 ### Added — `braindump-to-tool` v0.1.0: delta-only preset beside `refine-braindump-to-prompt`
 
 - Compose-only recipe for a braindump that is the object of a tool-forging run. Owns three
