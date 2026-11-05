@@ -133,7 +133,8 @@ python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.roun
 
 The script refuses: a HOTL marked done without evidence (exit 3); a HITL outside the floor —
 a tactical question is HOTL, decide it (exit 3); an item that vanished from the baseline instead
-of being closed (exit 4). New items are allowed: they grow the denominator. Always show
+of being closed (exit 4). New items are allowed: they grow the denominator. An empty
+denominator reads `0/0 = 100%` (nothing waits on that side). Always show
 numerator/denominator, and list pending items as id · kind · owner · next step.
 
 ### Step 4 — Converge to 100%
