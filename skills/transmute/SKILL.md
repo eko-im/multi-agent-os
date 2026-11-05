@@ -1,6 +1,6 @@
 ---
 name: transmute
-version: "0.2.3"
+version: "0.2.4"
 description: >-
   Transmute ONE source of ANY kind (text · prompt · draft · braindump · doc · code ·
   agentic-tool · email · report) through a menu of transformations (comprehend · analyze ·
@@ -448,6 +448,9 @@ router added no routing). Dormant-by-design otherwise.
 
 ## Versioning
 
+- v0.2.4 — **cross-ref only.** `braindump-to-tool` (v0.1.0) is the thin preset for a braindump that
+  asks for tools AND a merged delivery tail; it reuses this skill's §Source-as-data as the SSOT and adds
+  only a world gate, a nested-directive report and a prior-art probe. No behavior change here.
 - v0.2.3 — **§Declared-grammar aliases — the naming-surface delta of the same braindump family.**
   A third round on the family that drove v0.2.2 was triaged with `directive-braindump-triage`:
   26 atomic directives → 17 DONE · 4 COVERED · 2 EXCLUDED · 3 residual, with the *capability* ask

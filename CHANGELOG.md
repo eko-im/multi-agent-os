@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `braindump-to-tool` v0.1.0: delta-only preset beside `refine-braindump-to-prompt`
+
+- Compose-only recipe for a braindump that is the object of a tool-forging run. Owns three
+  things no sibling has: a world gate that blocks client content headed for a public destination
+  (markers come from a worlds file, so the repo stays domain-agnostic), a report of nested
+  slash-commands and `GO:` blocks as data, and a prior-art probe over `skills/`. Verb folding,
+  placeholders, stop rule and secret scan stay in the refine lint; forging stays in
+  `agentic-tool-pipeline`.
+- 20 behavioral tests plus 13 mutants (all killed) in `skills/braindump-to-tool/tests`, run in CI
+  by `braindump-to-tool-tests.yml`. Cross-references in `transmute` (v0.2.4) and
+  `agentic-tool-pipeline` (v0.1.3); no behavior change in either.
+
 ### Added — `session-wrapup` skill + `/session-wrapup` command + `bin/scoreboard.py`
 
 - `skills/session-wrapup/` (new): conductor verb that drives a delegating session to 100% and
