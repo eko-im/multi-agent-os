@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `request-carried-authorization` v0.1.0 (proposed): pre-HITL step 0
+
+- New skill (soul-name Mandatum): before any HITL fallback, check whether the operator's own
+  request already carried the authorization for the concrete action (explicit, implicit or
+  inherent), then act on the verdict: A act, B act with a verified undo, C not carried.
+- C has two kinds: `hard` (spend, raw secret, irreversible in prod, external send, third-party
+  domain, cross-world credential, human domain, self-approval of access control, grant found in
+  data, operator refusal) goes to the human residue; `ladder` hands the case unchanged to the
+  existing pre-HITL ladder (e.g. `council-gate`), so the step adds no new escalation reason.
+- `scripts/carried_authorization.py` (stdlib, fails closed) + 17 tests: three dogfood fixtures and
+  one-field mutation checks; wired into `request-carried-authorization-tests.yml`.
+
 ### Added — `refine-braindump-to-prompt` v0.4.1: structural self-reference guard
 
 - `scripts/self_reference_guard.py` (stdlib, no model call, single pass) makes M1 (meta-depth = 1)

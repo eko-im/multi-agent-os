@@ -84,6 +84,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `reactivate` | `reactivate/SKILL.md` | Cold-start reactivation conductor for new-fresh-born amnesic agents. |
 | `red-team` | `red-team/SKILL.md` | Decide WHEN an adversarial red-team is MANDATORY for an action, and HOW deep — then route to the right existing primitive (build nothing new). |
 | `refine-braindump-to-prompt` | `refine-braindump-to-prompt/SKILL.md` | Lapidate ONE raw operator braindump into ONE polished, ready-to-execute PROMPT. |
+| `request-carried-authorization` | `request-carried-authorization/SKILL.md` | Pre-HITL step 0 (soul-name Mandatum): did the operator's own request already carry the authorization? |
 | `ref-claim-verify` | `ref-claim-verify/SKILL.md` | Use to check the cross-reference CLAIMS a doc, PR body or diff makes about other artifacts against the real source — before trusting them. Verdicts are VERIFIED / MISMATCH / UNRESOLVED; UNRESOLVED is never a pass. |
 | `repo-custody-transfer` | `repo-custody-transfer/SKILL.md` | Transfer CUSTODY of a repository between git hosts (Bitbucket Cloud → GitHub first-class; soul-name Translatio) as a reversible, resumable, idempotent |
 | `research-dossier` | `research-dossier/SKILL.md` | Turn finished research into a decision-ready visual dossier — html, md, json, and hand-offs to pdf/pptx/xlsx — routed through an intermediate represen |
@@ -121,7 +122,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 - **Agentic-tool lifecycle**: `agentic-tool-forge` (genesis) · `agentic-tool-intake` (adopt-or-not) · `agentic-tool-evaluator` (score/QA) · `agentic-tool-trainer` (improve/distill) · `agentic-tool-pipeline` (conductor)
 - **Session lifecycle**: `preflight` → `morning-briefing` → `postflight` (+ `quiesce` · `signoff` · `session-wrapup` · `sync-to-git` · `session-fission` · `session-reentry` · `live-session-continuity-recovery` · `session-to-vault` · `reactivate` · `context-prep` · `verified-agentic-session-model`)
 - **Concierge routing**: `maos-concierge` · `claude-concierge` · `harness-concierge` · `9router-concierge` · `omniroute-concierge` · `opendesign-concierge` · `openrig-concierge` · `walkthrough-concierge`
-- **Governance & convergence**: `council-gate` · `convergence-engine` · `converge` · `red-team` · `delegate-governance` · `worktree-policy` · `anti-conflict` · `hierarchical-merge` · `ttl-policy` · `pii-masking`
+- **Governance & convergence**: `council-gate` · `request-carried-authorization` · `convergence-engine` · `converge` · `red-team` · `delegate-governance` · `worktree-policy` · `anti-conflict` · `hierarchical-merge` · `ttl-policy` · `pii-masking`
 - **Loops & recovery**: `ooda-loop` · `gap-loop` · `ratchet-loop` · `virtuous-spiral` · `goal-recovery` · `live-session-continuity-recovery` · `auto-pilot`
 - **Fleet & bulk convergence**: `fleet-campaign` (Classis — N resources → one declared config state, measured rounds) · `work-drain` (tracker register → DONE) · `repo-custody-transfer` (ONE repo, host→host)
 - **Founder journey**: `founder-playbook` · `founder-stage-idea` · `founder-stage-mvp` · `founder-stage-launch` · `founder-stage-scale`
