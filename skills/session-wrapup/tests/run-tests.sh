@@ -44,6 +44,8 @@ expect 5 "A6 close gate blocks while HOTL is open"            "$PY" "$SB" "$FX/p
 expect 5 "A7 close gate blocks an open HITL not in digest"    "$PY" "$SB" "$FX/undigested.json" --gate close
 expect 0 "A8 close gate passes: HOTL 100%, HITL in digest"    "$PY" "$SB" "$FX/closable.json" --gate close
 expect 2 "A9 unreadable input is a usage error"               "$PY" "$SB" "$FX/does-not-exist.json"
+expect 3 "A10 delegated done without delegator re-measure"    "$PY" "$SB" "$FX/delegated-unmeasured.json"
+expect 0 "A11 delegated done, delegator re-measured: closes"  "$PY" "$SB" "$FX/delegated-remeasured.json" --gate close
 
 echo "== mutation check: each guard removed must flip its scenario =="
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
@@ -68,6 +70,7 @@ PYEOF
 
 mutate "evidence guard"    'state == "done" and not str(it.get("evidence", "")).strip()' 'False' "$FX/no-evidence.json"
 mutate "HITL floor guard"  'it.get("floor") not in HITL_FLOOR' 'False' "$FX/tactical-hitl.json"
+mutate "re-measure guard"  'it.get("delegated") and not it.get("remeasured")' 'False' "$FX/delegated-unmeasured.json"
 mutate "shrink guard"      'if gone:' 'if False:' "$FX/shrunk.json" --baseline "$FX/baseline.json"
 mutate "close gate"        'if s["hotl"]["num"] != s["hotl"]["den"] or undigested:' 'if False:' "$FX/progress.json" --gate close
 

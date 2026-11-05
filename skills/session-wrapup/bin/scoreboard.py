@@ -8,13 +8,17 @@ It is a GATE, not a calculator: it refuses inputs that would let the agent fake 
 
   exit 0  ok (and, with --gate close, the close-out gate is met)
   exit 2  usage / unreadable input
-  exit 3  invalid item (HOTL done without evidence, HITL outside the HITL floor, bad field)
+  exit 3  invalid item (HOTL done without evidence, delegated HOTL done without the delegator's
+          re-measurement, HITL outside the HITL floor, bad field)
   exit 4  denominator shrank vs --baseline (an item vanished instead of being closed)
   exit 5  --gate close requested but not met (HOTL < 100% or an open HITL is not in the digest)
 
 Input schema (stdlib-only validation):
   {"items": [{"id": str, "kind": "HOTL"|"HITL", "state": "open"|"done",
               "evidence": str (required when HOTL done),
+              "delegated": bool (HOTL done by a worker/subagent),
+              "remeasured": bool (required true when delegated and done: the delegator
+                                  re-measured the claim at source),
               "floor": one of HITL_FLOOR (required when kind=HITL),
               "digest": bool (HITL only: is it in the HITL DIGEST?)}]}
 For HITL, state "done" means "answered by the operator".
@@ -67,6 +71,12 @@ def validate(items):
             errors.append(f"{tag}: state must be open or done")
         if kind == "HOTL" and state == "done" and not str(it.get("evidence", "")).strip():
             errors.append(f"{tag}: HOTL marked done without evidence (a worker's word is not evidence)")
+        if kind == "HOTL" and state == "done" and it.get("delegated") and not it.get("remeasured"):
+            errors.append(
+                f"{tag}: delegated HOTL marked done without the delegator's own re-measurement "
+                "(delegating does not waive responsibility: set remeasured=true only after "
+                "checking at source)"
+            )
         if kind == "HITL" and it.get("floor") not in HITL_FLOOR:
             errors.append(
                 f"{tag}: HITL outside the floor ({it.get('floor')!r}); "

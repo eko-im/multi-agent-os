@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `session-wrapup` v0.2.0: covers the operator's wrap-up prompt v4
+
+- New invariant I5 (shared responsibility): delegating passes on execution, not accountability.
+  `bin/scoreboard.py` now refuses a HOTL item with `delegated: true` marked done unless
+  `remeasured: true` (the delegator checked at source), exit 3.
+- Step 4: a missing agentic-tool is routed to `agentic-tool-pipeline` (forge picks the type,
+  anima the name) instead of being listed or hand-rolled; every HITL candidate first passes
+  `request-carried-authorization`. Lens table, DoD, anti-patterns and `/session-wrapup` updated.
+- Tests: A10/A11 + a mutation check for the new guard (16 pass); new
+  `session-wrapup-tests.yml` runs them in CI (they had no workflow before).
+- Existing behavior kept: scoreboard numbers, exit codes, priority order and close-out sequence.
+
 ### Added — `request-carried-authorization` v0.1.0 (proposed): pre-HITL step 0
 
 - New skill (soul-name Mandatum): before any HITL fallback, check whether the operator's own

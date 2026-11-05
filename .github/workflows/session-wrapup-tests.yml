@@ -1,0 +1,28 @@
+name: session-wrapup tests
+
+on:
+  pull_request:
+    paths:
+      - "skills/session-wrapup/**"
+      - ".github/workflows/session-wrapup-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/session-wrapup/**"
+      - ".github/workflows/session-wrapup-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  scoreboard-tests:
+    name: Run scoreboard tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Run acceptance scenarios incl. mutation checks (stdlib only)
+        run: bash skills/session-wrapup/tests/run-tests.sh
