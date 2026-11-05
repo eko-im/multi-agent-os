@@ -93,6 +93,10 @@ class StopRule(unittest.TestCase):
     def test_until_counts(self):
         self.assertTrue(run("loop until clean")["stop_rule_present"])
 
+    def test_ordinary_ate_and_max_are_not_stop_rules(self):
+        self.assertFalse(run("I ate lunch and maxed out")["stop_rule_present"])
+        self.assertTrue(run("repita ate zero achado")["stop_rule_present"])
+
 
 class Sanitize(unittest.TestCase):
     KEY = "AKIA" + "ABCDEFGHIJKLMNOP"  # split so this file is not itself a finding

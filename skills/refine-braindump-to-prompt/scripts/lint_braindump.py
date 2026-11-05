@@ -50,8 +50,11 @@ VERBS: list[tuple[str, str, tuple[str, ...]]] = [
     ("closeout", "CLOSEOUT", (r"git-cycle", r"diy-pr-review", r"house-(?:cleaning|keeping)", r"boy-scout", r"signoff")),
 ]
 
-STOP_MARKERS = (r"\buntil\b", r"\bate que\b", r"\bate\b", r"\bstop\b", r"\bpare\b", r"\bdod\b",
-                r"\bdone when\b", r"\bcriterio\b", r"\baceite\b", r"\bacceptance\b", r"\bmax\b")
+# Bare "ate" (pt "ate" = until, but also en "ate") and bare "max" matched ordinary prose, so
+# only the phrase forms count.
+STOP_MARKERS = (r"\buntil\b", r"\bate que\b", r"\bate (?:zero|o fim|convergir)\b", r"\bstop\b",
+                r"\bpare\b", r"\bdod\b", r"\bdone when\b", r"\bcriterio\b", r"\baceite\b",
+                r"\bacceptance\b", r"\bmax[- ]rounds?\b")
 
 PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][\w.-]*)\s*\}\}")
 

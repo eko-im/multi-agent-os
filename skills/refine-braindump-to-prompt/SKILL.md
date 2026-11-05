@@ -295,8 +295,8 @@ exit 0 ok · 1 halt (-> STOP-HITL with the halts list) · 2 usage · 3 internal 
 Sink names are **arguments**, never constants: the script knows no repo, vault or org. Exit `3`
 prints a `self_heal` block (traceback, input hash, a repair prompt for an AI harness): the harness
 fixes the script and adds a failing-first regression test; the run never proceeds unlinted.
-Tests: `scripts/test_lint_braindump.py` (22 cases; each guard was mutation-checked — removing it
-makes at least one test fail).
+Tests: `scripts/test_lint_braindump.py` (23 cases; six guards were mutation-checked — removing any
+one makes at least one test fail).
 
 ## Meta-dumps, placeholders and compound intent (binding, v0.4.0)
 
@@ -314,9 +314,10 @@ harmonize, sanitize, delegate to [naming, forge] … + git close-out. Do not exe
 - **M2 — placeholder binding.** `{{name}}` binds to the object the caller wrapped (e.g. a
   `<braindump>…</braindump>` block passed as `--bind braindump`). No wrapper → `STOP-HITL` with
   the resolution path *"what is `name`?"*. The skill never guesses a binding.
-- **M3 — verbs fold into phases, not into steps.** Measured by the lint on the trigger dump: 22 directive
-  tokens fold into 10 canonical acts under 5 top-level phases (table below). Each canonical act appears **once** in the rendered
-  prompt, with its own done-condition. A verb with no artifact it produces is session-meta and
+- **M3 — verbs fold into phases, not into steps.** Measured by the lint on the original (pt)
+  trigger dump, the `META_DUMP` test fixture: 22 directive tokens fold into 10 canonical acts
+  under 5 top-level phases (table below; the en rendering in the example measures 21). Each
+  canonical act appears **once** in the rendered prompt, with its own done-condition. A verb with no artifact it produces is session-meta and
   goes to the drop-list.
 - **M4 — world-aware sinks.** A dump that names a public sink (open-source repo) and a private
   one (personal vault) is split at RENDER: the public sink gets only the generic mechanism; the
@@ -782,8 +783,8 @@ python3 skills/refine-braindump-to-prompt/scripts/lint_braindump.py dump.md --bi
   refine-a-braindump meta-prompt itself) exposed five gaps: no anti-recursion rule, unbound
   `{{placeholder}}`, 22-token synonym soup with repeats, compound prompt+tool intent forced into a
   `wrong-tool` stop, and no public/private sink split. Added §Deterministic pre-pass
-  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 22 mutation-checked tests, CI
-  workflow) and §Meta-dumps M1–M5. Boy-scout: `commands/refine-braindump-to-prompt.md` was cited
+  (`scripts/lint_braindump.py`, stdlib, self-heal on exit 3, 23 tests with six guards
+  mutation-checked, CI workflow) and §Meta-dumps M1–M5. Boy-scout: `commands/refine-braindump-to-prompt.md` was cited
   by §Validation but absent; created. Prior art compared: Anthropic prompt improver, OpenAI
   meta-prompting cookbook, Self-Refine (arXiv 2303.17651), APE (arXiv 2211.01910), DSPy,
   meta-prompting scaffold (arXiv 2401.12954). They optimise prompt quality; none of them folds
