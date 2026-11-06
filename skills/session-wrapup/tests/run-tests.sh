@@ -80,6 +80,8 @@ expect 3 "A39 precheck must declare hitl_type (null is explicit)" "$PY" "$SB" "$
 expect 3 "A40 HOTL done with a hard C (human residue) refused" "$PY" "$SB" "$FX/precheck-hotl-hard-c.json"
 expect 0 "A41 HOTL done with C c_kind=ladder (council path) ok"  "$PY" "$SB" "$FX/precheck-hotl-ladder-c.json"
 expect 3 "A42 c_kind=ladder on a data-origin hard lock refused" "$PY" "$SB" "$FX/precheck-hotl-data-ladder.json"
+expect 3 "A43 notes of repeated placeholders (TBD TBD, n/a n/a)" "$PY" "$SB" "$FX/precheck-repeated-placeholder.json"
+expect 3 "A44 verdict outside {A,B,C} on a HITL item is refused" "$PY" "$SB" "$FX/precheck-hitl-bad-verdict.json"
 
 # A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
 if PYTHONDONTWRITEBYTECODE=1 "$PY" - "$HERE/../bin" "$HERE/../../request-carried-authorization/scripts" <<'PYEOF'
@@ -137,7 +139,8 @@ WANT=3 mutate "hard-flag floor" '"raw-secret",          # print' '#' "$FX/hard-f
 mutate "precheck required"  'if it.get("kind") == "HITL" else [])' 'if False else [])' "$FX/precheck-hitl-no-record.json"
 mutate "all minds present"  'if missing:' 'if False:' "$FX/precheck-missing-mind.json"
 mutate "mind notes filled"  'if hollow:' 'if False:' "$FX/precheck-empty-mind.json"
-mutate "placeholder notes"  ' and core not in PLACEHOLDERS' '' "$FX/precheck-placeholder-mind.json"
+mutate "placeholder notes"  ' and w not in PLACEHOLDERS' '' "$FX/precheck-placeholder-mind.json"
+mutate "per-word notes"     'for w in v.lower().split())' 'for w in [v.lower()])' "$FX/precheck-repeated-placeholder.json"
 mutate "verdict set"        'if v not in VERDICTS:' 'if False:' "$FX/precheck-bad-verdict.json"
 mutate "B needs undo"       'if v == "B" and not _filled(pc.get("undo")):' 'if False:' "$FX/precheck-b-no-undo.json"
 mutate "C needs lock"       'if v == "C" and lock not in' 'if False and lock not in' "$FX/precheck-c-no-lock.json"

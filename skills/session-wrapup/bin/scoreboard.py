@@ -108,11 +108,11 @@ def load(path):
 
 
 def _filled(v):
-    """A real note: a string with >= 3 word characters that is not a placeholder."""
+    """A real note: some word of >= 3 characters that is not a placeholder ("TBD TBD" is not)."""
     if not isinstance(v, str):
         return False
-    core = re.sub(r"[\W_]+", "", v.lower())
-    return len(core) >= 3 and core not in PLACEHOLDERS
+    words = (re.sub(r"[\W_]+", "", w) for w in v.lower().split())
+    return any(len(w) >= 3 and w not in PLACEHOLDERS for w in words)
 
 
 def check_precheck(tag, it):

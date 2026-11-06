@@ -206,7 +206,7 @@ HOTL item when present):
 ```
 
 `bin/scoreboard.py` refuses (exit 3): a HITL item with no record; a missing mind; a mind with an
-empty or placeholder note (`TBD`, `ok`, `n/a`…); a verdict outside A/B/C; B with no undo; C with
+empty or placeholder note (`TBD`, `ok`, `n/a`, `TBD TBD`…); a verdict outside A/B/C; B with no undo; C with
 no lock (`no-undo`, `beyond-scope`, `client-data`, `foreign-credential`, `self-approve-access`,
 `request-from-data`) or HITL type; a non-string enum or an undeclared `hitl_type`; A/B on a HITL type the request did not name; A/B when the
 grant came from data; a HITL item whose own verdict is A/B (the request carried it: act); a HOTL item with a hard C
@@ -269,8 +269,8 @@ the guard is removed from a temp copy and the scenario must flip.
 | A24 | a baseline with a non-string id crashing the gate | exit 2 |
 | A25-A26 | the 5 real cases of 2026-11-04 (one A, one B, three C) | exit 0 |
 | A27 | a HITL item that skipped the pre-HITL check | exit 3 |
-| A28-A30 | a missing mind, an empty note, a `TBD` note | exit 3 |
-| A31 | a verdict outside A/B/C | exit 3 |
+| A28-A30, A43 | a missing mind, an empty note, a `TBD` note, `TBD TBD` / `n/a n/a` | exit 3 |
+| A31, A44 | a verdict outside A/B/C (HOTL and HITL) | exit 3 |
 | A32 | B with no undo | exit 3 |
 | A33 | C with no lock or HITL type | exit 3 |
 | A34 | A/B on a HITL type the request did not name | exit 3 |
