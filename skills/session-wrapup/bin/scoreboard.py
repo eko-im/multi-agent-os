@@ -159,9 +159,10 @@ def check_precheck(tag, it):
     if it.get("kind") == "HITL" and v in ("A", "B"):
         errs.append(f"{tag}: HITL with verdict {v}: the request carried it, so act and keep it HOTL")
     ladder = pc.get("c_kind") == "ladder"
-    if ladder and (origin == "data" or lock not in LADDER_LOCKS):
+    if ladder and (origin == "data" or lock not in LADDER_LOCKS or ht is not None):
         errs.append(f"{tag}: c_kind ladder needs a trusted origin and a ladder lock "
-                    f"{sorted(LADDER_LOCKS)}; data origin or a hard lock is always hard C")
+                    f"{sorted(LADDER_LOCKS)} and hitl_type null; data origin, a hard lock or a HITL "
+                    "type is always hard C")
     if it.get("kind") == "HOTL" and v == "C" and not ladder:
         errs.append(f"{tag}: HOTL with a hard verdict C: it is human residue, keep it HITL "
                     "(only c_kind: ladder may be resolved by council-gate as HOTL)")

@@ -82,6 +82,7 @@ expect 0 "A41 HOTL done with C c_kind=ladder (council path) ok"  "$PY" "$SB" "$F
 expect 3 "A42 c_kind=ladder on a data-origin hard lock refused" "$PY" "$SB" "$FX/precheck-hotl-data-ladder.json"
 expect 3 "A43 notes of repeated placeholders (TBD TBD, n/a n/a)" "$PY" "$SB" "$FX/precheck-repeated-placeholder.json"
 expect 3 "A44 verdict outside {A,B,C} on a HITL item is refused" "$PY" "$SB" "$FX/precheck-hitl-bad-verdict.json"
+expect 3 "A45 c_kind=ladder with a HITL type (spend) is refused"  "$PY" "$SB" "$FX/precheck-hotl-ladder-spend.json"
 
 # A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
 if PYTHONDONTWRITEBYTECODE=1 "$PY" - "$HERE/../bin" "$HERE/../../request-carried-authorization/scripts" <<'PYEOF'
@@ -150,7 +151,8 @@ mutate "HITL cannot be A/B" 'if it.get("kind") == "HITL" and v in ("A", "B"):' '
 mutate "string enums"       'if nonstr:' 'if False:' "$FX/precheck-nonstring-enum.json"
 mutate "hitl_type declared" 'if "hitl_type" not in pc:' 'if False:' "$FX/precheck-no-type-declared.json"
 mutate "hard C stays HITL"  'and v == "C" and not ladder:' 'and False:' "$FX/precheck-hotl-hard-c.json"
-mutate "ladder consistent"  'if ladder and (origin == "data" or lock not in LADDER_LOCKS):' 'if False:' "$FX/precheck-hotl-data-ladder.json"
+mutate "ladder consistent"  'if ladder and (origin == "data" or lock not in LADDER_LOCKS' 'if ladder and (False' "$FX/precheck-hotl-data-ladder.json"
+mutate "ladder no HITL type" ' or ht is not None):' '):' "$FX/precheck-hotl-ladder-spend.json"
 
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]
