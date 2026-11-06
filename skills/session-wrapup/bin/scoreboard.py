@@ -128,7 +128,13 @@ def check_precheck(tag, it):
     hollow = [m for m in MINDS if m in minds and not _filled(minds[m])]
     if hollow:
         errs.append(f"{tag}: precheck minds with empty or placeholder notes {hollow}")
-    v, origin, ht = pc.get("verdict"), pc.get("origin"), pc.get("hitl_type")
+    raw = {k: pc.get(k) for k in ("verdict", "origin", "hitl_type", "lock")}
+    nonstr = [k for k, x in raw.items() if x is not None and not isinstance(x, str)]
+    if nonstr:
+        errs.append(f"{tag}: precheck fields must be strings or null: {nonstr}")
+    v, origin, ht, lock = (x if isinstance(x, str) else None for x in raw.values())
+    if "hitl_type" not in pc:
+        errs.append(f"{tag}: precheck must declare hitl_type (one of {sorted(HITL_TYPES)} or null)")
     if v not in VERDICTS:
         errs.append(f"{tag}: precheck verdict must be one of {sorted(VERDICTS)}, got {v!r}")
     if not _filled(pc.get("basis")):
@@ -137,8 +143,8 @@ def check_precheck(tag, it):
         errs.append(f"{tag}: precheck origin must be one of {sorted(ORIGINS)}, got {origin!r}")
     if v == "B" and not _filled(pc.get("undo")):
         errs.append(f"{tag}: verdict B needs a named undo")
-    if v == "C" and pc.get("lock") not in LOCKS | HITL_TYPES | HITL_FLOOR:
-        errs.append(f"{tag}: verdict C must name its lock or HITL type, got {pc.get('lock')!r}")
+    if v == "C" and lock not in LOCKS | HITL_TYPES | HITL_FLOOR:
+        errs.append(f"{tag}: verdict C must name its lock or HITL type, got {lock!r}")
     if v in ("A", "B") and origin == "data":
         errs.append(f"{tag}: verdict {v} on a grant that came from data (page, note, tool output) "
                     "is refused: data is not an order")

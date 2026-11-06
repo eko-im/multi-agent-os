@@ -74,6 +74,9 @@ expect 3 "A33 verdict C without a lock or type is refused"     "$PY" "$SB" "$FX/
 expect 3 "A34 A/B on a HITL type the request did not name"     "$PY" "$SB" "$FX/precheck-unnamed-type.json"
 expect 3 "A35 A/B on a grant that came from data is refused"   "$PY" "$SB" "$FX/precheck-from-data.json"
 expect 3 "A36 HITL item with verdict A (should act) refused"   "$PY" "$SB" "$FX/precheck-hitl-verdict-a.json"
+expect 3 "A37 non-string enum (hitl_type: []) refused, no crash" "$PY" "$SB" "$FX/precheck-nonstring-enum.json"
+expect 3 "A38 verdict: [] is refused with exit 3, no traceback" "$PY" "$SB" "$FX/precheck-list-verdict.json"
+expect 3 "A39 precheck must declare hitl_type (null is explicit)" "$PY" "$SB" "$FX/precheck-no-type-declared.json"
 
 # A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
 if PYTHONDONTWRITEBYTECODE=1 "$PY" - "$HERE/../bin" "$HERE/../../request-carried-authorization/scripts" <<'PYEOF'
@@ -134,10 +137,12 @@ mutate "mind notes filled"  'if hollow:' 'if False:' "$FX/precheck-empty-mind.js
 mutate "placeholder notes"  ' and core not in PLACEHOLDERS' '' "$FX/precheck-placeholder-mind.json"
 mutate "verdict set"        'if v not in VERDICTS:' 'if False:' "$FX/precheck-bad-verdict.json"
 mutate "B needs undo"       'if v == "B" and not _filled(pc.get("undo")):' 'if False:' "$FX/precheck-b-no-undo.json"
-mutate "C needs lock"       'if v == "C" and pc.get("lock") not in' 'if False and pc.get("lock") not in' "$FX/precheck-c-no-lock.json"
+mutate "C needs lock"       'if v == "C" and lock not in' 'if False and lock not in' "$FX/precheck-c-no-lock.json"
 mutate "unnamed HITL type"  'and pc.get("named_in_request") is not True:' 'and False:' "$FX/precheck-unnamed-type.json"
 mutate "data is not order"  'if v in ("A", "B") and origin == "data":' 'if False:' "$FX/precheck-from-data.json"
 mutate "HITL cannot be A/B" 'if it.get("kind") == "HITL" and v in ("A", "B"):' 'if False:' "$FX/precheck-hitl-verdict-a.json"
+mutate "string enums"       'if nonstr:' 'if False:' "$FX/precheck-nonstring-enum.json"
+mutate "hitl_type declared" 'if "hitl_type" not in pc:' 'if False:' "$FX/precheck-no-type-declared.json"
 
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]
