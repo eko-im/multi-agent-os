@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "skills/session-wrapup/**"
+      - "skills/request-carried-authorization/scripts/**"
       - ".github/workflows/session-wrapup-tests.yml"
   push:
     branches: [main]
     paths:
       - "skills/session-wrapup/**"
+      - "skills/request-carried-authorization/scripts/**"
       - ".github/workflows/session-wrapup-tests.yml"
 
 permissions:

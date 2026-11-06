@@ -40,20 +40,44 @@ expect 3 "A2 HOTL done without evidence is refused"           "$PY" "$SB" "$FX/n
 expect 3 "A3 tactical question filed as HITL is refused"      "$PY" "$SB" "$FX/tactical-hitl.json"
 expect 4 "A4 denominator shrink vs baseline is refused"       "$PY" "$SB" "$FX/shrunk.json" --baseline "$FX/baseline.json"
 expect 0 "A5 new item grows the denominator (allowed)"        "$PY" "$SB" "$FX/progress.json" --baseline "$FX/baseline.json"
-expect 5 "A6 close gate blocks while HOTL is open"            "$PY" "$SB" "$FX/progress.json" --gate close
-expect 5 "A7 close gate blocks an open HITL not in digest"    "$PY" "$SB" "$FX/undigested.json" --gate close
-expect 0 "A8 close gate passes: HOTL 100%, HITL in digest"    "$PY" "$SB" "$FX/closable.json" --gate close
+expect 5 "A6 close gate blocks while HOTL is open"            "$PY" "$SB" "$FX/progress.json" --gate close --baseline "$FX/baseline.json"
+expect 5 "A7 close gate blocks an open HITL not in digest"    "$PY" "$SB" "$FX/undigested.json" --gate close --baseline "$FX/undigested.json"
+expect 0 "A8 close gate passes: HOTL 100%, HITL in digest"    "$PY" "$SB" "$FX/closable.json" --gate close --baseline "$FX/closable.json"
 expect 2 "A9 unreadable input is a usage error"               "$PY" "$SB" "$FX/does-not-exist.json"
 expect 3 "A10 delegated done without delegator re-measure"    "$PY" "$SB" "$FX/delegated-unmeasured.json"
 expect 3 "A12 remeasured must be boolean true, not a string" "$PY" "$SB" "$FX/delegated-string-false.json"
-expect 0 "A11 delegated done, delegator re-measured: closes"  "$PY" "$SB" "$FX/delegated-remeasured.json" --gate close
+expect 0 "A11 delegated done, delegator re-measured: closes"  "$PY" "$SB" "$FX/delegated-remeasured.json" --gate close --baseline "$FX/delegated-remeasured.json"
+expect 4 "A13 HOTL relabelled as HITL vs baseline is refused" "$PY" "$SB" "$FX/relabel.json" --gate close --baseline "$FX/relabel-baseline.json"
+expect 2 "A14 close gate without --baseline is refused"       "$PY" "$SB" "$FX/closable.json" --gate close
+expect 3 "A15 digest \"false\" (a string) is refused"          "$PY" "$SB" "$FX/digest-string.json" --gate close --baseline "$FX/digest-string.json"
+expect 3 "A16 HOTL done must declare delegated true/false"    "$PY" "$SB" "$FX/delegated-missing.json"
+expect 3 "A17 delegated done without a remeasure record"      "$PY" "$SB" "$FX/delegated-no-record.json"
+expect 3 "A18 remeasure.at must be ISO 8601"                  "$PY" "$SB" "$FX/delegated-bad-time.json"
+expect 3 "A19 done with delivered != expected is refused"     "$PY" "$SB" "$FX/gap-done.json"
+expect 3 "A22 expected/delivered must be strings (1 == true)" "$PY" "$SB" "$FX/gap-nonstring.json"
+expect 3 "A23 remeasure.at must carry a time, not a date"     "$PY" "$SB" "$FX/delegated-date-only.json"
+expect 2 "A24 baseline with a non-string id is a usage error" "$PY" "$SB" "$FX/closable.json" --baseline "$FX/baseline-bad-ids.json"
+expect 0 "A20 every hard flag has its own HITL floor value"   "$PY" "$SB" "$FX/hard-floor.json"
+
+# A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
+if PYTHONDONTWRITEBYTECODE=1 "$PY" - "$HERE/../bin" "$HERE/../../request-carried-authorization/scripts" <<'PYEOF'
+import sys
+sys.path[:0] = sys.argv[1:3]
+import scoreboard, carried_authorization as ca
+m = scoreboard.HARD_FLAG_TO_FLOOR
+assert set(m) == set(ca.HARD_FLAGS), set(m) ^ set(ca.HARD_FLAGS)
+assert set(m.values()) <= scoreboard.HITL_FLOOR, set(m.values()) - scoreboard.HITL_FLOOR
+PYEOF
+then ok "A21 hard-flag map == request-carried-authorization HARD_FLAGS, all in floor"
+else bad "A21 hard-flag map drifted from request-carried-authorization HARD_FLAGS"; fi
 
 echo "== mutation check: each guard removed must flip its scenario =="
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # mutate <label> <python-substring-to-neutralize> <replacement> <fixture> [extra args...]
+# The mutated scenario must flip to exit $WANT (default 0: a refused case becomes accepted).
 mutate() {
-  local label="$1" needle="$2" repl="$3" fx="$4"; shift 4
+  local label="$1" needle="$2" repl="$3" fx="$4" want="${WANT:-0}"; shift 4
   local m="$TMP/sb_mut.py"
   "$PY" - "$SB" "$m" "$needle" "$repl" <<'PYEOF'
 import sys
@@ -65,7 +89,7 @@ open(dst, "w", encoding="utf-8").write(text.replace(needle, repl, 1))
 PYEOF
   local got=0
   "$PY" "$m" "$fx" "$@" >/dev/null 2>&1 || got=$?
-  if [ "$got" = "0" ]; then ok "M $label: guard removed -> scenario flips to exit 0"
+  if [ "$got" = "$want" ]; then ok "M $label: guard removed -> scenario flips to exit $want"
   else bad "M $label: guard removed but scenario still exits $got (test does not discriminate)"; fi
 }
 
@@ -73,7 +97,20 @@ mutate "evidence guard"    'state == "done" and not str(it.get("evidence", "")).
 mutate "HITL floor guard"  'it.get("floor") not in HITL_FLOOR' 'False' "$FX/tactical-hitl.json"
 mutate "re-measure guard"  'it.get("delegated") and it.get("remeasured") is not True' 'False' "$FX/delegated-unmeasured.json"
 mutate "shrink guard"      'if gone:' 'if False:' "$FX/shrunk.json" --baseline "$FX/baseline.json"
-mutate "close gate"        'if s["hotl"]["num"] != s["hotl"]["den"] or undigested:' 'if False:' "$FX/progress.json" --gate close
+mutate "close gate"        'if s["hotl"]["num"] != s["hotl"]["den"] or undigested:' 'if False:' "$FX/progress.json" --gate close --baseline "$FX/baseline.json"
+mutate "relabel guard"     'if relabel:' 'if False:' "$FX/relabel.json" --gate close --baseline "$FX/relabel-baseline.json"
+mutate "baseline required" 'if a.gate == "close" and not a.baseline:' 'if False:' "$FX/closable.json" --gate close
+# Without the type guard the gate still fails closed (digest is read with `is True`), but as a
+# silent "not in digest" (5) instead of an explicit invalid flag (3).
+WANT=5 mutate "boolean flags"     'if f in it and not isinstance(it[f], bool):' 'if False:' "$FX/digest-string.json" --gate close --baseline "$FX/digest-string.json"
+mutate "delegated declared" 'state == "done" and not isinstance(it.get("delegated"), bool):' 'False:' "$FX/delegated-missing.json"
+mutate "remeasure record"  'if kind == "HOTL" and state == "done" and it.get("delegated") is True:' 'if False:' "$FX/delegated-no-record.json"
+mutate "remeasure time"    'datetime.fromisoformat(rec["at"]' 'str(rec["at"]' "$FX/delegated-bad-time.json"
+mutate "expected=delivered" 'elif state == "done" and "expected" in it and' 'elif False and' "$FX/gap-done.json"
+mutate "string expected"   'elif "expected" in it and not (isinstance' 'elif False and not (isinstance' "$FX/gap-nonstring.json"
+mutate "time in at"        'if "T" not in rec["at"]:' 'if False:' "$FX/delegated-date-only.json"
+WANT=1 mutate "baseline ids"  'if bad_ids:' 'if False:' "$FX/closable.json" --baseline "$FX/baseline-bad-ids.json"
+WANT=3 mutate "hard-flag floor" '"raw-secret",          # print' '#' "$FX/hard-floor.json"
 
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]

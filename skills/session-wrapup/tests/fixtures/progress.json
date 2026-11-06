@@ -1,6 +1,6 @@
 {"items": [
- {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged, checks green"},
- {"id": "t2", "kind": "HOTL", "state": "done", "evidence": "worktree removed, git worktree list"},
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged, checks green", "delegated": false},
+ {"id": "t2", "kind": "HOTL", "state": "done", "evidence": "worktree removed, git worktree list", "delegated": false},
  {"id": "t3", "kind": "HOTL", "state": "open"},
  {"id": "t4", "kind": "HOTL", "state": "open"},
  {"id": "h1", "kind": "HITL", "state": "open", "floor": "spend", "digest": true}

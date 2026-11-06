@@ -1,0 +1,5 @@
+{"items": [
+ {"id": "h1", "kind": "HITL", "state": "open", "floor": "raw-secret", "digest": true},
+ {"id": "h2", "kind": "HITL", "state": "open", "floor": "cross-world-credential", "digest": true},
+ {"id": "h3", "kind": "HITL", "state": "open", "floor": "access-control-self-approval", "digest": true}
+]}

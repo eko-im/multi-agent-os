@@ -25,7 +25,7 @@ Drive the current conductor session to 100% and then close it. Thin entry point 
 | 2 Lenses | only the lens whose trigger fires | trigger table in the skill |
 | 3 Scoreboard | `%HOTL` · `%HITL` · `%SESSION` as n/d | `bin/scoreboard.py` |
 | 4 Converge | HOTL first (delegator re-measures every delegated "done"); missing tool → pipeline; pre-HITL authorization check; then ONE HITL digest (≤ 3 cards) | `quiesce` · `agentic-tool-pipeline` · `request-carried-authorization` · `council-gate` · `/hitl-digest` |
-| 5 Close | gate `--gate close` exit 0, then git-cycle → review → house-keeping → boy-scout → lessons | `signoff` |
+| 5 Close | gate `--gate close --baseline <round-start>` exit 0, then git-cycle → review → house-keeping → boy-scout → lessons | `signoff` |
 
 `--dry-run`: run Steps 1-3 and print the score and the plan; dispatch and write nothing.
 

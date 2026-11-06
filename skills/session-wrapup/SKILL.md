@@ -15,7 +15,7 @@ description: |
   `council-gate` + `/hitl-digest` + `agentic-tool-pipeline` + `signoff`; reimplements none.
   Triggers: "session-wrapup", "wrap up the session", "drive this session to 100%",
   "recap + score + close", "fechamento da sessão", "conduza até 100% e feche".
-version: 0.2.1
+version: 0.3.0
 triggers:
   - session-wrapup
   - wrap up the session
@@ -24,16 +24,16 @@ triggers:
   - fechamento da sessão
   - conduza até 100% e feche
 metadata:
-  version: "0.2.1"
+  version: "0.3.0"
   scope: AAIF cross-vendor
   family: worktree-lifecycle
   lifecycle-stage: operate
   id: MAOS-SKILL-session-wrapup
   type: skill
-  status: active
+  status: proposed  # promoted only after 2 real green dogfood cycles
   owner: maos-community
   composes: [pulse, goal-recovery, quiesce, request-carried-authorization, council-gate, hitl-digest, agentic-tool-pipeline, signoff]
-  source_prompt: "operator wrap-up prompt v4 (private vault, `pages/session-wrapup.prompt.v4.md`); pointer only, no content copied"
+  source_prompt: "an operator's recurring wrap-up prompt (v4); kept by the operator, not in this repo; this skill stands alone"
   naming: "Anima-named (agent register, descriptive-canonical, family-aligned with signoff/quiesce/pulse) — `session-wrapup`; rejected runner-up `helm` (needs a gloss; collides with the Kubernetes package manager)."
   dogfooding_validation:
     cycles_completed: 0
@@ -90,13 +90,18 @@ session-wrapup [--scope <session|repo:...|ticket:...>] [--dry-run]
 - **I2 Measure at source.** A fact without evidence is `[U]` unknown, not a guess. A worker's
   "done" is a claim until re-measured.
 - **I3 HITL floor.** Only these reach the human: new credential, spend, irreversible in
-  production, external send, operator taste/business call, third-party governance. Everything
-  else is decided by the agent (the same six values are `HITL_FLOOR` in `bin/scoreboard.py`).
+  production, external send, operator taste/business call, third-party governance, raw secret
+  value, credential outside its owner's domain, an access change that lets the agent approve
+  itself. Everything else is decided by the agent. These nine are `HITL_FLOOR` in
+  `bin/scoreboard.py`; `HARD_FLAG_TO_FLOOR` maps every hard flag of
+  `request-carried-authorization` §5 to one of them, and a test fails if the two drift.
 - **I4 No secret, PII or customer data in output.** Paths with `~`.
 - **I5 Shared responsibility.** Delegating passes on execution, never accountability
   (`agentic-delegation`). The delegate measures; the delegator re-measures at source (`gh`,
   `git`, the file, the API) before reporting or counting it. If they diverge, trust the
-  measurement and say so. In the scoreboard: `delegated: true` + `done` needs `remeasured: true`.
+  measurement and say so. In the scoreboard: `delegated: true` + `done` needs `remeasured: true`
+  and a `remeasure` record (§Step 3). That record is a **conductor declaration** the gate checks
+  for shape, not truth; it makes the claim auditable, it does not prove it.
 
 ## Steps
 
@@ -108,6 +113,10 @@ motivation → purpose → objectives (originating · foundational · generation
 primary · secondary · auxiliary) → DoR · DoD → goals → tasks → steps → deliverables →
 north-star · expected result · feedback. A node with no path to a purpose: trace it back with
 5 Whys or mark it orphaned.
+
+For each deliverable, put **EXPECTED × DELIVERED** (measured) side by side. A difference becomes
+its own scoreboard item, not a footnote: the item carries `expected` and `delivered`, and the
+gate refuses it as `done` while they differ (exit 3).
 
 ### Step 2 — Lenses (only on trigger, never all by habit)
 
@@ -128,10 +137,13 @@ Report a lens only when it changed a decision.
 ### Step 3 — Scoreboard (same denominator for the whole round)
 
 Items = decisions, actions and tasks of this session, each `HOTL` (the agent resolves) or `HITL`
-(only the human resolves, I3). Mark every HOTL item a worker or subagent completed with
-`"delegated": true`, and add `"remeasured": true` only after you checked it at source yourself
-(I5). The gate cannot see whether you really re-measured: an omitted or false flag is the honest
-default. Write them to a JSON file and run:
+(only the human resolves, I3). Every HOTL `done` declares `"delegated"`: `true` when a worker or
+subagent did it, `false` when you did it yourself. A delegated `done` also needs
+`"remeasured": true` and `"remeasure": {"source", "ref", "at", "result"}`: where you looked, an
+immutable reference (SHA, PR number, check run id), an ISO 8601 date and time and what you read (I5).
+Flags (`delegated`, `remeasured`, `digest`) must be JSON booleans; `"false"` as a string is
+refused. Keep the round-start list as the baseline; an item never changes kind against it.
+Write them to a JSON file and run:
 
 ```bash
 python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.round-start.json
@@ -146,7 +158,9 @@ python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.roun
 The script refuses: a HOTL marked done without evidence (exit 3); a delegated HOTL marked done
 without the delegator's own re-measurement (exit 3, I5); a HITL outside the floor —
 a tactical question is HOTL, decide it (exit 3); an item that vanished from the baseline instead
-of being closed (exit 4). New items are allowed: they grow the denominator. An empty
+of being closed, or that changed kind (HOTL relabelled as HITL) against it (exit 4); a non-boolean
+flag, a delegated `done` without a `remeasure` record, a `done` whose delivered differs from its
+expected (exit 3). New items are allowed: they grow the denominator. An empty
 denominator reads `0/0 = 100%` (nothing waits on that side). Always show
 numerator/denominator, and list pending items as id · kind · owner · next step.
 
@@ -154,7 +168,14 @@ numerator/denominator, and list pending items as id · kind · owner · next ste
 
 Order: (a) stop bleeding → (b) root cause → (c) no loose ends → (d) session goals.
 Exhaust HOTL first: delegate independent work in parallel, dependent work in sequence, divisible
-work recursively (`quiesce` drives PRs green). An approval block is removed only by a legitimate
+work recursively (`quiesce` drives PRs green). Every worker brief carries the item's DoD, its
+limits and the I3 floor; a brief without a DoD is an incomplete delegation, fix it before
+dispatch. A worker never hands a decision back by silence: it reports blocked or question.
+
+Growing autonomy has a fixed ceiling: each round that closes with evidence may widen what you
+decide alone **inside** I3; nothing widens I3 itself (the floor is a constant in
+`bin/scoreboard.py`, no input can add to or remove from it). Growing means asking less about
+what you can measure, never deciding what belongs to the operator. An approval block is removed only by a legitimate
 path (e.g. a second account approves when author ≠ approver); never bypass a protection, a
 required check or a security review.
 
@@ -175,7 +196,8 @@ recommendation. Always show the total still open, not only this round's 3.
 ### Step 5 — Close (only when the gate passes)
 
 ```bash
-python3 skills/session-wrapup/bin/scoreboard.py items.json --gate close   # exit 0 = may close
+python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.round-start.json --gate close
+# exit 0 = may close; without --baseline the gate refuses (exit 2)
 ```
 
 Then: git-cycle → DIY PR review (no paid bots; required CI green) → house-keeping (merged
@@ -207,6 +229,21 @@ the guard is removed from a temp copy and the scenario must flip.
 | A10 | a delegated "done" counted on the worker's word | exit 3 |
 | A11 | a delegated "done" the delegator re-measured | exit 0 |
 | A12 | `remeasured: "false"` (a string) slipping past the guard | exit 3 |
+| A13 | a HOTL item relabelled as HITL to reach 100% | exit 4 |
+| A14 | closing without the round-start baseline | exit 2 |
+| A15 | `digest: "false"` (a string) read as "in the digest" | exit 3 |
+| A16 | a HOTL `done` that does not say who did it | exit 3 |
+| A17 | `remeasured: true` with no record of what was read | exit 3 |
+| A18 | a `remeasure.at` that is not a time | exit 3 |
+| A19 | a `done` whose delivered differs from its expected | exit 3 |
+| A20 | a hard flag that has no floor value (would become HOTL) | exit 0 with its own value |
+| A21 | the hard-flag map drifting from `request-carried-authorization` | test fails |
+| A22 | `expected: 1` == `delivered: true` counted as no gap | exit 3 |
+| A23 | a `remeasure.at` with a date but no time | exit 3 |
+| A24 | a baseline with a non-string id crashing the gate | exit 2 |
+
+Not covered by tests: that the seven minds, `council-gate` and `/hitl-digest` really ran. The
+skill stays `proposed` until two real cycles are recorded in `dogfooding_validation`.
 
 ## Anti-patterns
 
