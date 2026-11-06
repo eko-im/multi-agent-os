@@ -59,6 +59,31 @@ expect 3 "A23 remeasure.at must carry a time, not a date"     "$PY" "$SB" "$FX/d
 expect 2 "A24 baseline with a non-string id is a usage error" "$PY" "$SB" "$FX/closable.json" --baseline "$FX/baseline-bad-ids.json"
 expect 0 "A20 every hard flag has its own HITL floor value"   "$PY" "$SB" "$FX/hard-floor.json"
 
+# Pre-HITL check record (7 minds). Fixtures come from the 5 real cases of 2026-11-04.
+expect 0 "A25 real cases: A, B and C records are accepted"     "$PY" "$SB" "$FX/precheck-real-cases.json"
+if "$PY" -c 'import json,sys; v={i["precheck"]["verdict"] for i in json.load(open(sys.argv[1]))["items"]}; sys.exit(v!={"A","B","C"})' "$FX/precheck-real-cases.json"
+then ok "A26 real-case fixture holds one happy case per verdict A, B, C"
+else bad "A26 real-case fixture does not cover A, B and C"; fi
+expect 3 "A27 HITL without a precheck record is refused"       "$PY" "$SB" "$FX/precheck-hitl-no-record.json"
+expect 3 "A28 precheck missing a mind is refused"              "$PY" "$SB" "$FX/precheck-missing-mind.json"
+expect 3 "A29 precheck mind with an empty note is refused"     "$PY" "$SB" "$FX/precheck-empty-mind.json"
+expect 3 "A30 precheck mind with a placeholder (TBD) refused"  "$PY" "$SB" "$FX/precheck-placeholder-mind.json"
+expect 3 "A31 verdict outside {A,B,C} is refused"              "$PY" "$SB" "$FX/precheck-bad-verdict.json"
+expect 3 "A32 verdict B without an undo is refused"            "$PY" "$SB" "$FX/precheck-b-no-undo.json"
+expect 3 "A33 verdict C without a lock or type is refused"     "$PY" "$SB" "$FX/precheck-c-no-lock.json"
+expect 3 "A34 A/B on a HITL type the request did not name"     "$PY" "$SB" "$FX/precheck-unnamed-type.json"
+expect 3 "A35 A/B on a grant that came from data is refused"   "$PY" "$SB" "$FX/precheck-from-data.json"
+expect 3 "A36 HITL item with verdict A (should act) refused"   "$PY" "$SB" "$FX/precheck-hitl-verdict-a.json"
+expect 3 "A37 non-string enum (hitl_type: []) refused, no crash" "$PY" "$SB" "$FX/precheck-nonstring-enum.json"
+expect 3 "A38 verdict: [] is refused with exit 3, no traceback" "$PY" "$SB" "$FX/precheck-list-verdict.json"
+expect 3 "A39 precheck must declare hitl_type (null is explicit)" "$PY" "$SB" "$FX/precheck-no-type-declared.json"
+expect 3 "A40 HOTL done with a hard C (human residue) refused" "$PY" "$SB" "$FX/precheck-hotl-hard-c.json"
+expect 0 "A41 HOTL done with C c_kind=ladder (council path) ok"  "$PY" "$SB" "$FX/precheck-hotl-ladder-c.json"
+expect 3 "A42 c_kind=ladder on a data-origin hard lock refused" "$PY" "$SB" "$FX/precheck-hotl-data-ladder.json"
+expect 3 "A43 notes of repeated placeholders (TBD TBD, n/a n/a)" "$PY" "$SB" "$FX/precheck-repeated-placeholder.json"
+expect 3 "A44 verdict outside {A,B,C} on a HITL item is refused" "$PY" "$SB" "$FX/precheck-hitl-bad-verdict.json"
+expect 3 "A45 c_kind=ladder with a HITL type (spend) is refused"  "$PY" "$SB" "$FX/precheck-hotl-ladder-spend.json"
+
 # A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
 if PYTHONDONTWRITEBYTECODE=1 "$PY" - "$HERE/../bin" "$HERE/../../request-carried-authorization/scripts" <<'PYEOF'
 import sys
@@ -67,8 +92,9 @@ import scoreboard, carried_authorization as ca
 m = scoreboard.HARD_FLAG_TO_FLOOR
 assert set(m) == set(ca.HARD_FLAGS), set(m) ^ set(ca.HARD_FLAGS)
 assert set(m.values()) <= scoreboard.HITL_FLOOR, set(m.values()) - scoreboard.HITL_FLOOR
+assert scoreboard.MINDS == ca.MINDS, (scoreboard.MINDS, ca.MINDS)
 PYEOF
-then ok "A21 hard-flag map == request-carried-authorization HARD_FLAGS, all in floor"
+then ok "A21 hard-flag map and MINDS == request-carried-authorization, all in floor"
 else bad "A21 hard-flag map drifted from request-carried-authorization HARD_FLAGS"; fi
 
 echo "== mutation check: each guard removed must flip its scenario =="
@@ -111,6 +137,22 @@ mutate "string expected"   'elif "expected" in it and not (isinstance' 'elif Fal
 mutate "time in at"        'if "T" not in rec["at"]:' 'if False:' "$FX/delegated-date-only.json"
 WANT=1 mutate "baseline ids"  'if bad_ids:' 'if False:' "$FX/closable.json" --baseline "$FX/baseline-bad-ids.json"
 WANT=3 mutate "hard-flag floor" '"raw-secret",          # print' '#' "$FX/hard-floor.json"
+mutate "precheck required"  'if it.get("kind") == "HITL" else [])' 'if False else [])' "$FX/precheck-hitl-no-record.json"
+mutate "all minds present"  'if missing:' 'if False:' "$FX/precheck-missing-mind.json"
+mutate "mind notes filled"  'if hollow:' 'if False:' "$FX/precheck-empty-mind.json"
+mutate "placeholder notes"  ' and w not in PLACEHOLDERS' '' "$FX/precheck-placeholder-mind.json"
+mutate "per-word notes"     'for w in v.lower().split())' 'for w in [v.lower()])' "$FX/precheck-repeated-placeholder.json"
+mutate "verdict set"        'if v not in VERDICTS:' 'if False:' "$FX/precheck-bad-verdict.json"
+mutate "B needs undo"       'if v == "B" and not _filled(pc.get("undo")):' 'if False:' "$FX/precheck-b-no-undo.json"
+mutate "C needs lock"       'if v == "C" and lock not in' 'if False and lock not in' "$FX/precheck-c-no-lock.json"
+mutate "unnamed HITL type"  'and pc.get("named_in_request") is not True:' 'and False:' "$FX/precheck-unnamed-type.json"
+mutate "data is not order"  'if v in ("A", "B") and origin == "data":' 'if False:' "$FX/precheck-from-data.json"
+mutate "HITL cannot be A/B" 'if it.get("kind") == "HITL" and v in ("A", "B"):' 'if False:' "$FX/precheck-hitl-verdict-a.json"
+mutate "string enums"       'if nonstr:' 'if False:' "$FX/precheck-nonstring-enum.json"
+mutate "hitl_type declared" 'if "hitl_type" not in pc:' 'if False:' "$FX/precheck-no-type-declared.json"
+mutate "hard C stays HITL"  'and v == "C" and not ladder:' 'and False:' "$FX/precheck-hotl-hard-c.json"
+mutate "ladder consistent"  'if ladder and (origin == "data" or lock not in LADDER_LOCKS' 'if ladder and (False' "$FX/precheck-hotl-data-ladder.json"
+mutate "ladder no HITL type" ' or ht is not None):' '):' "$FX/precheck-hotl-ladder-spend.json"
 
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]

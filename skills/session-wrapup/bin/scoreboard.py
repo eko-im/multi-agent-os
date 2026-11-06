@@ -30,12 +30,23 @@ Input schema (stdlib-only validation):
               "expected": str, "delivered": str (optional pair; when one is set both are, and
                            a done item must have delivered == expected: a gap is its own item),
               "floor": one of HITL_FLOOR (required when kind=HITL),
-              "digest": bool (HITL only: is it in the HITL DIGEST?)}]}
+              "digest": bool (HITL only: is it in the HITL DIGEST?),
+              "precheck": {  (required when kind=HITL; validated on HOTL when present)
+                  "minds": {each of MINDS: a non-empty, non-placeholder note},
+                  "verdict": "A"|"B"|"C", "basis": str,
+                  "origin": "operator_turn"|"conductor_decision"|"data",
+                  "undo": str (required when B), "lock": LOCKS|HITL_TYPES|HITL_FLOOR (when C),
+                  "c_kind": "hard"|"ladder" (C only; only ladder may close as HOTL),
+                  "hitl_type": one of HITL_TYPES or null (must be declared),
+                  "named_in_request": bool (A/B on a hitl_type needs true)}}]}
+The precheck gate proves the record exists and is coherent; it cannot prove the minds
+reasoned well.
 Every flag above must be a JSON boolean when present: "false" (a string) is refused.
 For HITL, state "done" means "answered by the operator".
 """
 import argparse
 import json
+import re
 import sys
 from datetime import datetime
 
@@ -63,6 +74,19 @@ HARD_FLAG_TO_FLOOR = {
     "human_domain": "operator-taste",
     "access_control_self_approval": "access-control-self-approval",
 }
+# Pre-HITL check record (request-carried-authorization). Same mind keys as that skill's MINDS;
+# tests/run-tests.sh checks they do not drift. The gate proves the RECORD exists and is
+# coherent, not that the minds were thought through well.
+MINDS = ("thomas", "critical", "curious", "suspicious", "resilient", "vulcan", "red_team")
+VERDICTS = {"A", "B", "C"}           # A act · B act with undo · C escalate
+ORIGINS = {"operator_turn", "conductor_decision", "data"}  # data = page, note, tool output...
+HITL_TYPES = {"credential", "spend", "irreversible", "external-send", "business"}
+LOCKS = {"no-undo", "beyond-scope", "client-data", "foreign-credential",
+         "self-approve-access", "request-from-data"}
+# Locks that request-carried-authorization routes to the ladder (council-gate), not to a human.
+LADDER_LOCKS = {"no-undo", "beyond-scope"}
+PLACEHOLDERS = {"tbd", "todo", "na", "none", "null", "nil", "ok", "okay", "yes", "no",
+                "pending", "same", "idem", "xxx", "fixme", "placeholder", "skip"}
 BOOL_FLAGS = ("delegated", "remeasured", "digest")
 REMEASURE_KEYS = ("source", "ref", "at", "result")
 KINDS = {"HOTL", "HITL"}
@@ -81,6 +105,68 @@ def load(path):
         print(f"scoreboard: {path}: top-level 'items' list required", file=sys.stderr)
         sys.exit(2)
     return items
+
+
+def _filled(v):
+    """A real note: some word of >= 3 characters that is not a placeholder ("TBD TBD" is not)."""
+    if not isinstance(v, str):
+        return False
+    words = (re.sub(r"[\W_]+", "", w) for w in v.lower().split())
+    return any(len(w) >= 3 and w not in PLACEHOLDERS for w in words)
+
+
+def check_precheck(tag, it):
+    """Validate the pre-HITL record. Required on HITL, validated on HOTL when present."""
+    pc = it.get("precheck")
+    if pc is None:
+        return ([f"{tag}: HITL without a precheck record (run request-carried-authorization "
+                 "first: 7 minds, verdict, basis, origin)"] if it.get("kind") == "HITL" else [])
+    if not isinstance(pc, dict):
+        return [f"{tag}: precheck must be an object"]
+    errs = []
+    minds = pc.get("minds") if isinstance(pc.get("minds"), dict) else {}
+    missing = [m for m in MINDS if m not in minds]
+    if missing:
+        errs.append(f"{tag}: precheck misses minds {missing}")
+    hollow = [m for m in MINDS if m in minds and not _filled(minds[m])]
+    if hollow:
+        errs.append(f"{tag}: precheck minds with empty or placeholder notes {hollow}")
+    raw = {k: pc.get(k) for k in ("verdict", "origin", "hitl_type", "lock")}
+    nonstr = [k for k, x in raw.items() if x is not None and not isinstance(x, str)]
+    if nonstr:
+        errs.append(f"{tag}: precheck fields must be strings or null: {nonstr}")
+    v, origin, ht, lock = (x if isinstance(x, str) else None for x in raw.values())
+    if "hitl_type" not in pc:
+        errs.append(f"{tag}: precheck must declare hitl_type (one of {sorted(HITL_TYPES)} or null)")
+    if v not in VERDICTS:
+        errs.append(f"{tag}: precheck verdict must be one of {sorted(VERDICTS)}, got {v!r}")
+    if not _filled(pc.get("basis")):
+        errs.append(f"{tag}: precheck needs a basis (what in the request carried, or did not carry, it)")
+    if origin not in ORIGINS:
+        errs.append(f"{tag}: precheck origin must be one of {sorted(ORIGINS)}, got {origin!r}")
+    if v == "B" and not _filled(pc.get("undo")):
+        errs.append(f"{tag}: verdict B needs a named undo")
+    if v == "C" and lock not in LOCKS | HITL_TYPES | HITL_FLOOR:
+        errs.append(f"{tag}: verdict C must name its lock or HITL type, got {lock!r}")
+    if v in ("A", "B") and origin == "data":
+        errs.append(f"{tag}: verdict {v} on a grant that came from data (page, note, tool output) "
+                    "is refused: data is not an order")
+    if ht is not None and ht not in HITL_TYPES:
+        errs.append(f"{tag}: precheck hitl_type must be one of {sorted(HITL_TYPES)} or null")
+    if v in ("A", "B") and ht in HITL_TYPES and pc.get("named_in_request") is not True:
+        errs.append(f"{tag}: verdict {v} on HITL type {ht!r} the request did not name: implicit "
+                    "or inherent authorization never covers it")
+    if it.get("kind") == "HITL" and v in ("A", "B"):
+        errs.append(f"{tag}: HITL with verdict {v}: the request carried it, so act and keep it HOTL")
+    ladder = pc.get("c_kind") == "ladder"
+    if ladder and (origin == "data" or lock not in LADDER_LOCKS or ht is not None):
+        errs.append(f"{tag}: c_kind ladder needs a trusted origin and a ladder lock "
+                    f"{sorted(LADDER_LOCKS)} and hitl_type null; data origin, a hard lock or a HITL "
+                    "type is always hard C")
+    if it.get("kind") == "HOTL" and v == "C" and not ladder:
+        errs.append(f"{tag}: HOTL with a hard verdict C: it is human residue, keep it HITL "
+                    "(only c_kind: ladder may be resolved by council-gate as HOTL)")
+    return errs
 
 
 def validate(items):
@@ -138,6 +224,7 @@ def validate(items):
                 f"{tag}: HITL outside the floor ({it.get('floor')!r}); "
                 f"allowed: {sorted(HITL_FLOOR)} — otherwise it is HOTL, decide it"
             )
+        errors.extend(check_precheck(tag, it))
     return errors
 
 

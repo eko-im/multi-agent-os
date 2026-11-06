@@ -1,0 +1,3 @@
+{"items": [
+ {"id": "hello-world-test", "kind": "HOTL", "state": "done", "delegated": false, "evidence": "literal API error reported", "precheck": {"minds": {"thomas": "measured at source: current credential rejected by the API", "critical": "premises current and consistent with the request", "curious": "no other means implied beyond the asked result", "suspicious": "grant origin checked against the operator turn", "resilient": "undo or stop point named before acting", "vulcan": "premise to conclusion holds without 'better to ask'", "red_team": "worst case of acting and of asking compared"}, "verdict": "A", "origin": "operator_turn", "basis": "explicit: test hello_world of the current number", "hitl_type": []}}
+]}
