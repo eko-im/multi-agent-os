@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `session-wrapup` v0.3.0: independent red-team findings (relabel, falsy flags)
+
+- **Breaking input change** in `bin/scoreboard.py`:
+  - `--gate close` now requires `--baseline` (exit 2), and an item whose `kind` changed against
+    the baseline (HOTL relabelled as HITL) is refused (exit 4).
+  - `delegated`, `remeasured` and `digest` must be JSON booleans (exit 3); `digest` is read with
+    `is True`, so `"false"` can no longer count as "in the digest".
+  - Every HOTL `done` declares `delegated` (true/false). A delegated `done` needs a
+    `remeasure` record `{source, ref, at, result}` with an ISO 8601 `at`; the docs call it a
+    conductor declaration the gate checks for shape, not truth.
+  - Optional `expected`/`delivered` pair: a `done` item with a gap is refused (exit 3).
+  - `HITL_FLOOR` gains `raw-secret`, `cross-world-credential`, `access-control-self-approval`;
+    `HARD_FLAG_TO_FLOOR` maps every `request-carried-authorization` hard flag, checked by a test.
+- SKILL.md: EXPECTED × DELIVERED in Step 1, worker-brief DoD contract and the fixed autonomy
+  ceiling in Step 4; `status: proposed` until two real dogfood cycles; `source_prompt` no longer
+  points at a private vault.
+- Tests: A13-A21 and 9 new mutation checks (34 pass). CI also runs on
+  `request-carried-authorization/scripts/**` changes.
+
 ### Changed — `session-wrapup` v0.2.1: I1 also preserves existing content
 
 - I1 now covers existing text (notes, docs) as well as behavior, matching the operator's re-sent

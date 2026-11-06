@@ -1,0 +1,4 @@
+{"items": [
+ {"id": "t1", "kind": "HITL", "state": "done", "floor": "spend"},
+ {"id": "h1", "kind": "HITL", "state": "open", "floor": "spend", "digest": true}
+]}

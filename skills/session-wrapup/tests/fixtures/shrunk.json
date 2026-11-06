@@ -1,5 +1,5 @@
 {"items": [
- {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged"},
- {"id": "t2", "kind": "HOTL", "state": "done", "evidence": "PR merged"},
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged", "delegated": false},
+ {"id": "t2", "kind": "HOTL", "state": "done", "evidence": "PR merged", "delegated": false},
  {"id": "h1", "kind": "HITL", "state": "open", "floor": "spend", "digest": true}
 ]}

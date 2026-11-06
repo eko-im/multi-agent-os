@@ -1,1 +1,3 @@
-{"items": [{"id": "t1", "kind": "HOTL", "state": "done"}]}
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "delegated": false}
+]}
