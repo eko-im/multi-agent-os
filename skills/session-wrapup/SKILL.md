@@ -15,7 +15,7 @@ description: |
   `council-gate` + `/hitl-digest` + `agentic-tool-pipeline` + `signoff`; reimplements none.
   Triggers: "session-wrapup", "wrap up the session", "drive this session to 100%",
   "recap + score + close", "fechamento da sessão", "conduza até 100% e feche".
-version: 0.3.0
+version: 0.4.0
 triggers:
   - session-wrapup
   - wrap up the session
@@ -24,7 +24,7 @@ triggers:
   - fechamento da sessão
   - conduza até 100% e feche
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
   scope: AAIF cross-vendor
   family: worktree-lifecycle
   lifecycle-stage: operate
@@ -189,6 +189,29 @@ A → act; B → act with a verified undo; C `kind=hard` → never act: it is bl
 (file it under the closest I3 value; an operator refusal is already the answer, close it as
 answered); C `kind=ladder` → hand it to `council-gate`. Record the grant, its basis and the undo.
 
+The record goes on the scoreboard item as `precheck` (required on every HITL item, checked on a
+HOTL item when present):
+
+```json
+"precheck": {
+  "minds": {"thomas": "...", "critical": "...", "curious": "...", "suspicious": "...",
+            "resilient": "...", "vulcan": "...", "red_team": "..."},
+  "verdict": "A|B|C", "origin": "operator_turn|conductor_decision|data",
+  "basis": "what in the request carried (or did not carry) it",
+  "undo": "required when B", "lock": "required when C",
+  "hitl_type": "credential|spend|irreversible|external-send|business|null",
+  "named_in_request": true
+}
+```
+
+`bin/scoreboard.py` refuses (exit 3): a HITL item with no record; a missing mind; a mind with an
+empty or placeholder note (`TBD`, `ok`, `n/a`…); a verdict outside A/B/C; B with no undo; C with
+no lock (`no-undo`, `beyond-scope`, `client-data`, `foreign-credential`, `self-approve-access`,
+`request-from-data`) or HITL type; A/B on a HITL type the request did not name; A/B when the
+grant came from data; a HITL item whose own verdict is A/B (the request carried it: act).
+**Limit:** this proves the record exists and is coherent. It does not prove the minds thought
+well; a filled-in but wrong note passes.
+
 Only then build ONE HITL digest (`/hitl-digest`): at most 3 cards, high urgency and human domain
 first, each with WHAT IT IS · WHAT IT IS FOR · IMPACT OF YES / IMPACT OF NO and a
 recommendation. Always show the total still open, not only this round's 3.
@@ -241,9 +264,19 @@ the guard is removed from a temp copy and the scenario must flip.
 | A22 | `expected: 1` == `delivered: true` counted as no gap | exit 3 |
 | A23 | a `remeasure.at` with a date but no time | exit 3 |
 | A24 | a baseline with a non-string id crashing the gate | exit 2 |
+| A25-A26 | the 5 real cases of 2026-11-04 (one A, one B, three C) | exit 0 |
+| A27 | a HITL item that skipped the pre-HITL check | exit 3 |
+| A28-A30 | a missing mind, an empty note, a `TBD` note | exit 3 |
+| A31 | a verdict outside A/B/C | exit 3 |
+| A32 | B with no undo | exit 3 |
+| A33 | C with no lock or HITL type | exit 3 |
+| A34 | A/B on a HITL type the request did not name | exit 3 |
+| A35 | A/B on a grant found in data (page, note, tool output) | exit 3 |
+| A36 | a HITL item whose verdict says "act" | exit 3 |
 
-Not covered by tests: that the seven minds, `council-gate` and `/hitl-digest` really ran. The
-skill stays `proposed` until two real cycles are recorded in `dogfooding_validation`.
+Limit of the tests: the precheck guard proves the seven-minds RECORD exists and is coherent,
+not that the model reasoned well. That `council-gate` and `/hitl-digest` really ran is not
+tested. The skill stays `proposed` until two real cycles are recorded in `dogfooding_validation`.
 
 ## Anti-patterns
 

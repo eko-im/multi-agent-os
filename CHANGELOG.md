@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `session-wrapup` v0.4.0: gate on the pre-HITL seven-minds record
+
+- **Breaking input change** in `bin/scoreboard.py`: every HITL item needs a `precheck` record
+  (seven minds with real notes, verdict A/B/C, basis, origin; undo for B; lock or HITL type for
+  C). Refused (exit 3): missing mind, empty or placeholder note, bad verdict, B without undo,
+  C without lock, A/B on an unnamed HITL type, A/B on a grant from data, HITL with verdict A/B.
+- `MINDS` must equal `request-carried-authorization`'s `MINDS` (test A21).
+- Tests: A25-A36 (fixtures from the 5 real cases of 2026-11-04) and 10 new mutation checks
+  (62 pass). SKILL.md states the limit: the gate proves the record, not the reasoning.
+
 ### Fixed — `session-wrapup` v0.3.0: independent red-team findings (relabel, falsy flags)
 
 - **Breaking input change** in `bin/scoreboard.py`:
