@@ -36,7 +36,8 @@ Input schema (stdlib-only validation):
                   "verdict": "A"|"B"|"C", "basis": str,
                   "origin": "operator_turn"|"conductor_decision"|"data",
                   "undo": str (required when B), "lock": LOCKS|HITL_TYPES|HITL_FLOOR (when C),
-                  "hitl_type": one of HITL_TYPES or null,
+                  "c_kind": "hard"|"ladder" (C only; only ladder may close as HOTL),
+                  "hitl_type": one of HITL_TYPES or null (must be declared),
                   "named_in_request": bool (A/B on a hitl_type needs true)}}]}
 The precheck gate proves the record exists and is coherent; it cannot prove the minds
 reasoned well.
@@ -155,6 +156,9 @@ def check_precheck(tag, it):
                     "or inherent authorization never covers it")
     if it.get("kind") == "HITL" and v in ("A", "B"):
         errs.append(f"{tag}: HITL with verdict {v}: the request carried it, so act and keep it HOTL")
+    if it.get("kind") == "HOTL" and v == "C" and pc.get("c_kind") != "ladder":
+        errs.append(f"{tag}: HOTL with a hard verdict C: it is human residue, keep it HITL "
+                    "(only c_kind: ladder may be resolved by council-gate as HOTL)")
     return errs
 
 
