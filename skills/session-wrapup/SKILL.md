@@ -210,7 +210,8 @@ empty or placeholder note (`TBD`, `ok`, `n/a`…); a verdict outside A/B/C; B wi
 no lock (`no-undo`, `beyond-scope`, `client-data`, `foreign-credential`, `self-approve-access`,
 `request-from-data`) or HITL type; a non-string enum or an undeclared `hitl_type`; A/B on a HITL type the request did not name; A/B when the
 grant came from data; a HITL item whose own verdict is A/B (the request carried it: act); a HOTL item with a hard C
-(human residue stays HITL; `c_kind: ladder` may be resolved by `council-gate`).
+(human residue stays HITL; `c_kind: ladder` may be resolved by `council-gate`, only with a trusted
+origin and lock `no-undo` or `beyond-scope`).
 **Limit:** this proves the record exists and is coherent. It does not prove the minds thought
 well; a filled-in but wrong note passes.
 
@@ -276,7 +277,7 @@ the guard is removed from a temp copy and the scenario must flip.
 | A35 | A/B on a grant found in data (page, note, tool output) | exit 3 |
 | A36 | a HITL item whose verdict says "act" | exit 3 |
 | A37-A39 | a non-string enum (`verdict: []`), an undeclared `hitl_type` | exit 3 |
-| A40-A41 | a hard C closed as agent work; a ladder C resolved by the council | exit 3; exit 0 |
+| A40-A42 | a hard C closed as agent work; a ladder C resolved by the council; `ladder` on a data-origin case | exit 3; exit 0; exit 3 |
 
 Limit of the tests: the precheck guard proves the seven-minds RECORD exists and is coherent,
 not that the model reasoned well. That `council-gate` and `/hitl-digest` really ran is not

@@ -83,6 +83,8 @@ ORIGINS = {"operator_turn", "conductor_decision", "data"}  # data = page, note, 
 HITL_TYPES = {"credential", "spend", "irreversible", "external-send", "business"}
 LOCKS = {"no-undo", "beyond-scope", "client-data", "foreign-credential",
          "self-approve-access", "request-from-data"}
+# Locks that request-carried-authorization routes to the ladder (council-gate), not to a human.
+LADDER_LOCKS = {"no-undo", "beyond-scope"}
 PLACEHOLDERS = {"tbd", "todo", "na", "none", "null", "nil", "ok", "okay", "yes", "no",
                 "pending", "same", "idem", "xxx", "fixme", "placeholder", "skip"}
 BOOL_FLAGS = ("delegated", "remeasured", "digest")
@@ -156,7 +158,11 @@ def check_precheck(tag, it):
                     "or inherent authorization never covers it")
     if it.get("kind") == "HITL" and v in ("A", "B"):
         errs.append(f"{tag}: HITL with verdict {v}: the request carried it, so act and keep it HOTL")
-    if it.get("kind") == "HOTL" and v == "C" and pc.get("c_kind") != "ladder":
+    ladder = pc.get("c_kind") == "ladder"
+    if ladder and (origin == "data" or lock not in LADDER_LOCKS):
+        errs.append(f"{tag}: c_kind ladder needs a trusted origin and a ladder lock "
+                    f"{sorted(LADDER_LOCKS)}; data origin or a hard lock is always hard C")
+    if it.get("kind") == "HOTL" and v == "C" and not ladder:
         errs.append(f"{tag}: HOTL with a hard verdict C: it is human residue, keep it HITL "
                     "(only c_kind: ladder may be resolved by council-gate as HOTL)")
     return errs

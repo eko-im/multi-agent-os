@@ -79,6 +79,7 @@ expect 3 "A38 verdict: [] is refused with exit 3, no traceback" "$PY" "$SB" "$FX
 expect 3 "A39 precheck must declare hitl_type (null is explicit)" "$PY" "$SB" "$FX/precheck-no-type-declared.json"
 expect 3 "A40 HOTL done with a hard C (human residue) refused" "$PY" "$SB" "$FX/precheck-hotl-hard-c.json"
 expect 0 "A41 HOTL done with C c_kind=ladder (council path) ok"  "$PY" "$SB" "$FX/precheck-hotl-ladder-c.json"
+expect 3 "A42 c_kind=ladder on a data-origin hard lock refused" "$PY" "$SB" "$FX/precheck-hotl-data-ladder.json"
 
 # A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
 if PYTHONDONTWRITEBYTECODE=1 "$PY" - "$HERE/../bin" "$HERE/../../request-carried-authorization/scripts" <<'PYEOF'
@@ -145,7 +146,8 @@ mutate "data is not order"  'if v in ("A", "B") and origin == "data":' 'if False
 mutate "HITL cannot be A/B" 'if it.get("kind") == "HITL" and v in ("A", "B"):' 'if False:' "$FX/precheck-hitl-verdict-a.json"
 mutate "string enums"       'if nonstr:' 'if False:' "$FX/precheck-nonstring-enum.json"
 mutate "hitl_type declared" 'if "hitl_type" not in pc:' 'if False:' "$FX/precheck-no-type-declared.json"
-mutate "hard C stays HITL"  'and v == "C" and pc.get("c_kind") != "ladder":' 'and False:' "$FX/precheck-hotl-hard-c.json"
+mutate "hard C stays HITL"  'and v == "C" and not ladder:' 'and False:' "$FX/precheck-hotl-hard-c.json"
+mutate "ladder consistent"  'if ladder and (origin == "data" or lock not in LADDER_LOCKS):' 'if False:' "$FX/precheck-hotl-data-ladder.json"
 
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]

@@ -13,10 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (seven minds with real notes, verdict A/B/C, basis, origin; undo for B; lock or HITL type for
   C). Refused (exit 3): missing mind, empty or placeholder note, bad verdict, B without undo,
   C without lock, A/B on an unnamed HITL type, A/B on a grant from data, HITL with verdict A/B, non-string enums,
-  undeclared `hitl_type`, HOTL closed on a hard C (`c_kind: ladder` is the council path).
+  undeclared `hitl_type`, HOTL closed on a hard C (`c_kind: ladder` is the council path, only for
+  trusted origin and lock `no-undo`/`beyond-scope`).
 - `MINDS` must equal `request-carried-authorization`'s `MINDS` (test A21).
-- Tests: A25-A41 (fixtures from the 5 real cases of 2026-11-04) and 13 new mutation checks
-  (70 pass). SKILL.md states the limit: the gate proves the record, not the reasoning.
+- Tests: A25-A42 (fixtures from the 5 real cases of 2026-11-04) and 14 new mutation checks
+  (72 pass). SKILL.md states the limit: the gate proves the record, not the reasoning.
 
 ### Fixed — `session-wrapup` v0.3.0: independent red-team findings (relabel, falsy flags)
 
@@ -36,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   points at a private vault.
 - Review round: `expected`/`delivered` must be strings, `remeasure.at` must carry a time,
   baseline ids must be non-empty strings (exit 2, no traceback).
-- Tests: A13-A24 and 13 new mutation checks (40 pass). CI also runs on
+- Tests: A13-A24 and 14 new mutation checks (40 pass). CI also runs on
   `request-carried-authorization/scripts/**` changes.
 
 ### Changed — `session-wrapup` v0.2.1: I1 also preserves existing content
