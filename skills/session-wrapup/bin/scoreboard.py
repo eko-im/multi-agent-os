@@ -107,6 +107,9 @@ def validate(items):
                           "or false (the conductor did it)")
         if ("expected" in it) != ("delivered" in it):
             errors.append(f"{tag}: expected and delivered go together")
+        elif "expected" in it and not (isinstance(it["expected"], str)
+                                       and isinstance(it["delivered"], str)):
+            errors.append(f"{tag}: expected and delivered must be strings")
         elif state == "done" and "expected" in it and it["expected"] != it["delivered"]:
             errors.append(f"{tag}: done but delivered != expected; file the gap as its own item")
         if kind == "HOTL" and state == "done" and not str(it.get("evidence", "")).strip():
@@ -125,9 +128,11 @@ def validate(items):
                               f"{list(REMEASURE_KEYS)} (where, immutable ref, when, what was read)")
             else:
                 try:
+                    if "T" not in rec["at"]:  # a date alone does not say when it was read
+                        raise ValueError
                     datetime.fromisoformat(rec["at"].replace("Z", "+00:00"))
                 except ValueError:
-                    errors.append(f"{tag}: remeasure.at must be ISO 8601, got {rec['at']!r}")
+                    errors.append(f"{tag}: remeasure.at must be an ISO 8601 date and time, got {rec['at']!r}")
         if kind == "HITL" and it.get("floor") not in HITL_FLOOR:
             errors.append(
                 f"{tag}: HITL outside the floor ({it.get('floor')!r}); "
@@ -181,12 +186,18 @@ def main():
 
     if a.baseline:
         base = load(a.baseline)
-        gone = sorted({i.get("id") for i in base if isinstance(i, dict)} - set(s["ids"]))
+        bad_ids = [i for i in base if not (isinstance(i, dict) and isinstance(i.get("id"), str)
+                                           and i["id"])]
+        if bad_ids:
+            print(f"scoreboard: {a.baseline}: every baseline item needs a non-empty string id",
+                  file=sys.stderr)
+            return 2
+        gone = sorted({i["id"] for i in base} - set(s["ids"]))
         if gone:
             print(f"SHRINK denominator lost items without closing them: {gone}", file=sys.stderr)
             return 4
-        relabel = sorted(i["id"] for i in base if isinstance(i, dict)
-                         and i.get("id") in s["kinds"] and i.get("kind") != s["kinds"][i["id"]])
+        relabel = sorted(i["id"] for i in base
+                         if i["id"] in s["kinds"] and i.get("kind") != s["kinds"][i["id"]])
         if relabel:
             print(f"RELABEL items changed kind vs baseline (close or keep them, do not relabel): "
                   f"{relabel}", file=sys.stderr)

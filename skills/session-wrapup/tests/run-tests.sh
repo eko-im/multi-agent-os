@@ -54,6 +54,9 @@ expect 3 "A16 HOTL done must declare delegated true/false"    "$PY" "$SB" "$FX/d
 expect 3 "A17 delegated done without a remeasure record"      "$PY" "$SB" "$FX/delegated-no-record.json"
 expect 3 "A18 remeasure.at must be ISO 8601"                  "$PY" "$SB" "$FX/delegated-bad-time.json"
 expect 3 "A19 done with delivered != expected is refused"     "$PY" "$SB" "$FX/gap-done.json"
+expect 3 "A22 expected/delivered must be strings (1 == true)" "$PY" "$SB" "$FX/gap-nonstring.json"
+expect 3 "A23 remeasure.at must carry a time, not a date"     "$PY" "$SB" "$FX/delegated-date-only.json"
+expect 2 "A24 baseline with a non-string id is a usage error" "$PY" "$SB" "$FX/closable.json" --baseline "$FX/baseline-bad-ids.json"
 expect 0 "A20 every hard flag has its own HITL floor value"   "$PY" "$SB" "$FX/hard-floor.json"
 
 # A21 the hard-flag map covers exactly request-carried-authorization's HARD_FLAGS
@@ -104,6 +107,9 @@ mutate "delegated declared" 'state == "done" and not isinstance(it.get("delegate
 mutate "remeasure record"  'if kind == "HOTL" and state == "done" and it.get("delegated") is True:' 'if False:' "$FX/delegated-no-record.json"
 mutate "remeasure time"    'datetime.fromisoformat(rec["at"]' 'str(rec["at"]' "$FX/delegated-bad-time.json"
 mutate "expected=delivered" 'elif state == "done" and "expected" in it and' 'elif False and' "$FX/gap-done.json"
+mutate "string expected"   'elif "expected" in it and not (isinstance' 'elif False and not (isinstance' "$FX/gap-nonstring.json"
+mutate "time in at"        'if "T" not in rec["at"]:' 'if False:' "$FX/delegated-date-only.json"
+WANT=1 mutate "baseline ids"  'if bad_ids:' 'if False:' "$FX/closable.json" --baseline "$FX/baseline-bad-ids.json"
 WANT=3 mutate "hard-flag floor" '"raw-secret",          # print' '#' "$FX/hard-floor.json"
 
 echo "== $pass passed, $fail failed =="

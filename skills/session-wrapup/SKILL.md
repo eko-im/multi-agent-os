@@ -140,7 +140,7 @@ Items = decisions, actions and tasks of this session, each `HOTL` (the agent res
 (only the human resolves, I3). Every HOTL `done` declares `"delegated"`: `true` when a worker or
 subagent did it, `false` when you did it yourself. A delegated `done` also needs
 `"remeasured": true` and `"remeasure": {"source", "ref", "at", "result"}`: where you looked, an
-immutable reference (SHA, PR number, check run id), an ISO 8601 time and what you read (I5).
+immutable reference (SHA, PR number, check run id), an ISO 8601 date and time and what you read (I5).
 Flags (`delegated`, `remeasured`, `digest`) must be JSON booleans; `"false"` as a string is
 refused. Keep the round-start list as the baseline; an item never changes kind against it.
 Write them to a JSON file and run:
@@ -238,6 +238,9 @@ the guard is removed from a temp copy and the scenario must flip.
 | A19 | a `done` whose delivered differs from its expected | exit 3 |
 | A20 | a hard flag that has no floor value (would become HOTL) | exit 0 with its own value |
 | A21 | the hard-flag map drifting from `request-carried-authorization` | test fails |
+| A22 | `expected: 1` == `delivered: true` counted as no gap | exit 3 |
+| A23 | a `remeasure.at` with a date but no time | exit 3 |
+| A24 | a baseline with a non-string id crashing the gate | exit 2 |
 
 Not covered by tests: that the seven minds, `council-gate` and `/hitl-digest` really ran. The
 skill stays `proposed` until two real cycles are recorded in `dogfooding_validation`.

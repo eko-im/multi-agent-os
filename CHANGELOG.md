@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SKILL.md: EXPECTED × DELIVERED in Step 1, worker-brief DoD contract and the fixed autonomy
   ceiling in Step 4; `status: proposed` until two real dogfood cycles; `source_prompt` no longer
   points at a private vault.
-- Tests: A13-A21 and 9 new mutation checks (34 pass). CI also runs on
+- Review round: `expected`/`delivered` must be strings, `remeasure.at` must carry a time,
+  baseline ids must be non-empty strings (exit 2, no traceback).
+- Tests: A13-A24 and 12 new mutation checks (40 pass). CI also runs on
   `request-carried-authorization/scripts/**` changes.
 
 ### Changed — `session-wrapup` v0.2.1: I1 also preserves existing content
