@@ -6,10 +6,11 @@ password on disk in several places. These tools stop that in layers.
 
 | Layer | Tool | What it does |
 |---|---|---|
-| deliver | `secret-pipe` | 1Password value → stdin / env / 0600 temp file of a child process; child output masked |
+| deliver | `secret-pipe` | 1Password values → stdin / env (many) / 0600 temp file of a child process; child output masked; one read per item per process (memory cache), host-wide lock per item, backoff with full jitter, stops on the daily limit; importable `get()` for scripts |
 | prevent | `secret-guard` | PreToolUse hook: blocks shell commands that would print a secret, put it in argv, or read a secret file |
 | detect (live) | `secret-alert` | PostToolUse hook: gitleaks over the tool output; logs `rule + sha8`, tells the agent not to repeat it |
 | detect (batch) | `secret-leak-scan` | transcripts/logs scan: gitleaks patterns + exact match of agent-vault values (quota-checked) |
+| detect (data) | `sensitive-scan` | payment-card data (PAN with brand+length+Luhn, CVV, expiry) and secrets in files or JSONL records; prints type/where/sha8 |
 | commit | `pre-commit-gitleaks` + `install-pre-commit` | git pre-commit gate on staged changes, installed without clobbering |
 
 No tool ever prints a value: findings carry path, line, rule and `sha256[:8]`.
@@ -48,8 +49,19 @@ logged (rule + command sha8) to `~/.local/state/secret-guard/blocks.log`.
   1Password account quota is shared by all agents (1000/day measured), so the
   scan refuses to run with less than 450 + 300 reads left. Run it weekly.
 
+## 1Password quota
+
+Official limits (https://www.1password.dev/service-accounts/rate-limits/): per
+token 1,000 reads/h and 100 writes/h (Families/Teams; Business 10,000/1,000);
+per account per day 1,000 (1Password/Families), 5,000 (Teams), 50,000
+(Business). The daily limit is shared by every service account of the account,
+so one careless batch blocks every agent for the rest of the day. Read an item
+once per run, never in parallel, back off with jitter, stop on the daily limit.
+
 ## Tests
 
 `tests/test_secret_guard.py` (block/allow cases + mutation per rule) and
-`tests/test_secret_pipe.sh` (fake `op` on PATH + mask mutation). Both use only
+`tests/test_secret_pipe.sh` (fake `op` on PATH: mask, cache, lock + mutations),
+`tests/test_secret_pipe_backoff.py` (retry, daily stop, jitter + mutation) and
+`tests/test_sensitive_scan.py` (generated Luhn-valid fakes + mutations). Both use only
 fake values generated at run time.
