@@ -57,6 +57,11 @@ MCP client --stdio--> ssh -T <host> shared-browser-mcp <harness> <account>
   default-deny policy must allow `launch`, `close` and `tab_list` or attach,
   cleanup and the account check fail. Page output gets `--content-boundaries`
   and `--max-output`.
+- **URLs.** Any `url` argument must be `http(s)` or `about:blank`; `file:`,
+  `javascript:`, `data:`, `chrome:` and logout/signout paths are refused
+  (`url_refused`). Measured: `open file://...` let a session read local files.
+- **Lease write.** If the lease cannot be written (disk full, permissions) the
+  call is refused with `lease_write_failed` instead of hanging.
 
 ## Install (on the browser host)
 
@@ -122,6 +127,12 @@ active tab, whoever owns it.
 - `tab_list` is allowed, so a session can see other tabs' titles and URLs.
 - The account probe only sees accounts a page exposes in `aria-label`, `title`,
   `data-email` or `<meta name="user-login">`; other sites return `ACCOUNT_UNVERIFIED`.
+- The probe passes when the expected account appears **anywhere** in those
+  attributes (an inbox listing a mail from it is enough) and it runs in the
+  page's own JavaScript world, so a page can fake it. It catches a wrong
+  profile or `authuser`, not a hostile page.
+- A logout is refused only on `open`; clicking a "Sign out" link still works.
+- Screenshots stay in `~/.agent-browser/tmp/screenshots` (0600) until removed.
 - Values starting with `--` are refused even in plain text input.
 - After a Chrome restart every call returns `tab_gone` (fails closed); the MCP
   client must restart the server to get a new tab.

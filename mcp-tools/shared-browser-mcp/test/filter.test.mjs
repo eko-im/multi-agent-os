@@ -46,3 +46,14 @@ test('account verdict: match, mismatch, none, and fail closed', () => {
   assert.match(accountVerdict('none', ['p@y.io'], 'public'), /^ACCOUNT_MISMATCH/);
   assert.match(accountVerdict('', ['w@x.io'], 'work'), /^ACCOUNT_UNVERIFIED/);
 });
+
+test('open only reaches http(s) or about:blank, never a logout URL', () => {
+  const call = (url) => filterCall({ name: 'agent_browser_open', arguments: { url } }, S);
+  for (const url of ['file:///home/u/.ssh/id_ed25519', 'javascript:alert(1)', 'data:text/html,x', 'chrome://settings',
+    'https://accounts.google.com/Logout', 'https://github.com/logout', 'https://x.io/u/signout?a=1', ' FILE:///etc/passwd', 42]) {
+    assert.match(call(url).error || '', /^url_refused/, String(url));
+  }
+  for (const url of ['https://example.com', 'http://example.com/a', 'example.com/x', 'about:blank', 'https://docs.x.io/logout-guide']) {
+    assert.ok(call(url).params, url);
+  }
+});

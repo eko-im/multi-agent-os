@@ -89,6 +89,21 @@ function scanFlagLike(value) {
   return false;
 }
 
+// Navigation targets. Measured: `open file:///home/...` lets the model read any
+// local file (keys, env) and `open` runs before the account check, so a page
+// could also send the model to a logout URL that signs the human out of the
+// shared profile. Only http(s) and about:blank pass; logout/signout paths do not.
+// shortcut: the logout match is by path only; a click on a "Sign out" link
+// still works (it is account-checked but not blocked). Phase 2: per-site URL policy.
+export function urlRefusal(url) {
+  if (url === 'about:blank') return null;
+  let u;
+  try { u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`); } catch { return 'url_refused: not a valid URL'; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return `url_refused: scheme '${u.protocol}' is not allowed (http, https or about:blank only)`;
+  if (/\/(log|sign)[-_]?(out|off)(\/|$)/i.test(u.pathname)) return 'url_refused: logout/signout URLs would sign the shared profile out; stop and report';
+  return null;
+}
+
 // Returns {params} with the session forced, or {error} with the reason.
 export function filterCall(params, session) {
   const args = (params && params.arguments) || {};
@@ -99,6 +114,10 @@ export function filterCall(params, session) {
   }
   if (scanFlagLike(args)) {
     return { error: 'a value starting with "--" is refused (agent-browser would read it as a global flag)' };
+  }
+  if (args.url !== undefined) {
+    const why = typeof args.url === 'string' ? urlRefusal(args.url.trim()) : 'url_refused: url must be a string';
+    if (why) return { error: why };
   }
   return { params: { ...params, arguments: { ...args, session } } };
 }
@@ -213,7 +232,14 @@ function main() {
       const why = admit();
       if (why) { audit({ tool, result: 'refused', reason: why }); reply(msg.id, why); return; }
       lease = { id: session, harness: env.SB_HARNESS, identity: env.SB_IDENTITY, account: env.SB_ACCOUNT || null, cdp, pid: process.pid, started: new Date().toISOString() };
-      writeLease();
+      // Measured: a failed write (disk full, EACCES) threw here and the client
+      // never got a reply. Without a lease file the reaper cannot see the tab,
+      // so refuse the call instead of running unleased.
+      try { writeLease(); } catch (e) {
+        lease = null;
+        const why = `lease_write_failed: ${e.code || e.message}`;
+        audit({ tool, result: 'refused', reason: why }); reply(msg.id, why); return;
+      }
     } else {
       const now = new Date();
       try { fs.utimesSync(leaseFile, now, now); } catch { /* reaper may have removed it */ }
