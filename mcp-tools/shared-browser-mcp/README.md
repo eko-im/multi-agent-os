@@ -22,13 +22,20 @@ MCP client --stdio--> ssh -T <host> shared-browser-mcp <harness> <account>
   in one profile can be mixed silently (measured: a work task landed on the
   personal Google account because it is `authuser=0`). The second argument names
   the account profile; `SB_CDP_<account>` is its CDP port and
-  `SB_ACCOUNT_<account>` is the e-mail or login its pages must show.
+  `SB_ACCOUNT_<account>` is the e-mail or login its pages must show (`none` for
+  a profile with no login: any visible account is then a mismatch). Both are
+  **required**: the wrapper refuses to start without them, and refuses when two
+  identities with different accounts point at the same CDP port.
+- **agent-browser >= 0.41.0 is enforced** at start (older `--pin-tab` does not
+  return `tab_locked`).
 - **Account check before every tool that reads or acts on the page.** The proxy
   (not the model) reads the account e-mails in the page's account widgets and
   `<meta name="user-login">` over its own CDP connection. Expected account
   present: the call goes through. Another account: `ACCOUNT_MISMATCH`. None
   visible: `ACCOUNT_UNVERIFIED`. Only `open`, `get_url`, `get_title`, waits,
-  history moves, `tab_list` and `close` run without it.
+  history moves, `tab_list` and `close` run without it. Each check is logged
+  with `probe_ms`. For Google, open URLs with `?authuser=<account>`: without it
+  a profile holding two accounts lands on `authuser=0`.
 - **Session fixed by the wrapper.** Tool arguments `session`, `namespace`,
   `restore*`, `extraArgs`, `idleTimeout`, `relaunch`, `allowedDomains`, CA
   options, and any value starting with `--` are refused. Tab switch/new/close
@@ -62,16 +69,25 @@ SB_AGENT_BROWSER=$HOME/sb/ab/node_modules/.bin/agent-browser
 SB_POLICY=${SB_POLICY:-$HOME/sb/app/policy/default.json}
 SB_MAX_LEASES=10
 SB_MIN_MEM_MB=3000
-SB_IDLE_SEC=${SB_IDLE_SEC:-1800}
-# one block per account profile:
+SB_IDLE_SEC=${SB_IDLE_SEC:-900}
+# one block per account profile (required; one Chrome profile per account):
 # SB_CDP_work=9222
 # SB_ACCOUNT_work=someone@example.com
+# SB_CDP_public=9224
+# SB_ACCOUNT_public=none
 EOF
 chmod 600 ~/sb/env
 ```
 
-Run the reaper every few minutes (cron or a user timer):
-`SB_HOME=~/sb ~/sb/bin/shared-browser-reaper`.
+Run the reaper every 2 minutes with the user timer in `systemd/` (a silent
+network drop then holds a tab at most `SB_IDLE_SEC` + 2 min):
+
+```bash
+mkdir -p ~/.config/systemd/user && cp systemd/shared-browser-reaper.* ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now shared-browser-reaper.timer
+```
+
+Or cron: `*/2 * * * * SB_HOME=$HOME/sb $HOME/sb/bin/shared-browser-reaper >/dev/null`.
 
 ## Register (client side)
 
@@ -93,7 +109,7 @@ every agent down.
 
 ```bash
 node --test mcp-tools/shared-browser-mcp/test/filter.test.mjs
-node mcp-tools/shared-browser-mcp/test/mcp-client.mjs '[["agent_browser_open",{"url":"https://example.com"}]]' -- ssh -T <host> 'SB_HOME=$HOME/sb $HOME/sb/bin/shared-browser-mcp test'
+node mcp-tools/shared-browser-mcp/test/mcp-client.mjs '[["agent_browser_open",{"url":"https://example.com"}]]' -- ssh -T <host> 'SB_HOME=$HOME/sb $HOME/sb/bin/shared-browser-mcp test public'
 ```
 
 Never run the unpinned mode (`SB_PIN_TAB=0`, for the isolation mutation-check
@@ -107,3 +123,7 @@ active tab, whoever owns it.
 - The account probe only sees accounts a page exposes in `aria-label`, `title`,
   `data-email` or `<meta name="user-login">`; other sites return `ACCOUNT_UNVERIFIED`.
 - Values starting with `--` are refused even in plain text input.
+- After a Chrome restart every call returns `tab_gone` (fails closed); the MCP
+  client must restart the server to get a new tab.
+- An account switch inside a page without navigation is caught only on the next
+  checked tool call, not before.

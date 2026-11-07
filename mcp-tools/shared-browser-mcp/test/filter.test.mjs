@@ -35,3 +35,14 @@ test('page reads and actions need the account check; tab moves are locked', () =
   assert.ok(ACCOUNT_FREE_TOOLS.has('agent_browser_open'));
   assert.ok(TAB_TOOLS.has('agent_browser_tab_switch') && !TAB_TOOLS.has('agent_browser_tab_list'));
 });
+
+import { accountVerdict } from '../lib/proxy.mjs';
+
+test('account verdict: match, mismatch, none, and fail closed', () => {
+  assert.equal(accountVerdict('w@x.io', ['p@y.io', 'w@x.io'], 'work'), null);
+  assert.match(accountVerdict('w@x.io', ['p@y.io'], 'work'), /^ACCOUNT_MISMATCH/);
+  assert.match(accountVerdict('w@x.io', [], 'work'), /^ACCOUNT_UNVERIFIED/);
+  assert.equal(accountVerdict('none', [], 'public'), null);
+  assert.match(accountVerdict('none', ['p@y.io'], 'public'), /^ACCOUNT_MISMATCH/);
+  assert.match(accountVerdict('', ['w@x.io'], 'work'), /^ACCOUNT_UNVERIFIED/);
+});

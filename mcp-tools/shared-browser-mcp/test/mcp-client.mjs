@@ -25,6 +25,8 @@ const rpc = (method, params) => new Promise((res) => {
 await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'sb-test', version: '0' } });
 child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
 for (const [tool, args] of calls) {
+  // ["sleep", {"ms": N}] pauses between calls (e.g. while a test restarts Chrome).
+  if (tool === 'sleep') { await new Promise((r) => setTimeout(r, args.ms)); continue; }
   const t0 = performance.now();
   const r = tool === 'tools/list' ? await rpc('tools/list', {}) : await rpc('tools/call', { name: tool, arguments: args || {} });
   const ms = Math.round(performance.now() - t0);

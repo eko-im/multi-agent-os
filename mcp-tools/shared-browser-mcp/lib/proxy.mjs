@@ -61,6 +61,21 @@ export function pageAccounts(cdpPort, targetId) {
   });
 }
 
+// Decides the account check from the expected account and the accounts the
+// page shows. expected 'none' = a profile with no login: any visible account
+// is a mismatch. Empty expected fails closed (bin/shared-browser-mcp refuses
+// to start without one; this guards a direct start of the proxy).
+export function accountVerdict(expected, seen, identity) {
+  if (!expected) return `ACCOUNT_UNVERIFIED: no account set for identity '${identity}'`;
+  if (expected === 'none') {
+    return seen.length ? `ACCOUNT_MISMATCH: identity '${identity}' expects no signed-in account but the page shows one; stop and report` : null;
+  }
+  if (seen.includes(expected)) return null;
+  return seen.length
+    ? `ACCOUNT_MISMATCH: the page is signed in as a different account than the one set for identity '${identity}'; switch account or stop and report`
+    : `ACCOUNT_UNVERIFIED: no signed-in account visible on the page for identity '${identity}'`;
+}
+
 // agent-browser < 0.41.0 reads global flags anywhere in its argv, so a string
 // value such as "--no-pin-tab" inside a selector could change the session
 // (upstream #2238). shortcut: refuse every value that starts with "--";
@@ -153,16 +168,17 @@ function main() {
   // the model) asks the page which account it is signed in as and compares it
   // with the account configured for this identity (one Chrome profile per account).
   const expectedAccount = (env.SB_ACCOUNT || '').toLowerCase();
+  let probeMs = 0;
   const checkAccount = async () => {
-    if (!expectedAccount) return null;
+    probeMs = 0;
+    if (!expectedAccount) return accountVerdict('', [], env.SB_IDENTITY);
     if (!lease.targetId) await captureTarget();
     if (!lease.targetId) return 'ACCOUNT_UNVERIFIED: no pinned tab yet';
     let seen;
+    const t0 = performance.now();
     try { seen = await pageAccounts(cdp, lease.targetId); } catch (e) { return `ACCOUNT_UNVERIFIED: ${e.message}`; }
-    if (seen.includes(expectedAccount)) return null;
-    return seen.length
-      ? `ACCOUNT_MISMATCH: the page is signed in as a different account than the one set for identity '${env.SB_IDENTITY}'; switch account or stop and report`
-      : `ACCOUNT_UNVERIFIED: no signed-in account visible on the page for identity '${env.SB_IDENTITY}'`;
+    probeMs = Math.round(performance.now() - t0);
+    return accountVerdict(expectedAccount, seen, env.SB_IDENTITY);
   };
 
   const reply = (id, text) => {
@@ -204,8 +220,8 @@ function main() {
     }
     if (!ACCOUNT_FREE_TOOLS.has(tool)) {
       const bad = await checkAccount();
-      if (bad) { audit({ tool, result: 'refused', reason: bad.split(':')[0] }); reply(msg.id, bad); return; }
-      if (expectedAccount) audit({ tool, account_check: 'ok' });
+      if (bad) { audit({ tool, result: 'refused', reason: bad.split(':')[0], probe_ms: probeMs }); reply(msg.id, bad); return; }
+      audit({ tool, account_check: 'ok', probe_ms: probeMs });
     }
     pending.set(msg.id, { tool, url: sanitizeUrl(f.params.arguments.url) });
     child.stdin.write(JSON.stringify({ ...msg, params: f.params }) + '\n');
