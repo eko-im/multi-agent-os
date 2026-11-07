@@ -96,6 +96,9 @@ EOF
 chmod 600 ~/sb/env
 ```
 
+`$SB_HOME/env` is sourced as shell by both scripts: keep `$SB_HOME` and `env`
+owned by, and writable only by, the browser host user.
+
 Run the reaper every 2 minutes with the user timer in `systemd/` (a silent
 network drop then holds a tab at most `SB_IDLE_SEC` + 2 min):
 

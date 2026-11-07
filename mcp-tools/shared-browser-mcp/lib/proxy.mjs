@@ -34,6 +34,10 @@ export const ACCOUNT_FREE_TOOLS = new Set([
   'agent_browser_reload', 'agent_browser_tools_profiles',
 ]);
 
+// CDP target ids are 32 hex chars. The id goes into CDP URLs (/json/close/<id>,
+// /devtools/page/<id>), so anything else (a path like ../activate/x) is ignored.
+export const isTargetId = (id) => typeof id === 'string' && /^[A-Za-z0-9]{1,64}$/.test(id);
+
 // Runs in the page over a separate CDP connection: returns the e-mails in
 // account widgets (aria-label/title/data-email) and a GitHub-style
 // <meta name="user-login">. Only these tokens leave the page, never content.
@@ -178,7 +182,7 @@ function main() {
       if (!err && lease) {
         try {
           const tab = (JSON.parse(out).data.tabs || []).find((t) => t.active);
-          if (tab && tab.targetId) { lease.targetId = tab.targetId; writeLease(); }
+          if (tab && isTargetId(tab.targetId)) { lease.targetId = tab.targetId; writeLease(); }
         } catch { /* retried on the next call */ }
       }
       resolve();
@@ -262,7 +266,7 @@ function main() {
       const p = pending.get(msg.id);
       if (!p) return;
       pending.delete(msg.id);
-      audit({ tool: p.tool, url: p.url, result: msg.error || (msg.result && msg.result.isError) ? 'error' : 'ok' });
+      audit({ tool: p.tool, url: p.url, result: (msg.error || (msg.result && msg.result.isError)) ? 'error' : 'ok' });
       // Without a pin the "active" tab may be someone else's (measured: an
       // unpinned open navigated a human tab and exit then closed it), so the
       // wrapper only records, and later closes, a tab it is pinned to.

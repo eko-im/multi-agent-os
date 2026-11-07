@@ -37,7 +37,12 @@ test('page reads and actions need the account check; tab moves are locked', () =
   assert.ok(TAB_TOOLS.has('agent_browser_tab_switch') && !TAB_TOOLS.has('agent_browser_tab_list'));
 });
 
-import { accountVerdict } from '../lib/proxy.mjs';
+import { accountVerdict, isTargetId } from '../lib/proxy.mjs';
+
+test('target ids used in CDP URLs are plain alphanumerics', () => {
+  assert.ok(isTargetId('2EE60210FABBDE21900FA7FDE8CFFAD0'));
+  for (const id of ['../activate/x', 'a/b', '', 'x?y', undefined]) assert.ok(!isTargetId(id), String(id));
+});
 
 test('account verdict: match, mismatch, none, and fail closed', () => {
   assert.equal(accountVerdict('w@x.io', ['p@y.io', 'w@x.io'], 'work'), null);
