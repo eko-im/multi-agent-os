@@ -231,6 +231,9 @@ function main() {
     if (done) return;
     done = true;
     audit({ event: 'shutdown', reason });
+    // A client that disconnects right after its first call can beat the async
+    // target capture; capture now so the pinned tab is not left behind.
+    if (pinned && lease && !lease.targetId) await captureTarget();
     try { child.kill('SIGTERM'); } catch { /* already gone */ }
     if (lease && lease.targetId) {
       // `agent-browser close` on a CDP session only detaches; the tab stays.
