@@ -1,0 +1,109 @@
+# shared-browser-mcp
+
+One already-logged-in Chrome, many agents. Each MCP client gets **one pinned
+tab** on a shared Chrome (reached over CDP on loopback), served as a stdio MCP
+server over `ssh`, so no port is opened. It wraps
+[`agent-browser mcp`](https://github.com/vercel-labs/agent-browser).
+
+Status: phase 1 (validation). Tested on Linux with agent-browser 0.41.2 and
+Chrome 155. Generic: no host, account or org lives in this directory; all of it
+goes in a local `$SB_HOME/env` on the browser host.
+
+## Model
+
+```
+MCP client --stdio--> ssh -T <host> shared-browser-mcp <harness> <account>
+   └─> lib/proxy.mjs (lease, filters, account check, cleanup)
+         └─> agent-browser mcp --tools core   (AGENT_BROWSER_CDP=<profile port>, PIN_TAB=1)
+               └─> Chrome profile for <account>, CDP on 127.0.0.1 only
+```
+
+- **One Chrome profile per account.** Cookies are per profile, so two accounts
+  in one profile can be mixed silently (measured: a work task landed on the
+  personal Google account because it is `authuser=0`). The second argument names
+  the account profile; `SB_CDP_<account>` is its CDP port and
+  `SB_ACCOUNT_<account>` is the e-mail or login its pages must show.
+- **Account check before every tool that reads or acts on the page.** The proxy
+  (not the model) reads the account e-mails in the page's account widgets and
+  `<meta name="user-login">` over its own CDP connection. Expected account
+  present: the call goes through. Another account: `ACCOUNT_MISMATCH`. None
+  visible: `ACCOUNT_UNVERIFIED`. Only `open`, `get_url`, `get_title`, waits,
+  history moves, `tab_list` and `close` run without it.
+- **Session fixed by the wrapper.** Tool arguments `session`, `namespace`,
+  `restore*`, `extraArgs`, `idleTimeout`, `relaunch`, `allowedDomains`, CA
+  options, and any value starting with `--` are refused. Tab switch/new/close
+  are refused with `tab_locked`.
+- **Lease** = `$SB_HOME/leases/<id>.json`, written on the first tool call and
+  touched on every call. Liveness = an `flock` on `$SB_HOME/locks/<id>.lock`
+  held by the proxy for its whole life.
+- **Cleanup.** On stdin EOF or SIGTERM the proxy closes its tab over CDP
+  (`agent-browser close` on a CDP session only detaches; the tab stays), closes
+  the session and drops the lease. `bin/shared-browser-reaper` handles the rest:
+  lock free (owner died) -> close tab; lease idle > `SB_IDLE_SEC` (silent network
+  drop) -> SIGTERM the owner.
+- **Admission.** Refused above `SB_MAX_LEASES` leases or below `SB_MIN_MEM_MB`
+  of `MemAvailable`.
+- **Policy.** `policy/default.json` (deny eval, downloads, uploads, network,
+  state) or `policy/read-only.json`. agent-browser 0.41.2 matches policy on
+  **action names** (`evaluate`, `screenshot`, `tab_list`, `close`, `launch`,
+  `url`, `title`, `gettext` ...), not only the documented categories; a
+  default-deny policy must allow `launch`, `close` and `tab_list` or attach,
+  cleanup and the account check fail. Page output gets `--content-boundaries`
+  and `--max-output`.
+
+## Install (on the browser host)
+
+```bash
+mkdir -p ~/sb/app && cp -r bin lib policy ~/sb/app/ && ln -sfn app/bin ~/sb/bin
+npm i --prefix ~/sb/ab --ignore-scripts agent-browser@0.41.2   # >= 0.41 for tab_locked and #2238
+cat > ~/sb/env <<'EOF'
+SB_CDP=${SB_CDP:-9222}
+SB_AGENT_BROWSER=$HOME/sb/ab/node_modules/.bin/agent-browser
+SB_POLICY=${SB_POLICY:-$HOME/sb/app/policy/default.json}
+SB_MAX_LEASES=10
+SB_MIN_MEM_MB=3000
+SB_IDLE_SEC=${SB_IDLE_SEC:-1800}
+# one block per account profile:
+# SB_CDP_work=9222
+# SB_ACCOUNT_work=someone@example.com
+EOF
+chmod 600 ~/sb/env
+```
+
+Run the reaper every few minutes (cron or a user timer):
+`SB_HOME=~/sb ~/sb/bin/shared-browser-reaper`.
+
+## Register (client side)
+
+Kiro / Claude project `.mcp.json` shape; other harnesses need their own format.
+
+```json
+{"mcpServers": {"shared-browser": {
+  "command": "ssh",
+  "args": ["-T", "-o", "ControlMaster=no", "-o", "ControlPath=none",
+           "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+           "<host>", "SB_HOME=$HOME/sb $HOME/sb/bin/shared-browser-mcp <harness> <account>"]}}}
+```
+
+`ControlMaster=no` gives each MCP its own connection, so it does not count
+against the shared master's `MaxSessions` and one dropped master does not take
+every agent down.
+
+## Test
+
+```bash
+node --test mcp-tools/shared-browser-mcp/test/filter.test.mjs
+node mcp-tools/shared-browser-mcp/test/mcp-client.mjs '[["agent_browser_open",{"url":"https://example.com"}]]' -- ssh -T <host> 'SB_HOME=$HOME/sb $HOME/sb/bin/shared-browser-mcp test'
+```
+
+Never run the unpinned mode (`SB_PIN_TAB=0`, for the isolation mutation-check
+only) against a Chrome that has human tabs: an unpinned `open` navigates the
+active tab, whoever owns it.
+
+## Known limits
+
+- Admission count and lease creation are not atomic (see `shortcut:` in the code).
+- `tab_list` is allowed, so a session can see other tabs' titles and URLs.
+- The account probe only sees accounts a page exposes in `aria-label`, `title`,
+  `data-email` or `<meta name="user-login">`; other sites return `ACCOUNT_UNVERIFIED`.
+- Values starting with `--` are refused even in plain text input.

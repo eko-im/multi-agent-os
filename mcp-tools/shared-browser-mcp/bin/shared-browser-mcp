@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# shared-browser-mcp <harness> [identity]
+# MCP stdio server: one pinned tab per client on a shared CDP Chrome.
+# Meant to be launched by an MCP client over `ssh -T <host> <this> <harness>`.
+# Local settings (CDP port, policy, limits) live in $SB_HOME/env, never in git.
+set -euo pipefail
+
+harness="${1:-}"
+identity="${2:-default}"
+name_re='^[A-Za-z0-9_-]{1,32}$'
+if [[ ! "$harness" =~ $name_re || ! "$identity" =~ $name_re ]]; then
+  echo "usage: shared-browser-mcp <harness> [identity]   (letters, digits, - and _ only)" >&2
+  exit 2
+fi
+
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+SB_HOME="${SB_HOME:-$HOME/.shared-browser}"
+# shellcheck disable=SC1091
+[[ -f "$SB_HOME/env" ]] && . "$SB_HOME/env"
+# One Chrome profile per account: identity <name> picks SB_CDP_<name> (that
+# profile's loopback CDP port) and SB_ACCOUNT_<name> (the e-mail or login the
+# pages must show). Unset values fall back to SB_CDP / no account check.
+id_var="${identity//-/_}"
+cdp_var="SB_CDP_${id_var}"
+acct_var="SB_ACCOUNT_${id_var}"
+SB_CDP="${!cdp_var:-${SB_CDP:-}}"
+SB_ACCOUNT="${!acct_var:-}"
+umask 077
+mkdir -p "$SB_HOME/leases" "$SB_HOME/locks"
+
+session="${harness}-${identity}-$$-$(date +%s)"
+# Lease liveness = this lock. It is held by the proxy for its whole life and
+# released by the kernel when the process dies, however it dies.
+exec 9>"$SB_HOME/locks/$session.lock"
+flock -n 9 || { echo "shared-browser-mcp: lock busy for $session" >&2; exit 1; }
+
+export SB_HOME SB_SESSION="$session" SB_HARNESS="$harness" SB_IDENTITY="$identity"
+export SB_CDP SB_ACCOUNT SB_POLICY SB_MAX_LEASES SB_MIN_MEM_MB SB_MAX_OUTPUT SB_AGENT_BROWSER SB_TOOLS SB_PIN_TAB
+exec node "$here/../lib/proxy.mjs"
