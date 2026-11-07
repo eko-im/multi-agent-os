@@ -29,7 +29,8 @@ test('refuses flag-like values anywhere in the arguments', () => {
 import { ACCOUNT_FREE_TOOLS, TAB_TOOLS } from '../lib/proxy.mjs';
 
 test('page reads and actions need the account check; tab moves are locked', () => {
-  for (const t of ['agent_browser_snapshot', 'agent_browser_get_text', 'agent_browser_click', 'agent_browser_fill', 'agent_browser_eval']) {
+  for (const t of ['agent_browser_snapshot', 'agent_browser_get_text', 'agent_browser_click', 'agent_browser_fill', 'agent_browser_eval',
+    'agent_browser_get_title', 'agent_browser_tab_list']) {
     assert.ok(!ACCOUNT_FREE_TOOLS.has(t), t);
   }
   assert.ok(ACCOUNT_FREE_TOOLS.has('agent_browser_open'));

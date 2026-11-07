@@ -9,6 +9,17 @@ Status: phase 1 (validation). Tested on Linux with agent-browser 0.41.2 and
 Chrome 155. Generic: no host, account or org lives in this directory; all of it
 goes in a local `$SB_HOME/env` on the browser host.
 
+**Not ready for real accounts yet.** Two parts of the design are still open:
+
+- **One profile per account is not set up on the tested host.** The validation
+  host had one Chrome profile holding two Google accounts. The port check only
+  catches two identities configured with different accounts on the same port;
+  it does not split accounts that share a profile. Create one profile (and one
+  CDP port) per account before using it with real logins.
+- **The GitHub account check is untested.** The `<meta name="user-login">` probe
+  was not run against GitHub, and no `ACCOUNT_MISMATCH` between two GitHub
+  accounts has been measured. Only the Google `authuser` case was tested.
+
 ## Model
 
 ```
@@ -32,8 +43,9 @@ MCP client --stdio--> ssh -T <host> shared-browser-mcp <harness> <account>
   (not the model) reads the account e-mails in the page's account widgets and
   `<meta name="user-login">` over its own CDP connection. Expected account
   present: the call goes through. Another account: `ACCOUNT_MISMATCH`. None
-  visible: `ACCOUNT_UNVERIFIED`. Only `open`, `get_url`, `get_title`, waits,
-  history moves, `tab_list` and `close` run without it. Each check is logged
+  visible: `ACCOUNT_UNVERIFIED`. Only `open`, `get_url`, waits, history moves
+  and `close` run without it (`get_title` and `tab_list` are checked: a title
+  can show the account e-mail, and `tab_list` shows other tabs). Each check is logged
   with `probe_ms`. For Google, open URLs with `?authuser=<account>`: without it
   a profile holding two accounts lands on `authuser=0`.
 - **Session fixed by the wrapper.** Tool arguments `session`, `namespace`,
@@ -124,7 +136,8 @@ active tab, whoever owns it.
 ## Known limits
 
 - Admission count and lease creation are not atomic (see `shortcut:` in the code).
-- `tab_list` is allowed, so a session can see other tabs' titles and URLs.
+- `tab_list` runs only after the account check, but then it still lists other
+  tabs' titles and URLs (it is not filtered to the session's own tab).
 - The account probe only sees accounts a page exposes in `aria-label`, `title`,
   `data-email` or `<meta name="user-login">`; other sites return `ACCOUNT_UNVERIFIED`.
 - The probe passes when the expected account appears **anywhere** in those

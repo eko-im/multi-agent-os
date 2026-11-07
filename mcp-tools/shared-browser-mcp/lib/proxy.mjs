@@ -26,10 +26,12 @@ export const TAB_TOOLS = new Set(['agent_browser_tab_switch', 'agent_browser_tab
 
 // Tools that neither read page content nor act on it, so they run before the
 // account is known (open is how the session reaches the page to check).
+// Not here: get_title (a Gmail title shows the account e-mail) and tab_list
+// (shows other tabs' titles and URLs); both go through the account check.
 export const ACCOUNT_FREE_TOOLS = new Set([
-  'agent_browser_open', 'agent_browser_get_url', 'agent_browser_get_title', 'agent_browser_wait_ms',
+  'agent_browser_open', 'agent_browser_get_url', 'agent_browser_wait_ms',
   'agent_browser_wait_for_load', 'agent_browser_close', 'agent_browser_back', 'agent_browser_forward',
-  'agent_browser_reload', 'agent_browser_tools_profiles', 'agent_browser_tab_list',
+  'agent_browser_reload', 'agent_browser_tools_profiles',
 ]);
 
 // Runs in the page over a separate CDP connection: returns the e-mails in
