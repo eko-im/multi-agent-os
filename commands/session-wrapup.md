@@ -21,6 +21,7 @@ Drive the current conductor session to 100% and then close it. Thin entry point 
 
 `--mode` defaults from the trigger: `recall` for recall · refresh · recap · retomada · end of a
 round · stalled goal (Steps 0-4d + Report, no close); `wrapup` otherwise (Steps 0-5 + Report).
+Any request to close wins: "recap + score + close" is `wrapup`.
 
 | Step | What happens | Delegates to |
 |------|--------------|--------------|

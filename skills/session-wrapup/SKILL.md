@@ -42,7 +42,7 @@ metadata:
   status: proposed  # promoted only after 2 real green dogfood cycles
   owner: maos-community
   composes: [pulse, goal-recovery, quiesce, request-carried-authorization, council-gate, hitl-digest, agentic-tool-pipeline, signoff]
-  source_prompt: "an operator's recurring wrap-up prompt (v5, 'Leme'); SSOT is the operator's private page ~/Projects/eko-engram/pages/session-wrapup.prompt.v5.md, not in this repo; this skill summarizes it and stands alone; on divergence the page wins"
+  source_prompt: "an operator's recurring wrap-up prompt (v5, 'Leme'); its SSOT is kept by the operator in a private vault, not in this repo; this skill summarizes it and stands alone"
   naming: "Anima-named (agent register, descriptive-canonical, family-aligned with signoff/quiesce/pulse) — `session-wrapup`; rejected runner-up `helm` (needs a gloss; collides with the Kubernetes package manager)."
   dogfooding_validation:
     cycles_completed: 0
@@ -87,6 +87,9 @@ only (use `quiesce`).
 | delta | the same prompt re-sent mid-round | measure ledger and sessions; report only %, pending, new blocks | no |
 
 Pick the mode from the trigger, not from habit: a `recall` must not drift into a half-close.
+**Precedence:** any request to close (wrapup, "close the session", "recap + score + close") selects
+`wrapup` even when it also says recall, refresh or recap; `recall` only when nothing asks to close.
+An explicit `--mode` overrides both.
 
 ### Roles
 
