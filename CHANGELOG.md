@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `session-wrapup` v0.5.0: covers the operator's wrap-up prompt v5
+
+- Two modes: `recall` (triggers recall · refresh · recap · retomada; Steps 0-4d + Report, no
+  close) and `wrapup` (Steps 0-5 + Report); `/session-wrapup --mode`.
+- New Step 0 (refresh memory, ≤ 5 lines of what changed), 4a/4b (plan and dispatch in the same
+  turn), 4c (missing tool only on trigger, measure similars first), 4d (new lessons every
+  interaction, "0" is valid) and a fixed six-part Report ending with the HITL digest.
+- Roles R2 (a single-item worker runs it only on its item and reports to its parent) and R3 (no
+  dispatch: prove with the literal error, execute directly, say so). Lens line of fired/not fired;
+  `[U]` instead of an unmeasured %.
+- The prompt itself stays with the operator (pointer only). Existing behavior kept:
+  `bin/scoreboard.py`, exit codes, tests, priority order and close-out sequence are unchanged.
+
 ### Added — `session-wrapup` v0.4.0: gate on the pre-HITL seven-minds record
 
 - **Breaking input change** in `bin/scoreboard.py`: every HITL item needs a `precheck` record
