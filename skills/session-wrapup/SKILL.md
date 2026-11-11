@@ -1,30 +1,39 @@
 ---
 name: session-wrapup
 description: |
-  Conductor verb that drives a delegating session to 100% and only then closes it. One short
+  Conductor verb that drives a delegating session to 100% and only then closes it. Two modes:
+  `wrapup` (Steps 0-5 + fixed report, closes) and `recall` (Steps 0-4d + fixed report, does not
+  close; ends with the next step already dispatched). One short
   invocation replaces the operator's long recurring wrap-up prompt: stay strategic and delegate;
-  recover the intent tree (motivation → purpose → objectives → DoR/DoD → goals → tasks →
+  refresh memory first (Step 0); recover the intent tree (motivation → purpose → objectives → DoR/DoD → goals → tasks →
   deliverables → north-star); apply decision lenses only when their trigger fires; keep a
   deterministic HOTL/HITL scoreboard with a fixed denominator (`bin/scoreboard.py`); clear all
   HOTL work first (stop-bleeding → root-cause → no-loose-ends → session goals); consolidate the
-  human residue into ONE HITL digest; then close with git-cycle → DIY PR review → house-keeping
+  human residue into ONE HITL digest; plan and dispatch the next steps in the same turn; save
+  new lessons every interaction; then (wrapup only) close with git-cycle → DIY PR review → house-keeping
   → boy-scout → lessons → `signoff`. Delegating does not waive responsibility: the delegator
   re-measures every delegated "done" at source before counting it. Missing agentic-tools go to
   `agentic-tool-pipeline`; every HITL candidate first passes `request-carried-authorization`.
   Thin composition: `pulse` + `goal-recovery` + `quiesce` + `request-carried-authorization` +
   `council-gate` + `/hitl-digest` + `agentic-tool-pipeline` + `signoff`; reimplements none.
-  Triggers: "session-wrapup", "wrap up the session", "drive this session to 100%",
+  Triggers: "session-wrapup", "wrapup", "recall", "refresh", "recap", "retomada",
+  "wrap up the session", "drive this session to 100%",
   "recap + score + close", "fechamento da sessão", "conduza até 100% e feche".
-version: 0.4.0
+version: 0.5.0
 triggers:
   - session-wrapup
+  - wrapup
+  - recall
+  - refresh
+  - recap
+  - retomada
   - wrap up the session
   - drive this session to 100%
   - recap score and close
   - fechamento da sessão
   - conduza até 100% e feche
 metadata:
-  version: "0.4.0"
+  version: "0.5.0"
   scope: AAIF cross-vendor
   family: worktree-lifecycle
   lifecycle-stage: operate
@@ -33,7 +42,7 @@ metadata:
   status: proposed  # promoted only after 2 real green dogfood cycles
   owner: maos-community
   composes: [pulse, goal-recovery, quiesce, request-carried-authorization, council-gate, hitl-digest, agentic-tool-pipeline, signoff]
-  source_prompt: "an operator's recurring wrap-up prompt (v4); kept by the operator, not in this repo; this skill stands alone"
+  source_prompt: "an operator's recurring wrap-up prompt (v5, 'Leme'); its SSOT is kept by the operator in a private vault, not in this repo; this skill summarizes it and stands alone"
   naming: "Anima-named (agent register, descriptive-canonical, family-aligned with signoff/quiesce/pulse) — `session-wrapup`; rejected runner-up `helm` (needs a gloss; collides with the Kubernetes package manager)."
   dogfooding_validation:
     cycles_completed: 0
@@ -63,23 +72,48 @@ Everything else is delegated to an existing skill.
 ## When to use / not use
 
 Use in a **conductor (root) session** with delegated work in flight, when the operator wants it
-driven to done and closed. **Re-sent mid-round:** answer only the delta (score, pending, blocked);
-never re-dispatch what is already dispatched.
+driven to done (`recall`) or driven to done and closed (`wrapup`). **Re-sent mid-round:** answer
+only the delta (score, pending, blocked); never re-dispatch what is already dispatched.
 
-Not for: a single-item worker session (it lacks the whole-goal view — report to its conductor
-instead); a plain end-of-thread close with nothing in flight (use `signoff`); driving PRs green
+Not for: a plain end-of-thread close with nothing in flight (use `signoff`); driving PRs green
 only (use `quiesce`).
+
+### Modes
+
+| Mode | Triggers | Runs | Closes? |
+|---|---|---|---|
+| `recall` | recall · refresh · recap · retomada · end of a round · stalled goal | Steps 0-4d + Report | no — skips only Step 5; ends with the next step dispatched |
+| `wrapup` | session-wrapup · wrapup · "close the session" · the full conductor prompt | Steps 0-5 + Report | yes, when the gate passes |
+| delta | the same prompt re-sent mid-round | measure ledger and sessions; report only %, pending, new blocks | no |
+
+Pick the mode from the trigger, not from habit: a `recall` must not drift into a half-close.
+**Precedence:** any request to close (wrapup, "close the session", "recap + score + close") selects
+`wrapup` even when it also says recall, refresh or recap; `recall` only when nothing asks to close.
+An explicit `--mode` overrides both.
+
+### Roles
+
+- **R1 Shared responsibility** — see I5.
+- **R2 Right role.** A worker bound to ONE item (it has its own brief) does not orchestrate the
+  whole goal: it lacks that view and would invent context. It runs this skill only over its own
+  item, executes it and reports to its parent (work report / recap to the conductor). An
+  orchestration request that reaches a worker goes to the conductor that dispatched it.
+- **R3 No dispatch.** If the session cannot dispatch a worker, prove it with the tool's literal
+  error, then execute directly and say in the Report that it was done directly, not by a worker.
 
 ## Composition
 
 ```
-session-wrapup [--scope <session|repo:...|ticket:...>] [--dry-run]
+session-wrapup [--mode wrapup|recall] [--scope <session|repo:...|ticket:...>] [--dry-run]
+  ├─ Step 0 REFRESH ─────→ session memory, saved lessons, ledger, last recap (read-only)
   ├─ Step 1 RECON+RECAP ─→ pulse (objectives map, Eisenhower) + goal-recovery (intent tree)
   ├─ Step 2 LENSES ──────→ trigger table below (lens-dispatch optional)
   ├─ Step 3 SCOREBOARD ──→ bin/scoreboard.py  (own)
   ├─ Step 4 CONVERGE ────→ quiesce (HOTL to green) · council-gate (before any HITL)
+  │                        ├─ 4a plan · 4b dispatch same turn · 4c missing tool · 4d lessons
   │                        └─ /hitl-digest (ONE digest for the human residue)
-  └─ Step 5 CLOSE ───────→ git-cycle → DIY PR review → house-keeping → boy-scout → lessons
+  ├─ REPORT ─────────────→ fixed six-part form (both modes)
+  └─ Step 5 CLOSE (wrapup only) → git-cycle → DIY PR review → house-keeping → boy-scout → lessons
                            → signoff  (broadcast continuation, default-ON)
 ```
 
@@ -105,13 +139,19 @@ session-wrapup [--scope <session|repo:...|ticket:...>] [--dry-run]
 
 ## Steps
 
+### Step 0 — Refresh memory (read-only, before recon)
+
+Read what you already know before measuring again: session memory, saved lessons, the work
+ledger, the last recap and score. Write in ≤ 5 lines what changed since the last recap. This
+orders thinking; it does not replace the recon (I2).
+
 ### Step 1 — Recon + recap (delegated, read-only)
 
 Delegate the recon: work ledger, PRs and checks, tickets, open HITL items, worktrees, session
 memory. Then recover, tagging each node `[V]` verified / `[I]` inferred / `[U]` unknown:
 motivation → purpose → objectives (originating · foundational · generational agentic DNA ·
-primary · secondary · auxiliary) → DoR · DoD → goals → tasks → steps → deliverables →
-north-star · expected result · feedback. A node with no path to a purpose: trace it back with
+primary · secondary · auxiliary) → DoR · DoD → goals · targets → tasks → steps → deliverables →
+north-star · expected result · feedback · open HOTL and HITL items. A node with no path to a purpose: trace it back with
 5 Whys or mark it orphaned.
 
 For each deliverable, put **EXPECTED × DELIVERED** (measured) side by side. A difference becomes
@@ -132,7 +172,8 @@ gate refuses it as `done` while they differ (exit 3).
 | before escalating | `request-carried-authorization` first (did the request already carry it?), then avoid-HITL: `council-gate` and the four questions — measured? mine? undoable? would someone see my error? |
 | a needed agentic-tool is missing or recurs ≥ 3× | `agentic-tool-pipeline` (forge decides the type, `anima` names it; dogfood before promotion) |
 
-Report a lens only when it changed a decision.
+Report a lens only when it changed a decision. In one line, say which lenses fired and which did
+not, so the operator sees they were considered without an empty-table ritual.
 
 ### Step 3 — Scoreboard (same denominator for the whole round)
 
@@ -162,11 +203,18 @@ of being closed, or that changed kind (HOTL relabelled as HITL) against it (exit
 flag, a delegated `done` without a `remeasure` record, a `done` whose delivered differs from its
 expected (exit 3). New items are allowed: they grow the denominator. An empty
 denominator reads `0/0 = 100%` (nothing waits on that side). Always show
-numerator/denominator, and list pending items as id · kind · owner · next step.
+numerator/denominator; with no measurement write `[U]`, never a number. List pending items as id · kind · owner · next step.
 
 ### Step 4 — Converge to 100%
 
 Order: (a) stop bleeding → (b) root cause → (c) no loose ends → (d) session goals.
+
+**4a Plan.** From the scoreboard, pick the next most logical steps yourself, in that order. Do
+not ask the operator what to do next.
+
+**4b Proceed.** Dispatch those steps **in the same turn**. Analysis without dispatch does not
+count as a round. Only the I3 residue waits for the operator.
+
 Exhaust HOTL first: delegate independent work in parallel, dependent work in sequence, divisible
 work recursively (`quiesce` drives PRs green). Every worker brief carries the item's DoD, its
 limits and the I3 floor; a brief without a DoD is an incomplete delegation, fix it before
@@ -179,10 +227,17 @@ what you can measure, never deciding what belongs to the operator. An approval b
 path (e.g. a second account approves when author ≠ approver); never bypass a protection, a
 required check or a security review.
 
-Missing capability: if the work needs an agentic-tool that does not exist (a skill, command,
+**4c Missing tool (only on trigger).** Trigger: a HOTL item is stuck for lack of a tool, or the
+same manual pain recurred ≥ 3×; no trigger, forge nothing. First measure similars (internal skills,
+commands, agents, rules, hooks; external). If one exists, use or extend it. If the work needs an agentic-tool that does not exist (a skill, command,
 agent, hook, script, rule…), do not list or hand-roll one. Send the intent to
 `agentic-tool-pipeline`: it searches similars, lets forge pick the type and anima the name, and
-trains it by dogfood. Do not pre-decide the type here.
+trains it by dogfood. Do not pre-decide the type here. A tool with personal, customer or
+cross-world content does not go to an open-source repo: pointer there, content in its owner's world.
+
+**4d Lessons (every interaction, both modes).** Save only a new, durable lesson (a measured
+defect or a fact that will matter again), once, after checking no equal one exists. "0 new
+lessons" is a valid result and is reported.
 
 Before any item becomes HITL: run `request-carried-authorization` on it and route on its verdict.
 A → act; B → act with a verified undo; C `kind=hard` → never act: it is blocked human residue
@@ -219,7 +274,16 @@ Only then build ONE HITL digest (`/hitl-digest`): at most 3 cards, high urgency 
 first, each with WHAT IT IS · WHAT IT IS FOR · IMPACT OF YES / IMPACT OF NO and a
 recommendation. Always show the total still open, not only this round's 3.
 
-### Step 5 — Close (only when the gate passes)
+### Report (fixed form, this order, both modes)
+
+1. Changed since the last recap (≤ 5 lines, Step 0)
+2. Score: `%session` · `%HOTL` · `%HITL`, each as n/d or `[U]`
+3. Pending: id · kind · owner · next step
+4. Dispatched now (4b): item · worker/session
+5. Lenses that fired (1 line) · new lessons (n)
+6. HITL digest last (≤ 3 cards, total still open visible)
+
+### Step 5 — Close (`wrapup` mode only; only when the gate passes)
 
 ```bash
 python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.round-start.json --gate close
@@ -228,13 +292,15 @@ python3 skills/session-wrapup/bin/scoreboard.py items.json --baseline items.roun
 
 Then: git-cycle → DIY PR review (no paid bots; required CI green) → house-keeping (merged
 worktrees and branches; no `-D`, `--force`, `reset --hard`) → boy-scout (small fixes only) →
-lessons learned (only a durable defect or fact, once) → `signoff`.
+lessons learned (4d) → `signoff`.
 
 ## Definition of Done
 
 `%HOTL = 100%` with evidence · every delegated "done" re-measured by the delegator at source
 (I5) · every HITL passed `request-carried-authorization` first · every open HITL is in the digest with a recommendation · zero
 orphan worktree/branch created by this session · lessons saved · `signoff` emitted.
+**Recall round DoD:** the Report in the fixed form + the next step dispatched (or proof that only
+HITL remains).
 If the DoD does not close this round: report the score and the next step, and keep going.
 
 ## Acceptance scenarios (from real wrap-up failures)
@@ -287,10 +353,13 @@ tested. The skill stays `proposed` until two real cycles are recorded in `dogfoo
 
 1. Reimplementing recap, PR convergence, the digest or the close-out — compose the siblings.
 2. Running every lens every time — that is ceremony, not analysis.
-3. Asking the human anything outside the I3 floor, or anything the request already authorized.
-4. Treating "I delegated it" as "it is done" (I5).
-5. Enumerating new tool kinds by hand instead of routing to `agentic-tool-pipeline`.
-6. Reporting a % computed by hand.
+3. Asking the human what to do next (4a), or ending a `recall` round with analysis and no
+   dispatch (4b).
+4. A single-item worker orchestrating the whole goal (R2).
+5. Asking the human anything outside the I3 floor, or anything the request already authorized.
+6. Treating "I delegated it" as "it is done" (I5).
+7. Enumerating new tool kinds by hand instead of routing to `agentic-tool-pipeline`.
+8. Reporting a % computed by hand.
 
 ## Related
 
