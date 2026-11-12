@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — sprint-carryover verification guidance
+
+- `sprint-carryover` v0.1.1: require direct read/changelog and delayed persistence checks after each
+  move, stop the batch on reversal or uncertain verification, and preserve status, assignee,
+  closed-sprint history and reviewed parent/subtask scope. Keep existing output fields and verdicts.
+- Add an anonymous operational knowledge base, FAQ, best practices and troubleshooting; distinguish
+  standard past/closed → active carryover from an explicitly reviewed active → future variation.
+- Reconcile an audit-supported initiator-based rule diagnosis with the superseded timing hypothesis;
+  require authorized policy review instead of alternate-account, endpoint or retry circumvention.
+
+<!-- Entry: Codex /root, 2026-10-16. -->
+
 ### Added — `harness-concierge` skill + `bin/harness-mcp-sync` executor + harness registry
 
 - `harnesses/<id>.yaml` (new, 38 files) + `harnesses/README.md` (registry contract v1): data-only

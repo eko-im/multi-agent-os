@@ -37,7 +37,7 @@ the move-set is presented for confirmation BEFORE any write.
 ```text
 /sprint-carryover                                          # dry-run: propose table, then ASK "apply for real?"
 /sprint-carryover --scope identity,agents                   # include my bot-agents' stranded items
-/sprint-carryover --department dev-be --scope department --project VKS  # a department's backlog on a named board
+/sprint-carryover --department dev-be --scope department --project DEMO  # a department's backlog on a named board
 /sprint-carryover --active-sprint "Sprint 42" --apply        # GATED move into a named active sprint (needs the per-item re-check)
 /sprint-carryover --json                                     # machine envelope
 ```
@@ -54,6 +54,16 @@ the move-set is presented for confirmation BEFORE any write.
 - **dry-run default / gated MOVE**: a bare interactive invocation (human at a TTY, no `--json`) proposes the move-set, then ASKS "apply for real? [y/N]"; nothing is written on NO / no answer. A non-interactive or `--json` run does NOT prompt — it stops read-only at the proposed move-set (verdict DRY_RUN); it writes ONLY with an explicit `--apply`. `--apply` moves directly (skips the prompt, keeps the per-item re-check). HUMAN_DOMAIN bulk mutation of a shared tracker.
 - **Level-triggered / idempotent**: re-derives the candidate set from the tracker each pass; a re-run
   after a partial move is a no-op on already-moved items.
+- **Verify after each write**: direct issue read + changelog, then a delayed read within a documented
+  observation window. Preserve status, assignee, closed-sprint history and reviewed parent/subtask
+  effects. Stop remaining writes on the first reversal or unverified result; no retry/rollback loop.
+  API acceptance alone is not a verified migration. See the skill's
+  [knowledge base and troubleshooting](../skills/sprint-carryover/references/operations.md).
+- **Destination**: past/closed → active remains standard. Active → future is a separately reviewed
+  variation, not enabled by naming a future sprint in `--active-sprint`.
+- **Automation policy**: if audit identifies an initiator-based rule, activation or an alternate
+  endpoint does not resolve the same condition. Stop for authorized policy review; no alternate
+  account or retry to evade the rule. Keep superseded hypotheses as investigation history.
 - **Report contract**: table with columns exactly `ticket-id | Title/Description-slug | Old Sprint | New Sprint`.
   Nothing skipped is silently dropped — each skip is named with a reason.
 
@@ -65,3 +75,5 @@ the move-set is presented for confirmation BEFORE any write.
   [`work-drain`](../skills/work-drain/SKILL.md) (drain to DONE, executes) — this one **relocates** across sprints.
 - Governance: `skills/worktree-policy`, `skills/hierarchical-merge` (reused, not re-authored).
 - Named by: `skills/anima` (system-name `sprint-carryover`; rejected runner-up `backlog-rollover`).
+
+<!-- Documentation updated by Codex /root, 2026-10-16. -->

@@ -1,6 +1,6 @@
 ---
 name: sprint-carryover
-version: "0.1.0"
+version: "0.1.1"
 description: |
   RELOCATE stranded open backlog from past/closed sprints INTO the active sprint. Given the
   operator's IDENTITY, their ai-bot-agents, and/or their department, DISCOVER open items still on a
@@ -61,6 +61,16 @@ backlog: discover → present → (gated) move → report.
 - **ONE** known ticket to reassign to a sprint → do it directly in the tracker; this skill is ceremony
   for a single move.
 
+## Operational knowledge
+
+Read [the knowledge base, best practices, FAQ and troubleshooting guide](references/operations.md)
+before an apply or incident recovery. The standard remains **past/closed → active**. An explicit
+**active → future** request is a distinct variation requiring its own reviewed scope and destination
+validation; `--active-sprint` does not silently enable it. Planned dates do not prove activation.
+If audit identifies an initiator-based rule, sprint activation or an alternate endpoint does not
+resolve the same trigger and initiator condition. Stop and escalate authorized policy review;
+never switch accounts or retry to evade the rule. Preserve superseded hypotheses as history.
+
 ## Identity resolution (placeholders are RUNTIME params, not guesses)
 
 The operator's request said "my name/login/email", "my ai-bot-agents", "my department" ON PURPOSE —
@@ -107,6 +117,9 @@ this directly, exactly as `work-drain` does:
 - **Re-running once everything is carried over is a no-op** — the correct end state, not a failure.
 - Never trust the search index as authoritative: it lags. Confirm each item's real sprint with a
   direct `get` before moving it.
+- Re-derivation is not permission to retry a reversal: after asynchronous removal or uncertain
+  persistence, STOP the batch and diagnose before another apply. Keep the approved scope as an audit
+  boundary, not a durable execution queue; do not broaden recovery filters silently.
 
 ## Pipeline (phases)
 
@@ -116,6 +129,8 @@ this directly, exactly as `work-drain` does:
 1. DETECT   capability-detect the tracker surface — MCP first (atlassian/jira/linear/gh-issues),
             then CLI (`gh`, `acli`, `jira`). Probe, never fabricate; cite what was found.
             none available -> HITL, STOP.
+            Verify the detected write schema preserves status, assignee and closed-sprint history.
+            Resolve site-local sprint fields; never copy customfield IDs from another site.
 2. DISCOVER (compose work-compass) use work-compass as the deterministic fast-path for the discovery
             FAN-OUT + the operator's own open items (identity seed) WHEN its fields are present. Its
             collector output is a STARTING POINT, not a ceiling: where a needed field is absent today
@@ -133,6 +148,8 @@ this directly, exactly as `work-drain` does:
 3. BUILD    the candidate move-set; de-dupe; EXCLUDE anything already in the active sprint, any item
             in a provider-terminal state (done/closed/resolved/canceled/merged/… per that provider's
             taxonomy), or out of scope. confirm each item's real state via a direct `get` (the index lags).
+            Inspect parent/subtask relationships, including completed subtasks, for inherited effects;
+            include that blast radius in the review without making terminal children move candidates.
 4. PRESENT  the table (ticket-id | Title/Description-slug | Old Sprint | New Sprint=active) + count.
             NO --apply, INTERACTIVE (human at a TTY, no --json)  ==>  render table, then ASK the
             operator "apply these N moves to the active sprint for real? [y/N]" via AskUserQuestion.
@@ -142,8 +159,9 @@ this directly, exactly as `work-drain` does:
             in JSON), verdict DRY_RUN. A non-interactive run writes ONLY with an explicit --apply.
             --apply given  ==>  skip the prompt, proceed directly to phase 5 (per-item re-check still runs).
 5. GATE     operator GO — either the interactive "apply? [y/N]" YES from phase 4, or an explicit
-            `--apply`. ONLY THEN MOVE each item to the active sprint
-            via the detected surface. Immediately before EACH move, a direct `get` MUST re-evaluate
+            `--apply`. ONLY THEN MOVE one item to the active sprint
+            via the detected surface. Run phases 5→6 for one item before proceeding to the next.
+            Immediately before EACH move, a direct `get` MUST re-evaluate
             the FULL candidate predicate (owner in union(scope) · department · labels · components ·
             still on its OLD/past sprint · actionable non-terminal status, canceled/terminal excluded)
             AND verify the destination is still the resolved active sprint — the phase-3 check may be
@@ -151,10 +169,21 @@ this directly, exactly as `work-drain` does:
             lost its department/label/component during a long review). Any candidate that no longer
             satisfies EVERY predicate, or whose destination changed, is skipped + reported, never moved.
             Idempotent: re-run after a partial move = no-op on the moved.
-6. REPORT   the final migration table (ONLY items actually moved) + skipped/failed with reasons.
+6. VERIFY   after EACH write, read the issue directly and inspect its changelog, then repeat after
+            a documented observation window appropriate to the site's asynchronous automation.
+            Verify destination membership persists, status/assignee/closed-sprint history are preserved,
+            and parent/subtask effects match the reviewed scope. Record timestamps and window limits.
+            API acceptance alone is not success. On the FIRST reversal, unresolved timeout,
+            unavailable verification or unexpected collateral change: STOP remaining writes.
+            No retry/compensation loop. Report the attempted item as failed/unverified and unattempted
+            items as skipped with the batch-stop reason. Diagnose before proposing recovery.
+7. REPORT   the final migration table (ONLY moves with observed persistence) + skipped/failed reasons.
 ```
 
-Phase 4→5 is the whole safety design: the move-set is seen and approved before any write.
+Phases 4→5 authorize and revalidate the move-set; phase 6 checks the actual result. A successful
+response does not establish durable state. "Observed persistence" is bounded by the recorded window,
+not a guarantee against future changes. If audit/history is inaccessible, report that limitation and
+hold remaining writes rather than declaring an unverified move successful.
 
 ## Hybrid execution & forward-compatibility
 
@@ -214,8 +243,8 @@ ticket-id | Title/Description-slug | Old Sprint | New Sprint
 ```
 
 - In dry-run (the default, no `--apply`): the table is the **proposed** move-set (New Sprint = the active sprint), plus a count.
-- After a gated move: the table lists **only items actually moved**, plus a skipped/failed section with
-  a reason per row. Nothing the run declined to touch is absent from the report (no silent truncation).
+- After a gated move: the table lists **only moves whose persistence and preservation checks passed**, plus a skipped/failed
+  section with a reason per row. Nothing the run declined to touch is absent from the report (no silent truncation).
 
 ## Machine output (`--json`) — aligned with the family envelope
 
@@ -230,7 +259,7 @@ ticket-id | Title/Description-slug | Old Sprint | New Sprint
 ```
 
 - `proposed` vs `migrated`: **DRY_RUN** → the candidate move-set lives in `proposed` and `migrated`
-  stays empty; **MIGRATED** → items actually written live in `migrated`. `migrated` NEVER carries a
+  stays empty; **MIGRATED** → only moves verified in phase 6 live in `migrated`. `migrated` NEVER carries a
   dry-run candidate (that would lie).
 - `dry_run` is `true` when NOTHING was written (verdict **DRY_RUN** / **DEFER_HITL** / **NO_CANDIDATES**)
   and `false` when a real move was applied (verdict **MIGRATED** via `--apply` or an interactive YES) —
@@ -238,6 +267,12 @@ ticket-id | Title/Description-slug | Old Sprint | New Sprint
   (every requested move failed), the verdict is still **MIGRATED** with `dry_run:false` (a write WAS attempted, so it is not a dry run) and the failures are reported in `failed[]`.
 - `skipped` (out-of-scope / no-op / already in active sprint) vs `failed` (write attempted, errored —
   `{ticket,error}`) are distinct sets.
+- API-accepted but reverted, uncertain or unverified moves belong in `failed[]`, with the observation
+  and timestamps in `error`; unattempted remainder belongs in `skipped[]`. If a later read before
+  reporting reveals reversal, remove the item from `migrated[]` and report it in `failed[]`.
+  Explain accepted / observed persistent / reverted / blocked outcomes in existing text fields and
+  `_agent_feedback`; these are **observations, not new verdict enums or JSON fields**. A `MIGRATED`
+  verdict records an apply attempt, not all-success; readers must inspect `failed[]` and `skipped[]`.
 - `human_domain` is **always `true`** for this tool: every MOVE is a bulk mutation of a shared tracker.
 
 Exit codes: `0` migrated / dry-run-ok · `1` error · `2` DEFER-HITL.
@@ -302,6 +337,11 @@ its verb is **relocation**, not detection or execution.
 5. Level-triggered: re-run after a partial move is a no-op on already-moved items.
 6. `bash tests/validate-plugin.sh` passes (0 new errors).
 
+For an apply, additionally demonstrate phase-6 checks for every reported migration. For changes to
+this documentation, review the [scenario matrix](references/operations.md#review-scenarios) without
+claiming that a documentation check executed live tracker writes. Reversal, timeout, inaccessible
+audit and parent/subtask effects must not produce a false success or automatic retry.
+
 **Scope-discipline 6Q:** (1) Does it MOVE (not merely detect/execute)? (2) Is discovery delegated to
 `work-compass`, not reimplemented? (3) Is the move gated behind an explicit GO? (4) Is dry-run the
 default? (5) Are the three owner-sets a union under `--scope`? (6) Is emptiness proven with a positive
@@ -319,6 +359,8 @@ close (E1) · `work-compass` grows a first-class relocation verb making this red
 retraction (E4) · ≥3 false-positive owner-match contexts (E5 → refine the owner-union, not auto-deprecate).
 
 ## §Refs
+
+- [Operational knowledge base, FAQ and troubleshooting](references/operations.md) (bundled guidance; no customer audit data)
 
 - `skills/work-compass/SKILL.md` (fast-path discovery fan-out + identity seed — **composed** where its fields reach, not reimplemented; sprint enumeration is this skill's own layer on top)
 - `skills/work-drain/SKILL.md` (sibling — *drains* to DONE; the level-triggered pattern is inherited from here)
@@ -340,7 +382,7 @@ retraction (E4) · ≥3 false-positive owner-match contexts (E5 → refine the o
 ```text
 /sprint-carryover                                                    # dry-run: propose table, then ASK "apply for real?"
 /sprint-carryover --scope identity,agents                            # include my bot-agents' stranded items
-/sprint-carryover --department dev-be --scope department --project VKS  # a department's backlog on a named board
+/sprint-carryover --department dev-be --scope department --project DEMO  # a department's backlog on a named board
 /sprint-carryover --active-sprint "Sprint 42" --apply                # GATED move into a named active sprint (needs the per-item re-check)
 /sprint-carryover --json                                             # machine envelope for agent-to-agent
 ```
@@ -349,6 +391,7 @@ retraction (E4) · ≥3 false-positive owner-match contexts (E5 → refine the o
 
 | Version | Date | Change |
 |---|---|---|
+| 0.1.1 | 2026-10-16 | Clarify post-write persistence and preservation checks, stop on first reversal, retain the existing output envelope, and add anonymous operational knowledge, FAQ and troubleshooting. Reconcile an initiator-based rule diagnosis with the superseded temporal hypothesis; require authorized policy review without alternate-account, endpoint or retry circumvention. Documentation authored by Codex /root, 2026-10-16. |
 | 0.1.0 | 2026-09-16 | **Bootstrap.** Genesis artifacts (skill + `/sprint-carryover` command wrapper) forged via the `agentic-tool-forge` methodology. Named by the `anima` methodology: system-name **`sprint-carryover`** (no soul-name); rejected runner-up **`backlog-rollover`**. **Composes `work-compass`** as the fast-path discovery fan-out + identity seed (DRY, the same way `work-drain`/Antlia composes it); sprint/owner/department enrichment + pagination are this skill's own tracker-native query layered on top (hybrid, forward-compatible) — reimplements no tracker access. Fills the DRY gap vs siblings: `work-compass` *detects* (read-only), `work-drain` *drains* to DONE (executes), `sprint-carryover` **relocates** open backlog from past sprints into the active sprint (migrates + reports). dry-run default ON; MOVE is HITL-confirm-gated (HUMAN_DOMAIN bulk mutation); level-triggered/idempotent; report table `ticket-id | Title/Description-slug | Old Sprint | New Sprint`; `--json` family envelope; EN+PT triggers; cross-vendor AAIF, capability-detected, stdlib-friendly. **(n++3)** Renamed the write-toggle to `--apply` (Anima; plan->apply industry pattern; replaces `--dry-run=off`); dry-run is now the implicit default (absence of `--apply`). Bare invocation now ENDS by asking the operator "apply for real? [y/N]" (AskUserQuestion); `--apply` skips the prompt and moves directly. Per-item phase-5 re-check unchanged (the real safety). |
 
 ## License
