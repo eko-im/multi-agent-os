@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "jobId": "56ac68ac-ed98-4047-b420-bf4d23545c02",
+  "sessionId": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+  "scopeKey": "26a7145df1e889a4d5e49a4d4880df5c33a0346b02e2d385594e010e1dc520d8",
+  "revision": 14,
+  "createdAt": "2026-10-26T20:44:22.562Z",
+  "updatedAt": "2026-10-26T21:41:40.485Z",
+  "producerGraceExpiresAt": "2026-10-26T20:44:52.563Z",
+  "bestEffortDeadlineAt": "2026-10-26T20:45:45.563Z",
+  "producers": {
+    "core": {
+      "state": "no-op",
+      "intentKey": "b32c88910013988b0c3db1b2517d07ded8b99b4a89db59bd340dad19af664edb",
+      "payloadDigest": "b32c88910013988b0c3db1b2517d07ded8b99b4a89db59bd340dad19af664edb",
+      "sealedAt": "2026-10-26T21:41:40.485Z",
+      "sealedBy": "recovery"
+    },
+    "wiki": {
+      "state": "no-op",
+      "sealedAt": "2026-10-26T20:44:22.601Z",
+      "sealedBy": "wiki-producer"
+    }
+  },
+  "actions": {
+    "foreground-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "0ee670e3fdf2ccb41adc83550c1ff40dae92d1282d8603323380131b3f7c6eff",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {}
+      },
+      "budgetMs": 9000,
+      "lastOutcomeCode": "required-deadline-expired"
+    },
+    "wiki-capture": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 0,
+      "idempotencyKey": "d36252dbc6f80ccea3776369586cf0c6fd3309eac8a2cb42b80078f2d7e0e671",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {}
+      },
+      "budgetMs": 9000,
+      "completedAt": "2026-10-26T20:44:22.601Z"
+    },
+    "team-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "b97c38e4462027c23320823c4a56a478f69f0665f729a31d7676c73dc4bb4994",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 9000,
+      "lastOutcomeCode": "required-core-producer-unavailable"
+    },
+    "python-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "c1d76275e191e2838d90af67f01fbf866fbdbb19fe7351735cc45806f770edfc",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 9000,
+      "lastOutcomeCode": "required-core-producer-unavailable"
+    },
+    "reply-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "08ef4316326ab30ea704d283229eb33802611c9d25d533a48561d71356dc1aa2",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 9000,
+      "lastOutcomeCode": "required-core-producer-unavailable"
+    },
+    "callback": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "25cd4bc40760ce6b765d8732a88e6459fa4746f003cbc50c94d9aca9f47287b3",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 2000,
+      "lastOutcomeCode": "best-effort-core-producer-unavailable"
+    },
+    "notification": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "cc799d2718e98001c24ffaec8802d74bb34a171c99423440471c7900a30b79c8",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 2000,
+      "lastOutcomeCode": "best-effort-core-producer-unavailable"
+    },
+    "openclaw": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "9f73ce63778410c40dd7d24237e8ea91616b3d5841cf412f8f18bc474022e431",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 2000,
+      "lastOutcomeCode": "best-effort-core-producer-unavailable"
+    },
+    "spawn-next": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "expired",
+      "attempts": 0,
+      "idempotencyKey": "a8539dac71ad4699e6df1e39d23cc9eba1378ae88cefa828f9a8e4ef062fc932",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "prompt_input_exit",
+        "input": {
+          "session_id": "917a1e71-74b4-45cd-847f-4d8f15242a88",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects/917a1e71-74b4-45cd-847f-4d8f15242a88/scratchpad",
+          "prompt_id": "0e25161d-1caa-4e17-8df3-aba1e92cbd2a",
+          "hook_event_name": "SessionEnd",
+          "reason": "prompt_input_exit"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "terminalization": {
+          "reason": "foreground-cleanup-exhausted",
+          "attempts": 0,
+          "outcomeCode": "required-deadline-expired"
+        }
+      },
+      "budgetMs": 2000,
+      "lastOutcomeCode": "best-effort-core-producer-unavailable"
+    }
+  },
+  "owner": null,
+  "phase": "complete",
+  "recoverableFailure": {
+    "reason": "actions-settled",
+    "releasedAt": "2026-10-26T21:41:40.469Z",
+    "ownerNonce": "ef15f746-1bda-48e5-aaaf-918744d4bd6c"
+  },
+  "completion": {
+    "completedAt": "2026-10-26T21:41:40.485Z",
+    "terminalDigest": "e3e78d5c43429dd3a4c8603de0c7e46d33d1ac9b5e057fc33c6a3471556ff5bc",
+    "terminalRevision": 14
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "entries": {
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1793047236659,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1793045275430,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
+    "36ecdedb510098944aae71584b6be878eaa0a53fa596a22a54e2925bffbd7593": {
+      "last_emitted_at_ms": 1793045262378,
+      "message": "Spawning agent: general-purpose (opus) | Task: Independent review #537 head 6e9375da"
+    },
+    "e594174b834034e2905a478faff66c1da9e8cd3e8751fecbf4bed49849333ade": {
+      "last_emitted_at_ms": 1793045207088,
+      "message": "Spawning agent: general-purpose (opus) | Task: Independent review #536 head 5971b999"
+    },
+    "5e90f42da392eabc0998198435dec0c2313eb79719ea6defa28b9a450d061189": {
+      "last_emitted_at_ms": 1793045060555,
+      "message": "[SLOP WARNING] Detected fallback/workaround language in this tool input. Do not make potential slop: avoid ad-hoc fallback layers, workaround shims, or environment-specific patches unless explicitly justified. For architecture concerns, consult the architect for a concrete design first. If this seems environment-specific, ask the user to confirm constraints before proceeding.\n\nSpawning agent: general-purpose (opus) | Task: Unblock #536 routing + stale reviews | Active agents: 1"
+    },
+    "8d4a26777f5b85a2f06574e64ee88e1ef38ca4802a5f0c872aa317990ce9b8d7": {
+      "last_emitted_at_ms": 1793045051985,
+      "message": "Spawning agent: general-purpose (opus) | Task: Dispose Codex P2s on #537"
+    },
+    "2122ce29215cd1f6e5b1e287e97675bddfac6a6cec4a2fc9d3d1207eb3ad0641": {
+      "last_emitted_at_ms": 1793044787177,
+      "message": "Spawning agent: general-purpose (opus) | Task: Probes + delta review #536/#537"
+    },
+    "32a87571467f9ffb6f5955e113f3c49775eb1740a74ac1e3178d9f91bb6e6a6a": {
+      "last_emitted_at_ms": 1793044559171,
+      "message": "Spawning agent: code-reviewer (opus) | Task: Independent review PR 536"
+    },
+    "7308dede0a4cf268b7e7fda7c9f017825047a07372a2fdf2692e0075f5c17e7a": {
+      "last_emitted_at_ms": 1793044506410,
+      "message": "Spawning agent: executor (opus) | Task: Fix Codex P2 on PR 537"
+    },
+    "6fb64f6e7dac2e04a6e7ac1d950e88847e4be2358d7376bdc5e06242795b7fc3": {
+      "last_emitted_at_ms": 1793043682451,
+      "message": "[SLOP WARNING] Detected fallback/workaround language in this tool input. Do not make potential slop: avoid ad-hoc fallback layers, workaround shims, or environment-specific patches unless explicitly justified. For architecture concerns, consult the architect for a concrete design first. If this seems environment-specific, ask the user to confirm constraints before proceeding.\n\nUse parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
+    "b3a0ae192b9df9fd860631baa114cc4a0d30b0b17dab6c36bdfb2b8d77811558": {
+      "last_emitted_at_ms": 1793043653078,
+      "message": "Spawning agent: general-purpose (opus) | Task: DIY review PR 536 head | Active agents: 1"
+    },
+    "abebd7b36738ff23561ed45a0f49b1528727edf0a5b7bd1bb37bf4bc3af357d5": {
+      "last_emitted_at_ms": 1793043639539,
+      "message": "Spawning agent: general-purpose (opus) | Task: Fix PR 537 minor findings"
+    }
+  },
+  "updated_at": "2026-10-26T20:40:36.659Z"
+}

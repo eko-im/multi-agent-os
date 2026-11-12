@@ -1,0 +1,345 @@
+{
+  "version": 1,
+  "jobId": "76e6d2fc-6cad-464c-9b81-e075e5cf4944",
+  "sessionId": "01a17a2b-178e-7ff2-b834-df21249439f1",
+  "scopeKey": "26a7145df1e889a4d5e49a4d4880df5c33a0346b02e2d385594e010e1dc520d8",
+  "revision": 66,
+  "createdAt": "2026-10-26T21:43:43.240Z",
+  "updatedAt": "2026-10-26T21:44:17.349Z",
+  "producerGraceExpiresAt": "2026-10-26T21:44:13.241Z",
+  "bestEffortDeadlineAt": "2026-10-26T21:45:06.241Z",
+  "producers": {
+    "core": {
+      "state": "sealed",
+      "intentKey": "64da508449ddcc9cde7d49192212d719187a8b4c2456610966e45be54867145c",
+      "payloadDigest": "64da508449ddcc9cde7d49192212d719187a8b4c2456610966e45be54867145c",
+      "sealedAt": "2026-10-26T21:44:14.911Z",
+      "sealedBy": "recovery"
+    },
+    "wiki": {
+      "state": "no-op",
+      "sealedAt": "2026-10-26T21:43:43.240Z",
+      "sealedBy": "wiki-producer"
+    }
+  },
+  "actions": {
+    "foreground-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "febf6dba2f2536433960a07f7cedce72e946b43ced0896570df80f017b8914d2",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "metrics": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "ended_at": "2026-10-26T21:44:14.039Z",
+          "reason": "other",
+          "agents_spawned": 0,
+          "agents_completed": 0,
+          "modes_used": []
+        }
+      },
+      "budgetMs": 9000,
+      "claimedAt": "2026-10-26T21:44:13.542Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "b897712b-aa2e-470b-b316-a891ffce85f4",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:14.890Z"
+    },
+    "wiki-capture": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 0,
+      "idempotencyKey": "1719cd1ef5b51e0269b78c4cb8c9308c9c1f7b82fd1c067fc034c060f23863f5",
+      "payload": {},
+      "budgetMs": 9000,
+      "completedAt": "2026-10-26T21:43:43.240Z"
+    },
+    "team-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "cee6ac31df545408e1e822247ac249b3f8182a98a5fe8e448ae3b251e55bdee1",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "metrics": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "ended_at": "2026-10-26T21:44:14.039Z",
+          "reason": "other",
+          "agents_spawned": 0,
+          "agents_completed": 0,
+          "modes_used": []
+        }
+      },
+      "budgetMs": 9000,
+      "claimedAt": "2026-10-26T21:44:14.985Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "a1016fa3-a405-493e-9479-9f6c3e999683",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:15.551Z"
+    },
+    "python-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "1f1370c4ac056606059d517e2f106b602d8cbcb04587b3fcc5f3b9f89e649cd0",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "metrics": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "ended_at": "2026-10-26T21:44:14.039Z",
+          "reason": "other",
+          "agents_spawned": 0,
+          "agents_completed": 0,
+          "modes_used": []
+        }
+      },
+      "budgetMs": 9000,
+      "claimedAt": "2026-10-26T21:44:15.582Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "e035a3a0-5c6e-4003-9480-4956a5f48278",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:15.946Z"
+    },
+    "reply-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "0b3a8b47c28b26d56aca004d4f572b96c118f16819c0d35162418816f9a5420a",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {}
+      },
+      "budgetMs": 9000,
+      "claimedAt": "2026-10-26T21:44:15.983Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "fbe52d42-6c47-490f-b3f9-18f346f08ed4",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:16.370Z"
+    },
+    "callback": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "d068ede2655bf89e0c0950e087d0603d7dcf45538e94f20a654d08c6f4841895",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "metrics": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "ended_at": "2026-10-26T21:44:14.039Z",
+          "reason": "other",
+          "agents_spawned": 0,
+          "agents_completed": 0,
+          "modes_used": []
+        }
+      },
+      "budgetMs": 2000,
+      "claimedAt": "2026-10-26T21:44:16.401Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "2aa1a3eb-dded-46da-bb7f-02e67bfb029c",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:16.641Z"
+    },
+    "notification": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "89c0438ff63097ce04beb60efb87292ff68a7af350a0ee331f3de9dbf42d62fc",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "metrics": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "ended_at": "2026-10-26T21:44:14.039Z",
+          "reason": "other",
+          "agents_spawned": 0,
+          "agents_completed": 0,
+          "modes_used": []
+        }
+      },
+      "budgetMs": 2000,
+      "claimedAt": "2026-10-26T21:44:16.670Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "b0eab935-9848-4fc4-8376-3ef1e4b9c6ee",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:16.875Z"
+    },
+    "openclaw": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "31fe8f6e1cf204e27006de511df257326fdd98655122ca437013e8779ffc735b",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {},
+        "metrics": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "ended_at": "2026-10-26T21:44:14.039Z",
+          "reason": "other",
+          "agents_spawned": 0,
+          "agents_completed": 0,
+          "modes_used": []
+        }
+      },
+      "budgetMs": 2000,
+      "claimedAt": "2026-10-26T21:44:16.901Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "7c03f4ac-c7f0-4f18-a051-c461c1d2bdab",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:17.093Z"
+    },
+    "spawn-next": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "completed",
+      "attempts": 1,
+      "idempotencyKey": "408951e1348d4a381fd7b22db242636c91151ee01597146cf28243ae3875d0be",
+      "payload": {
+        "transcriptPath": null,
+        "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+        "reason": "other",
+        "input": {
+          "session_id": "01a17a2b-178e-7ff2-b834-df21249439f1",
+          "transcript_path": null,
+          "cwd": "/Users/emilson.moraes/Projects/multi-agent-os",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {}
+      },
+      "budgetMs": 2000,
+      "claimedAt": "2026-10-26T21:44:17.119Z",
+      "runner": {
+        "attempt": 1,
+        "runnerNonce": "d44a77a4-7ff7-404e-a5ce-7e76ce6de7d5",
+        "phase": "terminal",
+        "deadlineAt": "2026-10-26T21:44:23.296Z"
+      },
+      "lastOutcomeCode": "completed",
+      "completedAt": "2026-10-26T21:44:17.302Z"
+    }
+  },
+  "owner": null,
+  "phase": "complete",
+  "recoverableFailure": {
+    "reason": "actions-settled",
+    "releasedAt": "2026-10-26T21:44:17.326Z",
+    "ownerNonce": "6defe4f2-47dd-4934-a5dd-c22a1165ccba"
+  },
+  "completion": {
+    "completedAt": "2026-10-26T21:44:17.326Z",
+    "terminalDigest": "ec626260d9babd19bd2fe5529d9babda907ccc72b7e519a2e6bb74c146c655f7",
+    "terminalRevision": 65
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "entries": {
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1791903891242,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1791903372785,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
+    "7d7d498b567cea2c763428a9f164ed02952006060889d465bcc816cd040a217a": {
+      "last_emitted_at_ms": 1791902731840,
+      "message": "Spawning agent: general-purpose (opus) | Task: Resolve eko-engram PR 111 conflict and review"
+    }
+  },
+  "updated_at": "2026-10-13T15:04:51.242Z"
+}

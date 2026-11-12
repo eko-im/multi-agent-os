@@ -1,0 +1,357 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1793034144187,
+  "projectRoot": "/Users/emilson.moraes/Projects/multi-agent-os",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">=20",
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "npm",
+    "runtime": "Node.js 20"
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {
+      "validate:skills": "bash scripts/validate-skill-frontmatter.sh"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "bin",
+      "docs",
+      "scripts",
+      "test",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "agents": {
+      "path": "agents",
+      "purpose": null,
+      "fileCount": 36,
+      "lastAccessed": 1793034144108,
+      "keyFiles": [
+        "COWORK-AUTONOMY-POLICY.md",
+        "README.md",
+        "SEAT-PROFILE.md",
+        "WACLI-DELEGATE-EVAL-REPORT.md",
+        "agile-product-lead.md"
+      ]
+    },
+    "audit": {
+      "path": "audit",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144111,
+      "keyFiles": [
+        "session_index.json"
+      ]
+    },
+    "bin": {
+      "path": "bin",
+      "purpose": "Executable scripts",
+      "fileCount": 27,
+      "lastAccessed": 1793034144112,
+      "keyFiles": [
+        "artifact-registry",
+        "atomize-and-route",
+        "bb-pipeline-watch.sh",
+        "bootstrap.sh",
+        "check-layer-purity"
+      ]
+    },
+    "claude-md": {
+      "path": "claude-md",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144112,
+      "keyFiles": [
+        "DEPRECATED.md"
+      ]
+    },
+    "commands": {
+      "path": "commands",
+      "purpose": null,
+      "fileCount": 17,
+      "lastAccessed": 1793034144112,
+      "keyFiles": [
+        "README.md",
+        "agentic-status.md",
+        "audit.md",
+        "auto-pilot.md",
+        "council-gate.md"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 42,
+      "lastAccessed": 1793034144113,
+      "keyFiles": [
+        "AGENTS_AND_HUMANS_GUIDE.md",
+        "ANALYSIS_REPORT_2026-01-08.md",
+        "GaaS_INSTALLATION_GUIDE.md",
+        "RAW_URL_INJECTION.md",
+        "agent-bootstrap-protocol.md"
+      ]
+    },
+    "gauntlet": {
+      "path": "gauntlet",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144113,
+      "keyFiles": [
+        "pilot-journal.md"
+      ]
+    },
+    "harnesses": {
+      "path": "harnesses",
+      "purpose": null,
+      "fileCount": 39,
+      "lastAccessed": 1793034144113,
+      "keyFiles": [
+        "README.md",
+        "agy.yaml",
+        "aider.yaml",
+        "amp.yaml",
+        "antigravity-ide.yaml"
+      ]
+    },
+    "hooks": {
+      "path": "hooks",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144113,
+      "keyFiles": [
+        "hooks.json"
+      ]
+    },
+    "install": {
+      "path": "install",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144114,
+      "keyFiles": [
+        "DEPRECATED.md"
+      ]
+    },
+    "mcp-tools": {
+      "path": "mcp-tools",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1793034144114,
+      "keyFiles": []
+    },
+    "ontology": {
+      "path": "ontology",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1793034144114,
+      "keyFiles": [
+        "os3pd-enforcement-matrix.jsonld",
+        "os3pd-v4.13.0.ttl"
+      ]
+    },
+    "openspec": {
+      "path": "openspec",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1793034144114,
+      "keyFiles": []
+    },
+    "orchestration": {
+      "path": "orchestration",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144115,
+      "keyFiles": [
+        "roadmap.yaml"
+      ]
+    },
+    "packaging": {
+      "path": "packaging",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144115,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "plugin-scripts": {
+      "path": "plugin-scripts",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1793034144115,
+      "keyFiles": [
+        "post-delegate.sh",
+        "pre-delegate.sh",
+        "session-end.sh",
+        "session-start.sh",
+        "session-tip.sh"
+      ]
+    },
+    "protocols": {
+      "path": "protocols",
+      "purpose": null,
+      "fileCount": 11,
+      "lastAccessed": 1793034144115,
+      "keyFiles": [
+        "action-priority.md",
+        "agent-delegation.md",
+        "agentic-tool-lifecycle.md",
+        "exit-hygiene.md",
+        "focus-governance.md"
+      ]
+    },
+    "research": {
+      "path": "research",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1793034144115,
+      "keyFiles": []
+    },
+    "rules": {
+      "path": "rules",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1793034144116,
+      "keyFiles": [
+        "action-now-protocol.md",
+        "agent-scm.md",
+        "ai-native-errors.md",
+        "axial-principles.md",
+        "context-before-commit.md"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 9,
+      "lastAccessed": 1793034144117,
+      "keyFiles": [
+        "DEPRECATED.md",
+        "changelog-required-check.sh",
+        "check-release-coherence.py",
+        "converge-lint.sh",
+        "corpus-firing-audit.py"
+      ]
+    },
+    "sentinel": {
+      "path": "sentinel",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1793034144117,
+      "keyFiles": [
+        "IMPLEMENTATION_PLAN.md",
+        "README.md",
+        "config.json",
+        "detection_rules.md"
+      ]
+    },
+    "skills": {
+      "path": "skills",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1793034144117,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "statusmap": {
+      "path": "statusmap",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1793034144118,
+      "keyFiles": [
+        "README.md",
+        "inference.md"
+      ]
+    },
+    "templates": {
+      "path": "templates",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1793034144118,
+      "keyFiles": [
+        "README.md",
+        "statusline-command.sh"
+      ]
+    },
+    "test": {
+      "path": "test",
+      "purpose": "Test files",
+      "fileCount": 1,
+      "lastAccessed": 1793034144118,
+      "keyFiles": [
+        "test_kirocrew_extras.sh"
+      ]
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 15,
+      "lastAccessed": 1793034144118,
+      "keyFiles": [
+        "dogfood-auto-pilot.sh",
+        "lens-dispatch-matrix.sh",
+        "ontology-validation-requirements.txt",
+        "test-artifact-registry.sh",
+        "test-gitleaks-config.sh"
+      ]
+    },
+    "tips": {
+      "path": "tips",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1793034144119,
+      "keyFiles": [
+        "catalog.json",
+        "inference.md",
+        "validate-tips.sh"
+      ]
+    },
+    "sentinel/lib": {
+      "path": "sentinel/lib",
+      "purpose": "Library code",
+      "fileCount": 2,
+      "lastAccessed": 1793034144121,
+      "keyFiles": [
+        "alert_handler.md",
+        "trace_writer.md"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": ".worktrees/context-budget/bin/context-budget",
+      "accessCount": 1,
+      "lastAccessed": 1793045277108,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
