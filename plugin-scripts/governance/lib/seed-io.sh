@@ -124,7 +124,7 @@ seed_active_world() {
   # legacy orgs (e.g. vek-servicos) are intentionally NOT matched here (this parser is
   # github.com-specific) — they fall through to "unknown", never guessed.
   case "$org" in
-    ekson73) printf 'personal' ;;
+    ekson73|eko-im) printf 'personal' ;;
     vek-im)  printf 'work' ;;
     *)       printf 'unknown' ;;
   esac

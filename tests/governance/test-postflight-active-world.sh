@@ -91,6 +91,12 @@ REPO6="${TEST_ROOT}/no-remote";     mk_repo "$REPO6"
 # stored directly (not via ambient `~/.gitconfig` insteadOf expansion) so this case is
 # deterministic on ANY machine/CI, whether or not that global rewrite is configured locally.
 REPO7="${TEST_ROOT}/personal-ssh-alias"; mk_repo "$REPO7" "git@github.com-ekson73:ekson73/some-repo.git"
+REPO8="${TEST_ROOT}/personal-org-ssh"; mk_repo "$REPO8" "git@github.com:eko-im/some-repo.git"
+REPO9="${TEST_ROOT}/personal-org-https"; mk_repo "$REPO9" "https://github.com/eko-im/some-repo.git"
+REPO10="${TEST_ROOT}/personal-org-ssh-alias"; mk_repo "$REPO10" "git@github.com-ekson73:eko-im/some-repo.git"
+REPO11="${TEST_ROOT}/personal-org-lookalike"; mk_repo "$REPO11" "https://github.com/eko-im-other/some-repo.git"
+REPO12="${TEST_ROOT}/legacy-ssh-alias"; mk_repo "$REPO12" "git@github.com-vek-im:eko-im/some-repo.git"
+REPO13="${TEST_ROOT}/work-https"; mk_repo "$REPO13" "https://github.com/vek-im/some-repo.git"
 
 assert_equals "personal" "$(seed_active_world "$REPO1")" "ekson73 SSH remote -> personal"
 assert_equals "personal" "$(seed_active_world "$REPO2")" "ekson73 HTTPS remote -> personal"
@@ -99,6 +105,12 @@ assert_equals "unknown"  "$(seed_active_world "$REPO4")" "unrelated org (torvald
 assert_equals "unknown"  "$(seed_active_world "$REPO5")" "spoofed remote (github.com as path substring) -> unknown"
 assert_equals "unknown"  "$(seed_active_world "$REPO6")" "no origin remote -> unknown"
 assert_equals "personal" "$(seed_active_world "$REPO7")" "ekson73's own personal-identity SSH alias (github.com-ekson73) -> personal"
+assert_equals "personal" "$(seed_active_world "$REPO8")" "eko-im SSH remote -> personal"
+assert_equals "personal" "$(seed_active_world "$REPO9")" "eko-im HTTPS remote -> personal"
+assert_equals "personal" "$(seed_active_world "$REPO10")" "eko-im via existing personal-identity SSH alias -> personal"
+assert_equals "unknown"  "$(seed_active_world "$REPO11")" "unverified owner with eko-im prefix -> unknown"
+assert_equals "unknown"  "$(seed_active_world "$REPO12")" "legacy SSH alias is not a verified GitHub host -> unknown"
+assert_equals "work"     "$(seed_active_world "$REPO13")" "vek-im HTTPS remote -> work"
 
 # =============================================================================
 # SECTION 2 — postflight-precompact.sh emits active_world on the skeleton
@@ -122,6 +134,18 @@ else
   ((TESTS_RUN++)) || true; ((TESTS_FAILED++)) || true
   echo -e "  ${RED}✗${NC} precompact wrote a seed file (none found — jq/lib dependency missing?)"
 fi
+
+for PRE_CASE in "personal:$REPO9" "unknown:$REPO11"; do
+  PRE_EXPECTED="${PRE_CASE%%:*}"
+  PRE_REPO="${PRE_CASE#*:}"
+  PRE_CASE_DIR="${TEST_ROOT}/pre-seed-${PRE_EXPECTED}"; mkdir -p "$PRE_CASE_DIR"
+  echo '{"session_id":"test-session","trigger":"manual"}' | \
+    CLAUDE_PROJECT_DIR="$PRE_REPO" POSTFLIGHT_SEED_DIR="$PRE_CASE_DIR" POSTFLIGHT_SNAPSHOT_PRS=0 \
+    bash "$PRECOMPACT" >/dev/null 2>&1 || true
+  assert_equals "$PRE_EXPECTED" \
+    "$(jq -r '.params.active_world // "MISSING"' "${PRE_CASE_DIR}/continuation-seed.latest.json" 2>/dev/null)" \
+    "precompact skeleton carries active_world=${PRE_EXPECTED} for $(basename "$PRE_REPO")"
+done
 
 # =============================================================================
 # SECTION 3 — postflight-postcompact.sh version-bump-on-backfill matrix
