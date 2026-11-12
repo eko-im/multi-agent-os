@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "jobId": "78f30477-32ff-4484-9f4c-cb92a3c4b7a7",
+  "sessionId": "54c4fcff-5059-469c-adb7-addee14e4673",
+  "scopeKey": "cd0f01a76ccc30a5d3d245203a9e88d38adeec3237806bec387ebb3e1510f0b5",
+  "revision": 4,
+  "createdAt": "2026-10-17T20:06:21.492Z",
+  "updatedAt": "2026-10-17T20:06:21.713Z",
+  "producerGraceExpiresAt": "2026-10-17T20:06:51.493Z",
+  "bestEffortDeadlineAt": "2026-10-17T20:07:44.493Z",
+  "producers": {
+    "core": {
+      "state": "prepared",
+      "intentKey": "c9f0c117ef599a93088b2f72e46a4374a206dc226c6b9d438c821fb18e8ecde7",
+      "payloadDigest": "c9f0c117ef599a93088b2f72e46a4374a206dc226c6b9d438c821fb18e8ecde7"
+    },
+    "wiki": {
+      "state": "no-op",
+      "sealedAt": "2026-10-17T20:06:21.528Z",
+      "sealedBy": "wiki-producer"
+    }
+  },
+  "actions": {
+    "foreground-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "c585dda379ccba25f0b5062bc637ff8a7f0095dc87d3818a2ef84bf580b847a8",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 9000
+    },
+    "wiki-capture": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "completed",
+      "attempts": 0,
+      "idempotencyKey": "335dedadfb179986a0ad52b06aa3ee3cd76da2ac8e7d77e416709f51724bd011",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 9000,
+      "completedAt": "2026-10-17T20:06:21.528Z"
+    },
+    "team-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "edb9496e10b9fd52fb7e6a5d523e9554471917998076915b2342ce4cebb3f97e",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 9000
+    },
+    "python-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "eb26cc4e7a5a54d14adb6c52a8d67f692f185145ef1344ba98263dcd10ffc446",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 9000
+    },
+    "reply-cleanup": {
+      "class": "required",
+      "phase": "deferred-required",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "7a6e4c6a9cf011af8ff945df60dde745f48f874a89bd967c6ccc8921c69a8e43",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 9000
+    },
+    "callback": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "ce490a1324564f68f206e1f995f765ec1b0ad496a87cea1c86bd835e125a8e7c",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 2000
+    },
+    "notification": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "8113fd9a782dfd795e5826416227a40164af658582bf2512240ecf54f1e5b139",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 2000
+    },
+    "openclaw": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "56b7cff51a63d863acfbb7ff09b27d486856b57562eae28904b967baa2b0db58",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 2000
+    },
+    "spawn-next": {
+      "class": "best-effort",
+      "phase": "deferred-best-effort",
+      "status": "pending",
+      "attempts": 0,
+      "idempotencyKey": "79c6887f0aaa43ba26061907d6a07c36b78b476bec1922eb81b372d6bd6a107c",
+      "payload": {
+        "transcriptPath": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+        "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+        "reason": "other",
+        "input": {
+          "session_id": "54c4fcff-5059-469c-adb7-addee14e4673",
+          "transcript_path": "/Users/emilson.moraes/.claude/projects/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673.jsonl",
+          "cwd": "/Users/emilson.moraes/Projects/.worktrees/omp-concierge",
+          "scratchpad_dir": "/private/tmp/claude-503/-Users-emilson-moraes-Projects--worktrees-omp-concierge/54c4fcff-5059-469c-adb7-addee14e4673/scratchpad",
+          "hook_event_name": "SessionEnd",
+          "reason": "other"
+        },
+        "initialTeamNames": [],
+        "openClawRouting": {
+          "tmux": "/private/tmp/tmux-503/default,18569,19",
+          "tmuxPane": "%26"
+        }
+      },
+      "budgetMs": 2000
+    }
+  },
+  "owner": null,
+  "phase": "recoverable-failure",
+  "recoverableFailure": {
+    "reason": "actions-settled",
+    "releasedAt": "2026-10-17T20:06:21.694Z",
+    "ownerNonce": "d1ba7b72-7b4e-4942-8cd3-300781b8df02"
+  }
+}
