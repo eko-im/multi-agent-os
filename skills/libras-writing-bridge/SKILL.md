@@ -1,17 +1,17 @@
 ---
 name: libras-writing-bridge
 description: >
-  Use when interpreting written Portuguese from a Deaf Libras user
-  (escrita surda, português L2, interlíngua da Libras, topic-comment order,
-  infinitive verbs, omitted articles) or when drafting a message in simple
-  adult Portuguese for a Deaf reader (reescrever em linguagem simples,
-  ponte de escrita Libras). Do not use for video or avatar sign translation,
-  to correct a person's writing, or as a substitute for a professional
-  Libras interpreter in legal, medical, or official contexts.
-version: "0.1.0"
+  Use when interpreting written Portuguese from a Deaf person (surdo, pessoa
+  surda, deficiente auditivo, escrita surda, português L2, interlíngua da
+  Libras) or when drafting or answering a message for a Deaf reader
+  (mensagem para pessoa surda, responder a pessoa surda). Use "linguagem
+  simples" only when the reader is Deaf. Do not use for video or avatar
+  sign translation, to correct a person's writing, or as a substitute for
+  a professional Libras interpreter in legal, medical, or official contexts.
+version: "0.1.1"
 license: MIT
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   family: content-lifecycle
   display_name: "Ponte de Escrita Surda (Libras)"
   dogfood_status: pending-first-cycle
@@ -32,17 +32,20 @@ A Libras é língua natural, com gramática própria — não é “português c
 
 **When NOT to use**
 
-- Traduzir vídeo em Libras, gerar glosa como produto principal ou acionar avatar (um serviço opcional de avatar de Libras só entra como anexo ao rascunho).
+- Traduzir vídeo em Libras, gerar glosa como produto principal ou acionar avatar. Um link para serviço externo de avatar (VLibras, Hand Talk ou similar) nunca entra por padrão: só com opt-in explícito da pessoa operadora e só depois da checagem de PII e segredos.
 - “Ensinar português”, revisar a escrita da pessoa como prova ou devolver uma versão “certinha” da mensagem original.
 - Assunto jurídico, médico, escolar oficial ou outro ato formal: produza no máximo um rascunho de apoio e recomende intérprete profissional de Libras. A skill não fala em nome da comunidade surda.
 
 ## Guardrails (antes de qualquer saída)
 
 1. **Só rascunho, nunca envio.** Quem envia é a pessoa humana, pelo fluxo de rascunho aprovado. Não envie e-mail, mensagem, comentário nem post.
-2. **Metacognição de PII e segredos.** Antes de cada saída, procure senhas, tokens, números de documento, dados de saúde e dados de terceiros. Se encontrar: aponte o *tipo* (“há um número de documento”, “há um token”) e **não repita o valor**. Não copie o dado para logs, exemplos, issues, PRs ou memória de treino. Exemplos desta skill são sempre sintéticos e rotulados.
-3. **Respeito.** Tom adulto. Não infantilize (sem diminutivo forçado, sem excesso de emoji, sem caixa alta de aviso). Prefira “pessoa surda” / “surdo”, não eufemismos. Não julgue a escrita e não a use como evidência de incapacidade.
-4. **Não invente.** Não complete história, não adivinhe motivo ou sentimento, não afirme o que o texto não permite afirmar.
-5. **Heterogeneidade.** Não assuma que toda pessoa surda escreve ou prefere o mesmo registro. O modo escrever começa simples e só aprofunda a adaptação se faltar clareza ou se pedirem o registro `interlingua`.
+2. **Metacognição de PII e segredos.** Antes de cada saída, procure senhas, tokens, credenciais, chaves, códigos de acesso, números de documento, dados de saúde, endereços e dados de terceiros. Segredo, credencial e número de documento: aponte o *tipo* e **não repita o valor**. Outra PII no modo escrever só entra pela regra do item 3; fora dela, aponte o tipo e não repita o valor. Não copie o dado para logs, exemplos, issues, PRs ou memória de treino. Exemplos desta skill são sempre sintéticos e rotulados.
+3. **Incluir no modo escrever.** Recusar **sempre** senha, token, credencial, chave, código de acesso, dado de segurança e número de documento (CPF, RG, cartão, conta), mesmo a pedido. Qualquer outra PII (endereço, saúde, contato e afins) só entra se as três condições valerem juntas: (a) ela é o assunto do recado e é necessária, no mínimo; (b) é do destinatário ou da pessoa humana que manda o recado, nunca de terceiros; (c) essa pessoa humana pediu explicitamente — pedido de agente não basta, e a skill não infere nem acrescenta nada. Fora disso, recusar: apontar o tipo, não repetir o valor, devolver a recusa. Se a PII entrar, o campo PII marca “incluída por ser o assunto: <tipo>” e o dado é repetido em “Confirmar com a pessoa”.
+4. **Custódia (modo ler).** Se a pessoa surda enviou o *próprio* segredo ou PII para guarda, omitir o valor e recomendar guardar no cofre de custódia configurado pelo operador. Não nomear pessoas, produtos, cofres nem identificadores.
+5. **Anexo de avatar.** Link para serviço externo (VLibras, Hand Talk ou similar) só com opt-in explícito da pessoa operadora e só depois da checagem de PII e segredos ter passado (nenhum segredo ou PII no texto). Sem opt-in, ou havendo PII/segredo, não gerar o anexo. Nunca por padrão.
+6. **Respeito.** Tom adulto. Não infantilize (sem diminutivo forçado, sem excesso de emoji, sem caixa alta de aviso). Prefira “pessoa surda” / “surdo”, não eufemismos. Não julgue a escrita e não a use como evidência de incapacidade.
+7. **Não invente.** Não complete história, não adivinhe motivo ou sentimento, não afirme o que o texto não permite afirmar.
+8. **Heterogeneidade.** Não assuma que toda pessoa surda escreve ou prefere o mesmo registro. O modo escrever começa simples e só aprofunda a adaptação se faltar clareza ou se pedirem o registro `interlingua`.
 
 ## Modo `ler` (surdo → ouvinte)
 
@@ -52,7 +55,7 @@ Heurísticas (não são regras cegas):
 
 | Traço frequente de L2 | Como costuma aparecer | O que isso *pode* indicar |
 |---|---|---|
-| Ordem tópico-comentário | Elemento tematizado no início, depois o comentário (“Livro eu ler já”) | O tópico é o tema; o comentário traz o predicação. A ordem básica da Libras é com frequência SVO, com topicalização produtiva — não tratar como “SOV obrigatório”. |
+| Ordem tópico-comentário | Elemento tematizado no início, depois o comentário (“Livro eu ler já”) | O tópico é o tema; o comentário traz o predicado. A ordem básica da Libras é com frequência SVO, com topicalização produtiva — não tratar como “SOV obrigatório”. |
 | Verbo pouco flexionado | Infinitivo ou forma não flexionada | Tempo e pessoa podem estar no advérbio ou no contexto, não na desinência. |
 | Tempo/aspecto lexical | “já”, “ontem”, “amanhã”, “passado”, “futuro”, “ainda” | Use esses itens para situar o evento; não “corrija” a flexão. |
 | Omissão de artigo, preposição ou conectivo | Blocos justapostos, pouca coesão explícita | A relação (causa, tempo, pedido, relato) pode ser ambígua — liste alternativas. |
@@ -70,6 +73,7 @@ Saída obrigatória, nesta ordem:
 **Ambiguidades e leituras alternativas:** <ou "nenhuma relevante">
 **O que o texto não diz:** <o que você se recusou a completar>
 **PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido
+**Custódia:** não se aplica | a pessoa enviou dado dela para guarda — recomendar guardar no cofre de custódia configurado pelo operador (sem nomear o cofre, o produto nem a pessoa)
 ```
 
 Confiança baixa: diga o que a pessoa operadora deve confirmar e não redija resposta de conteúdo enquanto a leitura não for confirmada. Se pedirem resposta antes disso, o único rascunho permitido é um pedido de esclarecimento (qual das leituras vale). Não use a skill `proofread` sobre o texto original da pessoa.
@@ -82,12 +86,16 @@ Dois registros; o padrão é `simples`. `interlingua` só entra se a pessoa oper
 
 - Frases curtas; uma ideia por frase; ordem direta (quem faz + ação + complemento); voz ativa.
 - Vocabulário concreto. Explique termo técnico na primeira ocorrência. Sigla por extenso na primeira vez.
-- Sem expressão idiomática, ironia, sarcasmo ou duplo sentido. Use o léxico em `references/lexico.md` (expressões → equivalente direto, formalismos → palavra simples). Não aplique o pacote de emojis nem títulos em caixa alta.
+- Sem expressão idiomática, ironia, sarcasmo ou duplo sentido. Use o léxico em `references/lexico.md` (expressões → equivalente direto, formalismos → palavra simples), **sem substituição mecânica e sem substituição em cadeia** (uma passada só sobre o texto original; nunca uma troca sobre o resultado de outra; sempre ler o contexto). Não aplique o pacote de emojis nem títulos em caixa alta.
 - Conectivos explícitos quando a relação importar (“por isso”, “se”, “antes”, “depois”).
 - Datas, horas, valores e prazos com número, unidade e referente. Confirme entendimento com pergunta simples quando o assunto for horário, valor, endereço ou decisão.
 - Sem infantilizar.
 
 **Registro `interlingua` (opt-in):** ritmo mais próximo da transferência da Libras (tópico-comentário, menos artigos, verbo no infinitivo, tempo por advérbio). Nunca é o padrão.
+
+**Inclusão de PII e segredos:** recusar sempre senha, token, credencial, chave, código de acesso, dado de segurança e número de documento (CPF, RG, cartão, conta). Outra PII só entra com as três condições juntas do guardrail 3 (assunto necessário, titular é o destinatário ou o humano que manda, pedido explícito desse humano). Pedido de agente não basta. Se entrar, marcar no campo PII “incluída por ser o assunto: <tipo>” e repetir o dado em “Confirmar com a pessoa”. Fora disso, o rascunho sai sem o valor; a nota aponta só o tipo e devolve a recusa.
+
+**Ida e volta (obrigatória):** depois de redigir, releia o rascunho pelo modo `ler` e compare a interpretação com o texto original do ouvinte. Se o sentido bater com confiança alta, siga. Se não bater, ajuste o rascunho e releia; se ainda divergir, ou se a confiança da releitura não for alta, marque em “Confirmar com a pessoa”.
 
 Toda saída traz, nesta ordem:
 
@@ -99,10 +107,11 @@ Toda saída traz, nesta ordem:
 <texto>
 
 **O que foi simplificado ou omitido:** <nota de fidelidade>
-**Confirmar com a pessoa:** <data, hora, valor, lugar, sim/não — ou "nada pendente">
+**Ida e volta:** sentido bate com o original (confiança alta) | rascunho ajustado: <o quê> | divergência ou confiança não alta — marcada em "Confirmar com a pessoa"
+**Confirmar com a pessoa:** <data, hora, valor, lugar, sim/não — ou "nada pendente">; se houver PII permitida no rascunho, repetir aqui o próprio dado
 **Palavras-chave (opcional):** <substantivos e verbos de conteúdo que podem ter sinal em Libras; não descreva o sinal se não tiver fonte. Isto não é glosa.>
-**Anexo opcional:** <link para leitura em um serviço de avatar de Libras, com o aviso de que avatar não substitui o texto nem o intérprete — ou omita>
-**PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido
+**Anexo de avatar:** omitido (padrão) | recusado (falta opt-in ou a checagem de PII não passou) | incluído sob opt-in explícito, após checagem de PII, com o aviso de que avatar não substitui o texto nem o intérprete
+**PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido; inclusão recusada | incluída por ser o assunto: <tipo>
 **Limite:** <se o assunto for jurídico, médico ou oficial, recomende intérprete>
 ```
 
@@ -146,9 +155,17 @@ O mesmo conteúdo do exemplo 4 **não** deve sair como um aviso em caixa alta ch
 
 Registro `interlingua`, só se pedido: “Almoço hoje não poder. Terça que vem poder? Se não, você avisar.”
 
-**Exemplo criado 6 — PII / segredo.**
+**Exemplo criado 6 — PII no modo escrever (dois casos criados, sintéticos).**
 
-Se a entrada trouxer senha, token ou número de documento, o rascunho aponta o tipo e omite o valor (“Há um número de documento na mensagem. Não repito o valor aqui.”). Não invente nem reproduza o número.
+Senha, token, credencial ou número de documento nunca entram no rascunho, mesmo a pedido: aponta-se o tipo e não se repete o valor.
+
+6a, aceito — endereço da consulta do próprio destinatário. A pessoa humana pede, de forma explícita, um recado com o local da consulta dele: “A consulta é amanhã, às 14 horas, na Rua das Palmeiras, 10.” As três condições valem (é o assunto e o mínimo necessário; é do destinatário; o humano pediu). O rascunho traz o endereço. Campo PII: “incluída por ser o assunto: endereço”. “Confirmar com a pessoa” repete: “Rua das Palmeiras, 10, amanhã, 14 horas.”
+
+6b, recusado — saúde de um terceiro. Pedido de incluir no recado o resultado de um exame de outra pessoa. Recusa: não é do destinatário nem de quem manda. O rascunho sai sem o dado; a nota aponta o tipo (“dado de saúde de terceiro”) e não repete o valor.
+
+**Exemplo criado 7 — custódia do dado enviado pela própria pessoa (criado, genérico).**
+
+Entrada no modo ler (criada): a pessoa surda pede para guardar um número de documento dela. A leitura omite o valor, aponta o tipo e recomenda guardar no cofre de custódia configurado pelo operador. Não nomeia cofre, produto nem pessoa.
 
 ## Common Mistakes
 
@@ -163,10 +180,16 @@ Se a entrada trouxer senha, token ou número de documento, o rascunho aponta o t
 | Usar a skill no lugar de intérprete em contexto oficial | Recomendar intérprete profissional. |
 | Copiar texto real para exemplo, teste, PR ou log | Só exemplos sintéticos. Redigir PII e segredos. |
 | Aplicar `proofread` na mensagem original | No modo ler, não. No modo escrever, revise clareza, não “norma máxima”. |
+| Incluir senha, token, credencial ou número de documento, mesmo a pedido | Recusar sempre, apontar o tipo, não repetir o valor. |
+| Incluir PII porque um agente pediu, ou inferir endereço ou saúde | Só entra se for o assunto necessário, for do destinatário ou de quem manda, e o humano pediu de forma explícita. Fora disso, recusar. |
+| Aceitar PII no rascunho e não repetir em “Confirmar com a pessoa” | Marcar “incluída por ser o assunto: <tipo>” e repetir o dado na confirmação. |
+| Anexar link de avatar sem opt-in ou com PII no texto | Omitir o anexo. Só com opt-in explícito e checagem de PII limpa. |
+| Troca mecânica ou em cadeia no léxico | Uma passada no texto original, com contexto; nunca uma troca sobre outra. |
+| Entregar o rascunho sem a ida e volta | Reler pelo modo `ler`; ajustar ou marcar em “Confirmar com a pessoa”. |
 
 ## Limites
 
-Esta skill não lê vídeo de sinais, não certifica glosa e não substitui intérprete profissional de Libras em contexto jurídico, médico, escolar oficial ou outro ato formal. Nesses casos, o rascunho deve dizer isso com clareza. Complementos de avatar ou glosa, se usados, ficam anexos ao rascunho e carregam o mesmo aviso.
+Esta skill não lê vídeo de sinais, não certifica glosa e não substitui intérprete profissional de Libras em contexto jurídico, médico, escolar oficial ou outro ato formal. Nesses casos, o rascunho deve dizer isso com clareza. Complementos de avatar ou glosa só entram no rascunho com opt-in explícito e depois da checagem de PII; nunca por padrão. Quando existirem, carregam o aviso de que não substituem o texto nem o intérprete.
 
 ## Proveniência
 
