@@ -16,7 +16,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 
 1. Substitua primeiro as expressões idiomáticas, das mais longas para as mais curtas, para não cortar locuções no meio.
 2. Depois substitua os formalismos e estrangeirismos desta lista, só em palavra inteira. Se a troca mudar a classe gramatical ou a construção da frase (por exemplo, “não obstante a falta de documentos” não vira “porém a falta de documentos”), reescreva o trecho inteiro para permanecer gramatical.
-3. Não aplique substituições mecânicas se o sentido literal for o pretendido (por exemplo, “enrolar” como enrolar um cabo).
+3. Não aplique substituições mecânicas se o sentido literal for o pretendido (por exemplo, “enrolar” como enrolar um cabo), nem se o equivalente da tabela distorcer o sentido no contexto: nesse caso, reescreva pelo sentido ou peça confirmação.
 4. Registre o que mudou na nota de fidelidade do rascunho.
 5. Não use este léxico para reescrever a mensagem original da pessoa no modo ler.
 
@@ -91,12 +91,12 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | de nariz empinado | arrogante |
 | estar com a corda no pescoço | estar em situação difícil |
 | estar com a macaca | estar muito agitado ou irritado |
-| estar de cara | estar presente |
+| estar de cara | estar surpreso ou insatisfeito; em alguns contextos, estar sóbrio (escolha pelo contexto) |
 | estar de saco cheio | estar cansado, irritado |
 | estar na pindaíba | estar sem dinheiro |
 | estar por fora | não saber, não entender |
 | fogo de palha | entusiasmo que passa rápido |
-| manga de alpaca | pessoa preguiçosa |
+| manga de alpaca | funcionário zeloso e apegado à rotina |
 | não estar nem aí | não se importar |
 | pé frio | pessoa que traz azar |
 | pé quente | pessoa que traz sorte |
@@ -284,7 +284,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | call | ligação |
 | eventualmente | talvez, se indicar possibilidade; às vezes, se indicar frequência (escolha pelo contexto) |
 | basicamente | de forma simples |
-| literalmente | realmente |
+| literalmente | ao pé da letra |
 | obviamente | claro |
 | certamente | com certeza |
 | infelizmente | é triste, mas |
