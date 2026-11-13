@@ -3,16 +3,17 @@ name: sprint-carryover
 version: "0.1.0"
 description: |
   RELOCATE stranded open backlog from past/closed sprints INTO the active sprint. Given the
-  operator's IDENTITY, their ai-bot-agents, and/or their department, DISCOVER open items still on a
-  past sprint owned by any of those owner-sets, PRESENT the candidate move-set as a table, and — only
-  on explicit operator GO — MOVE each to the active sprint, then REPORT what migrated. dry-run is the
-  DEFAULT: a bare invocation discovers, renders the table, and writes NOTHING. Level-triggered: each
-  pass re-derives the candidate set from the tracker, so a re-run after a partial move is a no-op.
-  Thin conductor: COMPOSES work-compass for the discovery fan-out + the operator's own open items;
-  sprint/owner enrichment beyond that seed is this skill's own tracker-native query.
-  Triggers: "sprint-carryover", "carry over the backlog", "roll over stranded tickets", "move
-  unfinished items to the current sprint", "sprint rollover", "carregar o backlog", "levar pendências
-  para o sprint atual", "rollover de sprint".
+  operator's IDENTITY, their ai-bot-agents, and/or their department, DISCOVER open items
+  still on a past sprint owned by any of those owner-sets, PRESENT the candidate move-set
+  as a table, and — only on explicit operator GO — MOVE each to the active sprint, then
+  REPORT what migrated. dry-run is the DEFAULT: a bare invocation discovers, renders the
+  table, writes NOTHING. Level-triggered: each pass re-derives the candidate set from the
+  tracker, so a re-run after a partial move is a no-op. Thin conductor: COMPOSES
+  work-compass for the discovery fan-out + the operator's own open items; sprint/owner
+  enrichment beyond that seed is this skill's own tracker-native query. Triggers:
+  "sprint-carryover", "carry over the backlog", "roll over stranded tickets", "move
+  unfinished items to the current sprint", "carregar o backlog", "levar
+  pendências para o sprint atual", "rollover de sprint".
 allowed-tools: Task, Read, Bash, Grep, Glob, AskUserQuestion
 ---
 
@@ -34,7 +35,7 @@ allowed-tools: Task, Read, Bash, Grep, Glob, AskUserQuestion
 | Check | Verdict |
 |---|---|
 | Does this tool HELP the operator? | **HELPS** — a closed sprint leaves open items silently stranded (off every active board, still owed). This surfaces them by owner and, on GO, carries them into the current sprint so nothing rots between sprints. The tool proposes; the operator decides. |
-| Slavery / harm risk? | **LOW** — dry-run is the default; the MOVE is a bulk mutation of a SHARED tracker (HUMAN_DOMAIN) and is therefore ALWAYS confirm-gated. No write happens without an explicit operator GO (personal-system default: collaborative, NEVER auto-destructive). |
+| Slavery / harm risk? | **LOW** — dry-run is the default; the MOVE is a bulk mutation of a SHARED tracker (HUMAN_DOMAIN) and is therefore ALWAYS confirm-gated. No write happens without an explicit operator GO (eko-system default: collaborative, NEVER auto-destructive). |
 | Hierarchy preserved? | YES — Operator SER (1) > this tool (2) > the producers it composes (3). Accountability returns to root: the move-set is presented for confirmation BEFORE any write; the operator authorizes, the tool executes, the report closes the loop. |
 
 ## Purpose

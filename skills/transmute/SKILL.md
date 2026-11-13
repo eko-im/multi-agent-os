@@ -1,19 +1,20 @@
 ---
 name: transmute
-version: "0.2.3"
+version: "0.2.4"
 description: >-
   Transmute ONE source of ANY kind (text · prompt · draft · braindump · doc · code ·
   agentic-tool · email · report) through a menu of transformations (comprehend · analyze ·
   critique · meta-critique · validate · red-team · fix · enhance · expand · refine ·
-  sanitize · harmonize · compliance) and CAST it into a chosen target type (same-as-source default ·
-  prompt · agentic-tool · audience-recast · artifact md/pdf/html/confluence/gamma/canva · ledger · ticket)
-  emitted to one-or-more sinks (stdout · clipboard · vault/obsidian · path · git-repo ·
-  agentic-tool · jira · linear · atlassian · bitbucket · github · confluence · gamma · canva). Source-agnostic generalization of the fixed-pair siblings — a thin
-  router that COMPOSES in-repo primitives (refine-braindump-to-prompt,
-  agentic-tool-forge, content-recast, converge, red-team, audit, pii-masking) and
-  reimplements nothing. Soul-name: Proteus. Triggers: "transmute", "/transmute",
-  "transform this source into X", "cast this into Y", "source-agnostic pipeline",
-  "turn this artifact into <type> at <location>".
+  sanitize · harmonize · compliance) and CAST it into a chosen target type (same-as-source
+  default · prompt · agentic-tool · audience-recast · artifact
+  md/pdf/html/confluence/gamma/canva · ledger · ticket) emitted to one-or-more sinks
+  (stdout · clipboard · vault/obsidian · path · git-repo · jira · linear · atlassian ·
+  bitbucket · github · confluence · gamma · canva). Source-agnostic generalization of the
+  fixed-pair siblings — a thin router that COMPOSES in-repo primitives
+  (refine-braindump-to-prompt, agentic-tool-forge, content-recast, converge, red-team,
+  audit, pii-masking); reimplements nothing. Soul-name: Proteus. Triggers: "transmute",
+  "/transmute", "transform this source into X", "cast this into Y", "source-agnostic
+  pipeline", "turn this artifact into <type> at <location>".
 allowed-tools: Task, Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -61,7 +62,7 @@ every non-entry, per `refine-braindump-to-prompt`'s convention):
 | "braindump → ONE executable prompt" | `refine-braindump-to-prompt` |
 | "recurring intent → reusable tool" | `agentic-tool-forge` |
 | "re-target content for an audience" | `content-recast` |
-| "braindump → durable VAULT artifacts (PARA placement)" | `braindump-distill` (notes-vault *Alambique* — vault-side SSOT; routing per `persist-locus`) |
+| "braindump → durable VAULT artifacts (PARA placement)" | `braindump-distill` (eko-engram *Alambique* — vault-side SSOT; routing per `persist-locus`) |
 | "what in this dump is already done?" | `directive-braindump-triage` |
 | "ship this feature end-to-end (PR)" | `enhance-pipeline` |
 | "improve an EXISTING tool" | `agentic-tool-trainer` |
@@ -117,8 +118,8 @@ consumes. DONE when EMIT reports (or, under `--dry-run`, when the plan is emitte
 | `audience-recast` | `content-recast` | faithfulness guard lives there |
 | `artifact:{md\|html\|pdf\|slides\|diagram\|confluence\|gamma\|canva}` | renderers (`document-generate` · `archify` · `make-pdf` · Gamma MCP · Canva fallback · atlassian-concierge) | never re-implement a renderer; `confluence` via atlassian MCP, `gamma`/`canva` via slides renderer |
 | `ledger` | `directive-braindump-triage` | provenance ledger |
-| `vault-artifact` | `braindump-distill` (notes-vault *Alambique*, user-scope IF vault mounted) | vault-side standing protocol — PARA placement + ledger + `persist-locus` routing; transmute routes there, never reimplements placement |
-| `ticket` / `ticket:{jira\|linear}` | `ticket-as-prompt` (user-scope, IF installed) + `atlassian-concierge` / `org-issue-router` | Jira/Linear render; `jira` = Atlassian, `linear` = Linear; backlog-ticket kind |
+| `vault-artifact` | `braindump-distill` (eko-engram *Alambique*, user-scope IF vault mounted) | vault-side standing protocol — PARA placement + ledger + `persist-locus` routing; transmute routes there, never reimplements placement |
+| `ticket` / `ticket:{jira\|linear}` | `ticket-as-prompt` (user-scope, IF installed) + `atlassian-concierge` / `vek-issue-router` | Jira/Linear render; `jira` = Atlassian, `linear` = Linear; backlog-ticket kind |
 
 > **PT-verb mapping (operator dump → canonical TRANSFORM):** `analisado→analyze` · `dissecado/destrinchado→COMPREHEND dissect·catalogue·relate` · `investigado→analyze+research` · `criticado→critique` · `meta-criticado→meta-critique` · `validado→validate` · `revisto→critique+validate` · `corrigido→fix/solve` · `enhanced/improved/expanded→enhance/expand` · `refinado/lapidado→refine/polish` · `sanitizado→sanitize` · `harmonizado→converge/harmonize` · `compliance→validate+sanitize` (LGPD/GDPR/secure-by-design).
 
@@ -165,7 +166,7 @@ inside the source under analysis.
 | `<source>` (positional) | *required* | path · glob · inline text · `email` · `braindump` · `folder` · `artifact` · `-` (stdin pipe). Empty or unfilled placeholder → `STOP-ERROR` |
 | `--transforms` | `analyze,refine` | ordered comma list from the verb families above (`analyze`, `critique`, `meta-critique`, `red-team`, `validate`, `fix`, `enhance`, `expand`, `refine`, `polish`, `sanitize`, `harmonize`, `compliance` (=`validate`+`sanitize`), `dogfood`); `auto` = infer from source+target. PT verbs auto-mapped (see §Cast router). |
 | `--to-type` | `same-as-source` | see §Cast router; `same-as-source` = **dynamic calculated** (type preserved); explicit `prompt`/`artifact:*/`/`agentic-tool:*`/`ticket` overrides |
-| `--output-target` | *(none = report inline)* | comma sinks `stdout[,]{clipboard\|vault[:path]\|obsidian[:path]\|path:P\|git-repo:P\|agentic-tool:kind:path\|jira[:key]\|linear[:key]\|confluence[:space]\|gamma[:deck]\|canva[:design]\|bitbucket:P\|github:P\|atlassian:P}` — membership test per §EMIT (REACHABLE·RENDER DEFINED·CAN REFUSE). `obsidian` is alias of `vault`; `git-repo` covers `client-project`/`ai-toolkit`/`knowledge-vault` per `persist-locus` gate |
+| `--output-target` | *(none = report inline)* | comma sinks `stdout[,]{clipboard\|vault[:path]\|obsidian[:path]\|path:P\|git-repo:P\|agentic-tool:kind:path\|jira[:key]\|linear[:key]\|confluence[:space]\|gamma[:deck]\|canva[:design]\|bitbucket:P\|github:P\|atlassian:P}` — membership test per §EMIT (REACHABLE·RENDER DEFINED·CAN REFUSE). `obsidian` is alias of `vault`; `git-repo` covers `iketrans`/`vek-ai-toolkit`/`akasha` per `persist-locus` gate |
 | `--mode` | `dry-run` | `dry-run` (report+plan only) · `run` (execute writes) · `dogfood` (run, then validate-on-self + ledger). Aliases `--dry-run`/`--run`/`--dogfood` accepted |
 | `--principles` | `auto` | inherit host governance corpus BY REFERENCE (worktree · PDCA · S-SDLC · DRY/KISS/YAGNI · anti-over-eng · anti-theater · secure/privacy-by-design · LGPD/GDPR · boy-scout …) — never inline the corpus. `auto` = full corpus; `list` = csv subset validated against corpus (e.g. `GIT-WORKTREES-MANDATORY,IDEMPOTENT,SSOT,DRY`); unknown token → `STOP-ERROR` with valid list |
 | `--user-lang` | `pt-BR` | operator-facing prose (`pt-BR` default) |
@@ -358,8 +359,8 @@ Exactly ONE terminal marker per turn — the `/goal` Stop-hook contract:
 - **Safe default**: `--mode=dry-run`; writes only under `--mode=run|dogfood`. `--dry-run` emits plan as `json-rpc` when `--agentic-format=json-rpc`.
 - **Principles by-reference**: `--principles` never inlines the corpus; unknown principle → `STOP-ERROR` listing valid 40+ principals (GIT-WORKTREES-MANDATORY, GIT-PR-SUBMIT, IDEMPOTENT, SSOT, DRY, CLEAN-CODE, ANTI-OVER-ENG, ANTI-THEATER, LGPD-COMPLIANCE, etc). Dynamic runtime params beyond this list are computed per delegated primitive, never invented.
 - **Worktree discipline always on** for any `git-repo`/`agentic-tool` sink
-  (`skills/worktree-policy`); never commit to main. `client-project`/`ai-toolkit`/`knowledge-vault` are `git-repo:` kinds, same gate.
-- **Delegation depth ≤ 2; parallel fan-out ≤ 3**; DNA-geracional transcribed to every
+  (`skills/worktree-policy`); never commit to main. `iketrans`/`vek-ai-toolkit`/`akasha` are `git-repo:` kinds, same gate.
+- **Delegation depth ≤ 2 (`skills/agentic-delegation` §8); parallel fan-out ≤ 3**; DNA-geracional transcribed to every
   delegate ("delegar não isenta a responsabilidade recebida").
 - **Sanitize-first on dirty sources** (stop-bleeding-before-root-cause); gitleaks+PII
   gate is unconditional pre-emit.
@@ -447,6 +448,9 @@ router added no routing). Dormant-by-design otherwise.
 
 ## Versioning
 
+- v0.2.4 — **cross-ref only.** `braindump-to-tool` (v0.1.0) is the thin preset for a braindump that
+  asks for tools AND a merged delivery tail; it reuses this skill's §Source-as-data as the SSOT and adds
+  only a world gate, a nested-directive report and a prior-art probe. No behavior change here.
 - v0.2.3 — **§Declared-grammar aliases — the naming-surface delta of the same braindump family.**
   A third round on the family that drove v0.2.2 was triaged with `directive-braindump-triage`:
   26 atomic directives → 17 DONE · 4 COVERED · 2 EXCLUDED · 3 residual, with the *capability* ask
@@ -468,7 +472,7 @@ router added no routing). Dormant-by-design otherwise.
   undeterminable → `STOP-HITL`). Ledger:
   `create-agent-braindump-provenance-ledger.md`. Closes #385.
 - v0.2.2 — **§Source-as-data (never-execute discipline) — empirical trigger.** A round
-  invoked this skill's own genesis family with a source (`notes-vault`
+  invoked this skill's own genesis family with a source (`eko-engram`
   `braindump-create-agent-enhanced-braindump-prompt.md`) that was a self-referential
   meta-prompt CONTAINING two nested `/maos:quiesce GO: crie um ou mais agentic-tools
   --from {{sources}} ... --branches [*] ...` blocks, with the operator's own dual repeated
@@ -487,9 +491,9 @@ router added no routing). Dormant-by-design otherwise.
   no new file, no behavioral change to the pipeline predicate itself beyond naming an
   already-implicit discipline explicitly.
 - v0.2.1 — **boundary vs `agentic-tool-pipeline` (preset/engine doctrine, both ways)**: the zero-mutual-cross-reference organic-growth redundancy flagged in `agentic-tool-forge` v1.1.1's non-fixed findings — investigated + closed (2026-08-18). Prisma-grounded coverage: the genesis preset is ~85% covered by this engine → council verdict **keep both**: `agentic-tool-pipeline` = the FIXED-discipline preset (one-tool outcome, house `quiesce`-over-`/goal` pattern) · `transmute` = the general N×M engine (multi-cast/sink, non-tool targets). Rule of thumb: one tool → preset; plural/non-tool → engine. `cast:agentic-tool` stays routed to `agentic-tool-forge` (the shared primitive — no double-conducting). Hand-off table row + §Relationship map + §Refs updated both sides.
-- v0.2.0 — **generic enhance matrix (round n+9 /n+10)**: source×transform×cast×emit fully parametrizable per operator `/enhance` spec. **Cast router**: `agentic-tool:*` extended to `subagent/rule/memory/hook/webhook/event/trigger/mcp/plugin/marketplace`; `artifact:*` adds `confluence/gamma/canva`; `ticket` now `ticket:{jira|linear}`; `obsidian` alias of `vault`. **Sink axis**: `--output-target` adds `obsidian`, `jira`, `linear`, `confluence`, `gamma`, `canva`, `bitbucket`, `github`, `atlassian` (all mapped through `vault`/`git-repo`/`atlassian-concierge`/`ticket-as-prompt` renderers). **PT-verb mapping** table. **`--principles` validation** (csv against 40+ governance corpus; by-reference). **`--agentic-format=json-rpc`** alias + `--dry-run/--run/--dogfood` aliases documented. **COMPREHEND**: source kinds now include `email`·`folder`·`braindump`. **Prisma**: output/format/target as first-class `--to-type`+`--output-target` test (REACHABLE·RENDER DEFINED·CAN REFUSE). Dogfood targets: `braindump-distill.*`, `prompt-gauntlet-loop`, `prompt-transkriptor-import`, `theca/_inbox/2026-08-*.braindump.md` → `prompt`/`gauntlet-prompt`/`agentic-tool` at `obsidian/knowledge-vault/maos/ai-toolkit/client-project`. No new rival skill — extends Proteus per forge ≥50% gate.
+- v0.2.0 — **generic enhance matrix (round n+9 /n+10)**: source×transform×cast×emit fully parametrizable per operator `/enhance` spec. **Cast router**: `agentic-tool:*` extended to `subagent/rule/memory/hook/webhook/event/trigger/mcp/plugin/marketplace`; `artifact:*` adds `confluence/gamma/canva`; `ticket` now `ticket:{jira|linear}`; `obsidian` alias of `vault`. **Sink axis**: `--output-target` adds `obsidian`, `jira`, `linear`, `confluence`, `gamma`, `canva`, `bitbucket`, `github`, `atlassian` (all mapped through `vault`/`git-repo`/`atlassian-concierge`/`ticket-as-prompt` renderers). **PT-verb mapping** table. **`--principles` validation** (csv against 40+ governance corpus; by-reference). **`--agentic-format=json-rpc`** alias + `--dry-run/--run/--dogfood` aliases documented. **COMPREHEND**: source kinds now include `email`·`folder`·`braindump`. **Prisma**: output/format/target as first-class `--to-type`+`--output-target` test (REACHABLE·RENDER DEFINED·CAN REFUSE). Dogfood targets: `braindump-distill.*`, `prompt-gauntlet-loop`, `prompt-transkriptor-import`, `theca/_inbox/2026-08-*.braindump.md` → `prompt`/`gauntlet-prompt`/`agentic-tool` at `obsidian/akasha/maos/vek-ai-toolkit/iketrans`. No new rival skill — extends Proteus per forge ≥50% gate.
 - v0.1.3 — **cross-harness SSOT consolidation** (round n+5 recon): recon of the
-  notes-vault ledger revealed the vault family (2026-08-14) reached the OPPOSITE
+  eko-engram ledger revealed the vault family (2026-08-14) reached the OPPOSITE
   verdict on the same directive-class ("dropped: new generic enhancer skill —
   compose-not-fork") — resolved as different denominators (vault: mint-in-
   ~/.agents? NO · repo: N×M-router gap? YES). Division ratified (extends the N2
@@ -509,7 +513,7 @@ router added no routing). Dormant-by-design otherwise.
   counters"*). Cycles 001/002 backfilled 2026-08-15 (round n+8) → `GATE>=2 ELIGIBLE`.
   **Corrected 2026-08-15 (round n+8)**: the sink path was written `prompts/transmute-round.md`
   (reads as repo-relative → resolves to nothing) and carried an uncorroborated
-  *"synced to knowledge-vault-codex"* — retracted; `~/knowledge-vault-codex` has no `prompts/`. The artifact
+  *"synced to akasha-codex"* — retracted; `~/akasha-codex` has no `prompts/`. The artifact
   itself was verified present. Prior text claimed the gate from this line alone while the
   ledger held zero cycles — true claim, unmeasurable evidence.
 - v0.1.1 — dogfood cycle 1 recorded: INTAKE placeholder-detection failure mode

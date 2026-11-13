@@ -10,8 +10,8 @@
 
 | Tool | Version | Status | Use Case |
 | ---- | ------- | ------ | -------- |
-| `aws` | 2.33.20 | ✅ Connected (AdministratorAccess) | AWS API, EKS, ECR, KMS, IAM |
-| `kubectl` | (latest) | ✅ Context: `aws-eks` | K8s cluster operations |
+| `aws` | 2.33.20 | ✅ Connected | AWS API, EKS, ECR, KMS, IAM |
+| `kubectl` | (latest) | ✅ Context configured | K8s cluster operations |
 | `flux` | 2.7.5 | ✅ Connected | FluxCD GitOps reconciliation |
 | `eksctl` | (latest) | ✅ | EKS cluster management |
 | `helm` | (latest) | ✅ via Rancher Desktop | Helm chart management |
@@ -45,7 +45,7 @@
 
 | Tool | Version | Use Case |
 | ---- | ------- | -------- |
-| `python3` | 3.12.7 (mise) | org-cli, automation scripts |
+| `python3` | 3.12.7 (mise) | vek-cli, automation scripts |
 | `node` | 22.22.0 (volta) | Frontend builds |
 | `npm` / `npx` | 11.8.0 | Package management |
 
@@ -62,7 +62,7 @@
 | `typer` | 0.21.1 | CLI framework |
 | `click` | 8.3.1 | CLI framework (legacy) |
 
-## 6. org-cli.py Commands (12 modules)
+## 6. vek-cli.py Commands (12 modules)
 
 ```text
 cluster    — EKS cluster operations
@@ -92,12 +92,19 @@ All verified ✅: `curl`, `wget`, `ssh`, `tar`, `zip`, `unzip`, `base64`, `sed`,
 
 ## 9. Live Connections
 
+Concrete account IDs, cluster names, regions, kubecontext names and estate
+counts are **deliberately not recorded here**. This repo is public, and those
+identifiers are target-selection material even though none of them
+authenticates anyone. They live in the operator's private IaC repo and secret
+manager — read them from there (`protocols/delegation/provider-matrix.md`
+§Secrets), never from this document.
+
 | Resource | Status | Details |
 | -------- | ------ | ------- |
-| AWS Account | ✅ | `853982059333` (AdministratorAccess SSO) |
-| EKS Cluster | ✅ | `k8s-eks-prd-002` (us-east-1) |
-| FluxCD | ✅ | 6 kustomizations, 15+ HelmReleases |
-| kubectl | ✅ | Context: `aws-eks`, 35 namespaces |
+| AWS Account | ✅ | SSO profile configured; identifier in private IaC repo |
+| EKS Cluster | ✅ | Reachable; name and region in private IaC repo |
+| FluxCD | ✅ | GitOps reconciliation available |
+| kubectl | ✅ | Context configured; name in private IaC repo |
 | GitHub | ✅ | `gh` authenticated |
 | Docker | ✅ | Rancher Desktop |
 
@@ -107,13 +114,13 @@ All verified ✅: `curl`, `wget`, `ssh`, `tar`, `zip`, `unzip`, `base64`, `sed`,
 | --------- | ------------- |
 | K8s manifest validation | `kustomize build` + `yamllint` |
 | K8s cluster operations | `kubectl` (read) / FluxCD (write) |
-| Helm chart management | `org-cli.py helm` (SSOT: `helm-charts.yaml`) |
+| Helm chart management | `vek-cli.py helm` (SSOT: `helm-charts.yaml`) |
 | Secret encryption | `sops` (KMS) — kubeseal unavailable |
 | AWS API calls | `aws` CLI |
 | Git operations | `git` + `gh` |
 | YAML processing | `yq` (structured) / `jq` (JSON) |
-| Python automation | `python3` + `org-cli.py` |
-| Monitoring/health | `org-cli.py monitor` + `flux get` |
+| Python automation | `python3` + `vek-cli.py` |
+| Monitoring/health | `vek-cli.py monitor` + `flux get` |
 | Documentation | Agent (markdown) → git commit |
 | Deployment | Git push → FluxCD auto-reconcile (IaC) |
 

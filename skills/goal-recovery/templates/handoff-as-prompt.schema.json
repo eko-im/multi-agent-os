@@ -74,7 +74,7 @@
             "required": ["source", "read"],
             "additionalProperties": true,
             "properties": {
-              "source": {"type": "string", "enum": ["postflight_seed", "braindump", "ticket", "objectives_ntree", "ash_journal", "git_branch", "git_last_commit", "transcript", "work_compass_cpt", "operator_prompt", "free_text"]},
+              "source": {"type": "string", "enum": ["postflight_seed", "braindump", "ticket", "ci", "tests", "objectives_ntree", "ash_journal", "git_branch", "git_last_commit", "transcript", "work_compass_cpt", "operator_prompt", "free_text"]},
               "read": {"type": "boolean", "description": "true = this source existed and was read; false = probed-but-absent (still auditable)"},
               "ref": {"type": "string", "description": "path/id/sha of the source, or 'absent'"}
             }
@@ -100,7 +100,7 @@
       "additionalProperties": true,
       "properties": {
         "layer": {"const": "community", "description": "per layer-precedence-policy §3 — mandatory attribution field"},
-        "type": {"const": "handoff-as-prompt", "description": "the L5 purpose-tag / --type"},
+        "type": {"const": "handoff-as-prompt", "description": "the eko L5 purpose-tag / --type"},
         "contract": {"type": "string"},
         "contract_version": {"type": "string"}
       }

@@ -169,7 +169,7 @@ if [ "${n_trap:-0}" -ge 2 ]; then ok "ANTI-BYPASS: real secret glued to placehol
 else bad "ANTI-BYPASS: a real secret near the placeholder was suppressed ($n_trap/2)"; fi
 
 # ══ 6. AWS-URI anti-bypass (F1) — real secret ENDING in a reference URI fires ═
-# The app-db-password allowlist exempts a value that IS an aws:/// reference URI
+# The vek-db-password allowlist exempts a value that IS an aws:/// reference URI
 # (anchored ^…$ on the extracted secret). A real password that merely ENDS in
 # such a URI (CorrectHorse1!aws:///foo#BAR) must NOT be swallowed, while the
 # pure reference URI stays suppressed.
@@ -177,12 +177,28 @@ awsmix=$'db_password=CorrectHorse1aws:///foo#BAR\n'
 r_awsmix="$(scan "$awsmix")"
 if has_secret "$r_awsmix" "CorrectHorse1aws:///foo#BAR"; then ok "AWS-URI: real secret ending in a reference URI still fires"
 else bad "AWS-URI: a real secret ending in aws:/// was suppressed (substring bypass)"; fi
-awspure=$'db_password=aws:///example-app/env/hml#APP_DB_PASSWORD\n'
+awspure=$'db_password=aws:///vek-sales/env/hml#VEK_DB_PASSWORD\n'
 r_awspure="$(scan "$awspure")"
 if [ -z "$r_awspure" ]; then ok "AWS-URI: pure reference URI correctly suppressed"
 else bad "AWS-URI: a legitimate SM reference URI produced a finding"; fi
 
-# ══ 7. URI / ASSIGNMENT / ENV-DEFAULT / BUILT-INS ════════════════════════════
+# ══ 7. REDACTED marker — whole value IS exactly `<REDACTED>`, real secrets still fire ═
+# The vek-db-password allowlist exempts an extracted value that is exactly the
+# literal redaction marker (anchored ^…$ on the secret). A real password that
+# merely contains the marker, a variant such as `<REDACTED_DB>`, or a marker
+# that is not closed, must still fire.
+# The historical document shape is `KEY=${VEK_DB_PASSWORD:<REDACTED>}`: the rule
+# does not swallow that form as a literal secret (value-class or exact mask).
+redacted=$'DB_PASSWORD=<REDACTED>\nquarkus.datasource.password=${VEK_DB_PASSWORD:<REDACTED>}\n'
+r_redacted="$(scan "$redacted")"
+if [ -z "$r_redacted" ]; then ok "REDACTED: literal marker values suppressed"
+else bad "REDACTED: a literal marker produced a finding"; fi
+redacted_trap=$'DB_PASSWORD=<REDACTED>ExtraSecret1\nDB_PASSWORD=RealPass1<REDACTED>\nDB_PASSWORD=<REDACTED\nDB_PASSWORD=<REDACTED_DB>\nquarkus.datasource.password=${VEK_DB_PASSWORD:Abcd1234Efgh5678Ijkl90}\n'
+r_redacted_trap="$(scan "$redacted_trap")"
+n_redacted_trap="$(grep -c . <<<"$r_redacted_trap" || true)"
+if [ "${n_redacted_trap:-0}" -ge 5 ]; then ok "REDACTED: real secret near the marker still fires ($n_redacted_trap)"
+else bad "REDACTED: a real secret near the marker was suppressed ($n_redacted_trap/5)"; fi
+# ══ 8. URI / ASSIGNMENT / ENV-DEFAULT / BUILT-INS ════════════════════════════
 # Values are assembled at runtime so this file contains no credential literal
 # and no user@host text (the PII linter does not allow example.test).
 # There is no entropy floor: 8–11 character values must still fire.
@@ -312,20 +328,20 @@ if [ "$env_n" -eq 0 ]; then ok "ENV negative: masks, empty, and non-credential V
 else bad "ENV negative: $env_n mask/placeholder finding(s)"; fi
 
 # Angle-bracket placeholder (the form used to redact a db password). It must
-# not fire app-db-password or any other rule.
+# not fire vek-db-password or any other rule.
 ang="$(printf '<%s>' 'REDACTED')"
 r_ang="$(scan "$(printf 'DB_PASSWORD=%s\npassword=%s\n' "$ang" '<...>')")"
 if [ -z "$r_ang" ]; then ok "ANGLE: angle-bracket placeholder fires no rule"
-else bad "ANGLE: angle-bracket placeholder fired $(nrule "$r_ang" app-db-password) app-db-password finding(s)"; fi
+else bad "ANGLE: angle-bracket placeholder fired $(nrule "$r_ang" vek-db-password) vek-db-password finding(s)"; fi
 
 # ANTI-BYPASS for the angle-bracket exemption: only the exact mask <REDACTED>
 # is a placeholder. Any other bracketed value, mixed case or uppercase with
-# digits, is not a placeholder and must still fire app-db-password.
+# digits, is not a placeholder and must still fire vek-db-password.
 wrap1="$(printf '<%s%s>' 'notA' 'Placeholder9x')"
 wrap2="$(printf '<%s%s>' 'A123' '4567')"
 r_wrap="$(scan "$(printf 'DB_PASSWORD=%s\npassword=%s\n' "$wrap1" "$wrap2")")"
-if [ "$(nrule "$r_wrap" app-db-password)" -ge 2 ]; then ok "ANGLE ANTI-BYPASS: bracket-wrapped non-placeholder values still fire"
-else bad "ANGLE ANTI-BYPASS: a bracket-wrapped non-placeholder value was suppressed ($(nrule "$r_wrap" app-db-password)/2)"; fi
+if [ "$(nrule "$r_wrap" vek-db-password)" -ge 2 ]; then ok "ANGLE ANTI-BYPASS: bracket-wrapped non-placeholder values still fire"
+else bad "ANGLE ANTI-BYPASS: a bracket-wrapped non-placeholder value was suppressed ($(nrule "$r_wrap" vek-db-password)/2)"; fi
 if [ "$(nrule "$r_wrap" app-password-assignment)" -ge 2 ]; then ok "ANGLE ANTI-BYPASS: app-password-assignment also fires on bracket-wrapped non-placeholders"
 else bad "ANGLE ANTI-BYPASS: app-password-assignment suppressed a bracket-wrapped non-placeholder ($(nrule "$r_wrap" app-password-assignment)/2)"; fi
 

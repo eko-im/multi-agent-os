@@ -1,15 +1,15 @@
-# .gitleaks.toml -- Gitleaks configuration for MAOS-based repositories
+# .gitleaks.toml -- Gitleaks configuration for VEK repositories
 # Canonical source: multi-agent-os/.gitleaks.toml
 # Version: 1.5.0
 
-title = "MAOS Secret Scanning Rules"
+title = "VEK Secret Scanning Rules"
 
 [extend]
 # Built-in gitleaks rules (github-pat, aws-access-token, …) are part of the gate.
 useDefault = true
 
 [[rules]]
-id = "app-db-password"
+id = "vek-db-password"
 description = "Hardcoded database password"
 # secretGroup = 1 points entropy + the reported Secret at the VALUE (capture
 # group 1), not the whole `name=value` match. entropy = 2.0 is a low floor that
@@ -38,14 +38,24 @@ secretGroup = 1
 # Rule-scoped false-positive exemptions (NOT global — must never weaken other
 # rules). Each is form- or path-anchored and deliberately narrow. NOTE: we do
 # NOT path-allowlist docs/insights/ broadly — secret-management-strategy.md
-# holds a REAL credential that MUST keep firing until it is rotated.
+# held a REAL credential in history. It was rotated on 2026-10-26, so that ONE
+# historical finding is pinned by fingerprint in .gitleaksignore; any new
+# commit of a password in that file still fires.
 [rules.allowlist]
-description = "app-db-password documented non-credential references"
+description = "vek-db-password documented non-credential references"
 # regexTarget=secret: test the EXTRACTED VALUE (secretGroup 1), fully anchored
-# ^…$ so the WHOLE value must BE an AWS Secrets Manager REFERENCE URI (the
-# pointer, not a secret) — e.g. aws:///example-app/env/hml#APP_DB_PASSWORD. Testing
-# the match (unanchored) was unsafe: a real password merely ENDING in such a URI
-# (CorrectHorse1!aws:///foo#BAR) contained the substring and was suppressed.
+# ^…$ so the WHOLE value must BE one of the shapes below. Testing the match
+# (unanchored) was unsafe: a real password that merely CONTAINS the shape was
+# suppressed.
+#   1. An AWS Secrets Manager REFERENCE URI (the pointer, not a secret) —
+#      e.g. aws:///vek-sales/env/hml#VEK_DB_PASSWORD. A password that merely
+#      ENDS in such a URI (CorrectHorse1!aws:///foo#BAR) stays detectable.
+#   2. The exact redaction marker `<REDACTED>`. This is the documented
+#      placeholder, not a credential. A real password that merely contains
+#      the marker, or a variant such as `<REDACTED_DB>`, is NOT exempted, and
+#      this is deliberately NOT a path allowlist: the same history holds a
+#      real (now rotated) credential, ignored only by exact fingerprint in
+#      .gitleaksignore so the path keeps firing for anything new.
 regexTarget = "secret"
 regexes = [
     '''^aws:///[^\s'"]+#[A-Z0-9_]+$''',
@@ -53,7 +63,7 @@ regexes = [
     # angle-bracket placeholder in this repo's history. The value class allows
     # < and >, so without this exemption the gate flags the mask itself.
     # Exact literal, fully anchored ^…$ on the extracted value: any other
-    # bracketed value (<s3cr3t!x>, <A1234567>) still fires. Only the
+    # bracketed value (<s3cr3t!x>, <A1234567>, <REDACTED_DB>) still fires. Only the
     # placeholder is exempt, never the rule or a path.
     '''^<REDACTED>$''',
 ]
@@ -66,22 +76,22 @@ paths = [
 ]
 
 [[rules]]
-id = "app-quarkus-datasource-password"
+id = "vek-quarkus-datasource-password"
 description = "Quarkus datasource password in properties"
 regex = '''quarkus\.datasource\..*password\s*[:=]\s*[^\s$\{]{4,}'''
 keywords = ["quarkus.datasource"]
 
 [[rules]]
-id = "app-spring-datasource-password"
+id = "vek-spring-datasource-password"
 description = "Spring datasource password in properties"
 regex = '''spring\.datasource\.password\s*[:=]\s*[^\s$\{]{4,}'''
 keywords = ["spring.datasource.password"]
 
 [[rules]]
-id = "app-jwt-secret"
+id = "vek-jwt-secret"
 description = "JWT secret or signing key"
 # secretGroup = 1 → the reported Secret is the VALUE, not the whole match. No
-# entropy floor (see app-db-password rationale): an entropy cutoff cannot
+# entropy floor (see vek-db-password rationale): an entropy cutoff cannot
 # separate a weak placeholder from a weak real secret, so it only hides
 # low-entropy credentials. Old `entropy = 3.0` on the whole match under-detected.
 # See tests/test-gitleaks-config.sh.
@@ -90,7 +100,7 @@ keywords = ["jwt", "signing"]
 secretGroup = 1
 
 [[rules]]
-id = "app-bitbucket-app-password"
+id = "vek-bitbucket-app-password"
 description = "Bitbucket app password"
 regex = '''(?i)(bitbucket[._-]?(?:app[._-]?)?password|BB_AUTH_STRING)\s*[:=]\s*['"]?[^\s'"$\{]{8,}['"]?'''
 keywords = ["bitbucket", "BB_AUTH"]
@@ -201,7 +211,7 @@ regexes = [
 ]
 
 [allowlist]
-description = "Global allowlist"
+description = "VEK global allowlist"
 
 # Documentation placeholders are not credentials.
 #

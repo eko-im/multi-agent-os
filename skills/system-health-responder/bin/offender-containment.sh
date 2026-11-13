@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /** offender-containment.sh — TICKET-90-ext: neutralize a runaway agentic-tool/plugin PRODUCER
+# /** offender-containment.sh — EKO-90-ext: neutralize a runaway agentic-tool/plugin PRODUCER
 #  *  whose upstream issue has NO source fix. Deterministic, gated, reversible.
 #  *
 #  *  @lesson 2026-07-14 disk-drain: the disk-guardian cleaned caches but could NOT beat a LIVE
@@ -52,7 +52,7 @@ log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG" 2>/dev/null || true;
 
 usage() {
   cat <<'EOF'
-offender-containment.sh — contain a no-source-fix agentic-tool/plugin PRODUCER (TICKET-90-ext)
+offender-containment.sh — contain a no-source-fix agentic-tool/plugin PRODUCER (EKO-90-ext)
   (default)          DRY-RUN: detect registry offenders present now + PROPOSE disable/remove. Acts on nothing.
   --prune            LOW-stakes maintenance ONLY: `uv cache prune` (non-destructive; keeps tool installs).
   --engage           Perform the MEDIUM disable of PRESENT, registry-vetted offenders. REQUIRES
@@ -67,7 +67,7 @@ EOF
 protected() { local c; c="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"; local p
   # substring match errs CONSERVATIVE (over-protect = skip a containment we could've done — never contain a
   # protected tool). EXCEPTION: `claude` matches WHOLE-string only, else it over-matches legit claude-branded
-  # plugins/marketplaces (`claude-plugins-official`, `claude-code-concierge`) that are NOT the runtime.
+  # plugins/marketplaces (`claude-plugins-official`, `claude-concierge`, `claude-code-concierge` alias) that are NOT the runtime.
   for p in "${PROTECTED[@]}"; do
     if [ "$p" = "claude" ]; then [ "$c" = "claude" ] && return 0; continue; fi
     case "$c" in *"$p"*) return 0;; esac
