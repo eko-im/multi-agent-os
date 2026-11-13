@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# shared-browser-reaper: close tabs whose MCP client is gone or idle.
+# Run from a timer (every few minutes) or by hand. Safe to run twice.
+# - owner dead  (lease lock is free)        -> close its tab, drop the lease
+# - owner idle  (lease mtime > SB_IDLE_SEC) -> SIGTERM the owner; it cleans up
+# Tabs without a lease are never closed: they may be a human's.
+set -euo pipefail
+
+SB_HOME="${SB_HOME:-$HOME/.shared-browser}"
+# shellcheck disable=SC1091
+[[ -f "$SB_HOME/env" ]] && . "$SB_HOME/env"
+ab="${SB_AGENT_BROWSER:-agent-browser}"
+cdp="${SB_CDP:-9222}"
+idle="${SB_IDLE_SEC:-900}"
+log="$SB_HOME/audit.log"
+now="$(date +%s)"
+
+note() { printf '{"ts":"%s","reaper":"%s","session":"%s"}\n' "$(date -u +%FT%TZ)" "$1" "$2" >> "$log"; echo "$1 $2"; }
+
+shopt -s nullglob
+for lease in "$SB_HOME"/leases/*.json; do
+  id="$(basename "$lease" .json)"
+  lock="$SB_HOME/locks/$id.lock"
+  if [[ ! -e "$lock" ]] || flock -n "$lock" true; then
+    target="$(jq -r '.targetId // empty' "$lease" 2>/dev/null || true)"
+    # Each account profile has its own CDP port; the lease records which one.
+    lcdp="$(jq -r '.cdp // empty' "$lease" 2>/dev/null || true)"
+    lcdp="${lcdp:-$cdp}"
+    # Same format check as isTargetId in lib/proxy.mjs: the id goes into a CDP URL.
+    if [[ "$target" =~ ^[A-Za-z0-9]{1,64}$ ]]; then
+      curl -s -m 5 "http://127.0.0.1:$lcdp/json/close/$target" >/dev/null || true
+    fi
+    AGENT_BROWSER_CDP="$lcdp" timeout 15 "$ab" --session "$id" close >/dev/null 2>&1 || true
+    rm -f "$lease" "$lock"
+    note reaped-dead "$id"
+  elif (( now - $(stat -c %Y "$lease") > idle )); then
+    pid="$(jq -r '.pid // empty' "$lease" 2>/dev/null || true)"
+    [[ -n "$pid" ]] && kill -TERM "$pid" 2>/dev/null || true
+    note reaped-idle "$id"
+  fi
+done
+
+# Lock files of clients that never made a browser call and then died.
+for lock in "$SB_HOME"/locks/*.lock; do
+  id="$(basename "$lock" .lock)"
+  [[ -e "$SB_HOME/leases/$id.json" ]] && continue
+  flock -n "$lock" true && rm -f "$lock"
+done
+exit 0
