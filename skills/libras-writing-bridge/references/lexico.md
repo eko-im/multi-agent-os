@@ -90,7 +90,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | de mão beijada | de graça, fácil |
 | de nariz empinado | arrogante |
 | estar com a corda no pescoço | estar em situação difícil |
-| estar com a macaca | estar com azar |
+| estar com a macaca | estar muito agitado ou irritado |
 | estar de cara | estar presente |
 | estar de saco cheio | estar cansado, irritado |
 | estar na pindaíba | estar sem dinheiro |
@@ -244,7 +244,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | sendo assim | então |
 | tendo em vista | considerando |
 | vale ressaltar | é importante dizer |
-| vez que | porque |
+| uma vez que | porque |
 | via de regra | normalmente |
 
 ## Simplificações de vocabulário
