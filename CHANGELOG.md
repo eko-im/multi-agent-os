@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed — `libras-writing-bridge` v0.1.1: PII refusal, opt-in avatar, lexicon sense fixes, round-trip check
 
-- Mode `escrever` refuses to include secrets, credentials or our/third-party PII
-  even when asked; points to the type and does not repeat the value (R1).
+- Mode `escrever` always refuses secrets, credentials, access codes and
+  document numbers. Other PII enters a draft only when it is the necessary
+  subject, belongs to the recipient or the sending human (never a third
+  party), and that human asked for it explicitly; the type is marked and
+  the value is repeated under "Confirmar com a pessoa" (R1, refined).
 - External avatar links (VLibras, Hand Talk) require an explicit operator opt-in
   and a passing PII check; never attached by default (R2).
 - If a Deaf person sends their own secret or PII for safekeeping, recommend

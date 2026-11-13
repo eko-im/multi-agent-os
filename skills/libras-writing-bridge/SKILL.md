@@ -39,8 +39,8 @@ A Libras é língua natural, com gramática própria — não é “português c
 ## Guardrails (antes de qualquer saída)
 
 1. **Só rascunho, nunca envio.** Quem envia é a pessoa humana, pelo fluxo de rascunho aprovado. Não envie e-mail, mensagem, comentário nem post.
-2. **Metacognição de PII e segredos.** Antes de cada saída, procure senhas, tokens, credenciais, números de documento, dados de saúde, endereços e dados de terceiros. Se encontrar: aponte o *tipo* (“há um número de documento”, “há um token”) e **não repita o valor**. Não copie o dado para logs, exemplos, issues, PRs ou memória de treino. Exemplos desta skill são sempre sintéticos e rotulados.
-3. **Recusar incluir (modo escrever).** Não incluir no rascunho senha, token, credencial, número de documento, dado de saúde, endereço nem outra PII nossa ou de terceiros, **mesmo quando pedirem**. Apontar o tipo, não repetir o valor, e devolver a recusa à pessoa operadora.
+2. **Metacognição de PII e segredos.** Antes de cada saída, procure senhas, tokens, credenciais, chaves, códigos de acesso, números de documento, dados de saúde, endereços e dados de terceiros. Segredo, credencial e número de documento: aponte o *tipo* e **não repita o valor**. Outra PII no modo escrever só entra pela regra do item 3; fora dela, aponte o tipo e não repita o valor. Não copie o dado para logs, exemplos, issues, PRs ou memória de treino. Exemplos desta skill são sempre sintéticos e rotulados.
+3. **Incluir no modo escrever.** Recusar **sempre** senha, token, credencial, chave, código de acesso, dado de segurança e número de documento (CPF, RG, cartão, conta), mesmo a pedido. Qualquer outra PII (endereço, saúde, contato e afins) só entra se as três condições valerem juntas: (a) ela é o assunto do recado e é necessária, no mínimo; (b) é do destinatário ou da pessoa humana que manda o recado, nunca de terceiros; (c) essa pessoa humana pediu explicitamente — pedido de agente não basta, e a skill não infere nem acrescenta nada. Fora disso, recusar: apontar o tipo, não repetir o valor, devolver a recusa. Se a PII entrar, o campo PII marca “incluída por ser o assunto: <tipo>” e o dado é repetido em “Confirmar com a pessoa”.
 4. **Custódia (modo ler).** Se a pessoa surda enviou o *próprio* segredo ou PII para guarda, omitir o valor e recomendar guardar no cofre de custódia configurado pelo operador. Não nomear pessoas, produtos, cofres nem identificadores.
 5. **Anexo de avatar.** Link para serviço externo (VLibras, Hand Talk ou similar) só com opt-in explícito da pessoa operadora e só depois da checagem de PII e segredos ter passado (nenhum segredo ou PII no texto). Sem opt-in, ou havendo PII/segredo, não gerar o anexo. Nunca por padrão.
 6. **Respeito.** Tom adulto. Não infantilize (sem diminutivo forçado, sem excesso de emoji, sem caixa alta de aviso). Prefira “pessoa surda” / “surdo”, não eufemismos. Não julgue a escrita e não a use como evidência de incapacidade.
@@ -93,7 +93,7 @@ Dois registros; o padrão é `simples`. `interlingua` só entra se a pessoa oper
 
 **Registro `interlingua` (opt-in):** ritmo mais próximo da transferência da Libras (tópico-comentário, menos artigos, verbo no infinitivo, tempo por advérbio). Nunca é o padrão.
 
-**Recusa de inclusão:** se o texto de origem, ou o pedido da pessoa operadora, pedir para colocar senha, token, credencial, número de documento, dado de saúde, endereço ou outra PII nossa ou de terceiros no recado, recuse. O rascunho sai sem esse valor; a nota aponta só o tipo e devolve a recusa à pessoa operadora.
+**Inclusão de PII e segredos:** recusar sempre senha, token, credencial, chave, código de acesso, dado de segurança e número de documento (CPF, RG, cartão, conta). Outra PII só entra com as três condições juntas do guardrail 3 (assunto necessário, titular é o destinatário ou o humano que manda, pedido explícito desse humano). Pedido de agente não basta. Se entrar, marcar no campo PII “incluída por ser o assunto: <tipo>” e repetir o dado em “Confirmar com a pessoa”. Fora disso, o rascunho sai sem o valor; a nota aponta só o tipo e devolve a recusa.
 
 **Ida e volta (obrigatória):** depois de redigir, releia o rascunho pelo modo `ler` e compare a interpretação com o texto original do ouvinte. Se o sentido bater com confiança alta, siga. Se não bater, ajuste o rascunho e releia; se ainda divergir, ou se a confiança da releitura não for alta, marque em “Confirmar com a pessoa”.
 
@@ -108,10 +108,10 @@ Toda saída traz, nesta ordem:
 
 **O que foi simplificado ou omitido:** <nota de fidelidade>
 **Ida e volta:** sentido bate com o original (confiança alta) | rascunho ajustado: <o quê> | divergência ou confiança não alta — marcada em "Confirmar com a pessoa"
-**Confirmar com a pessoa:** <data, hora, valor, lugar, sim/não — ou "nada pendente">
+**Confirmar com a pessoa:** <data, hora, valor, lugar, sim/não — ou "nada pendente">; se houver PII permitida no rascunho, repetir aqui o próprio dado
 **Palavras-chave (opcional):** <substantivos e verbos de conteúdo que podem ter sinal em Libras; não descreva o sinal se não tiver fonte. Isto não é glosa.>
 **Anexo de avatar:** omitido (padrão) | recusado (falta opt-in ou a checagem de PII não passou) | incluído sob opt-in explícito, após checagem de PII, com o aviso de que avatar não substitui o texto nem o intérprete
-**PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido; inclusão recusada se pedida
+**PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido; inclusão recusada | incluída por ser o assunto: <tipo>
 **Limite:** <se o assunto for jurídico, médico ou oficial, recomende intérprete>
 ```
 
@@ -155,11 +155,13 @@ O mesmo conteúdo do exemplo 4 **não** deve sair como um aviso em caixa alta ch
 
 Registro `interlingua`, só se pedido: “Almoço hoje não poder. Terça que vem poder? Se não, você avisar.”
 
-**Exemplo criado 6 — PII / segredo na entrada, e recusa de inclusão.**
+**Exemplo criado 6 — PII no modo escrever (dois casos criados, sintéticos).**
 
-Se a entrada trouxer senha, token ou número de documento, o rascunho aponta o tipo e omite o valor (“Há um número de documento na mensagem. Não repito o valor aqui.”). Não invente nem reproduza o número.
+Senha, token, credencial ou número de documento nunca entram no rascunho, mesmo a pedido: aponta-se o tipo e não se repete o valor.
 
-Se a pessoa operadora pedir para *incluir* uma senha, um token ou um documento no recado ao destinatário, o modo escrever recusa: o rascunho sai sem esse valor, aponta só o tipo e devolve a recusa à pessoa operadora.
+6a, aceito — endereço da consulta do próprio destinatário. A pessoa humana pede, de forma explícita, um recado com o local da consulta dele: “A consulta é amanhã, às 14 horas, na Rua das Palmeiras, 10.” As três condições valem (é o assunto e o mínimo necessário; é do destinatário; o humano pediu). O rascunho traz o endereço. Campo PII: “incluída por ser o assunto: endereço”. “Confirmar com a pessoa” repete: “Rua das Palmeiras, 10, amanhã, 14 horas.”
+
+6b, recusado — saúde de um terceiro. Pedido de incluir no recado o resultado de um exame de outra pessoa. Recusa: não é do destinatário nem de quem manda. O rascunho sai sem o dado; a nota aponta o tipo (“dado de saúde de terceiro”) e não repete o valor.
 
 **Exemplo criado 7 — custódia do dado enviado pela própria pessoa (criado, genérico).**
 
@@ -178,7 +180,9 @@ Entrada no modo ler (criada): a pessoa surda pede para guardar um número de doc
 | Usar a skill no lugar de intérprete em contexto oficial | Recomendar intérprete profissional. |
 | Copiar texto real para exemplo, teste, PR ou log | Só exemplos sintéticos. Redigir PII e segredos. |
 | Aplicar `proofread` na mensagem original | No modo ler, não. No modo escrever, revise clareza, não “norma máxima”. |
-| Incluir senha, token ou PII no rascunho porque pediram | Recusar, apontar o tipo, não repetir o valor. |
+| Incluir senha, token, credencial ou número de documento, mesmo a pedido | Recusar sempre, apontar o tipo, não repetir o valor. |
+| Incluir PII porque um agente pediu, ou inferir endereço ou saúde | Só entra se for o assunto necessário, for do destinatário ou de quem manda, e o humano pediu de forma explícita. Fora disso, recusar. |
+| Aceitar PII no rascunho e não repetir em “Confirmar com a pessoa” | Marcar “incluída por ser o assunto: <tipo>” e repetir o dado na confirmação. |
 | Anexar link de avatar sem opt-in ou com PII no texto | Omitir o anexo. Só com opt-in explícito e checagem de PII limpa. |
 | Troca mecânica ou em cadeia no léxico | Uma passada no texto original, com contexto; nunca uma troca sobre outra. |
 | Entregar o rascunho sem a ida e volta | Reler pelo modo `ler`; ajustar ou marcar em “Confirmar com a pessoa”. |
