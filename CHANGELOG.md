@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — gitleaks default rules are part of the gate
+
+- `.gitleaks.toml` sets `[extend] useDefault = true`. Built-in rules, including `github-pat` and `aws-access-token`, now run with the `app-*` rules. Downstream copies of this config fail closed on those patterns. Fixtures that the built-in rules flag are synthetic or assembled at runtime; paths are not allowlisted to hide them. The URI and password-assignment rules also have no entropy floor, and the uppercase-constant allowlist is case-sensitive, so a short or lowercase alphanumeric secret is no longer silent.
+- `.gitleaksignore` lists measured commit fingerprints (`commit:file:rule:line`) for historical fixture, example, hash, and other false positives (triage 2026-11-13 added 184, one per finding, never by path). Gitleaks 8.30.1 ignores a `fingerprints` key inside `[allowlist]` without warning, so the lines live in this file. Possible real findings in `step1010_logs.txt`, `step1012_fly_deploy_logs.txt`, and `docs/insights/secret-management-strategy.md` are not ignored.
+
 ### Changed — `libras-writing-bridge` v0.1.1: PII refusal, opt-in avatar, lexicon sense fixes, round-trip check
 
 - Mode `escrever` always refuses secrets, credentials, access codes and
@@ -584,7 +589,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Carries `§How a rule enters this asset`: a cause measured at source may be written as fact; a cause **inferred from tool output is a `HYPOTHESIS`** and ships labelled. The section names the empirical breach that produced it — a round asserted a ~40k-token fixed overhead that a delegated measurement put at ~18k, and reported a gateway down while it was answering; both were inferences presented as measurements.
 - Forged through `agentic-tool-pipeline` (Stage-0 → bare INTENT → `agentic-tool-forge`; Stage-1 measured no duplicate in the corpus; Stage-2/3 converged **type = skill**, rejecting command/rule/agent); named via `anima` agent-register, rejecting `virtuous-cycle`, `hotl-loop` and `cvp-hotl`. Seven design corrections recorded as D1–D7. `dogfood_status: pending-first-cycle` — zero real cycles; promotion is `dogfood-ledger`'s call.
 - `skills/README.md` lists it (95 tracked skills) and adds it to the **Loops & recovery** family.
-
 ### Added — `/hitl-digest` thin command
 
 - `commands/hitl-digest.md`: thin `/hitl-digest` slash command over the `synopsis-panel` engine (`synopsis-fuse.py --hitl-only`). Renders the HITL DIGEST on demand — only the human-attention gates (credential, spend, irreversible, external-send, business), ⏫ high-severity and 👤 human-domain first. Reimplements nothing: it delegates rendering to `synopsis-fuse.py` and the ledger to the external `punch-list.md` SSOT; read-only. The engine path resolves from `CLAUDE_PLUGIN_ROOT` (with a git-root fallback), and the pure digest short-circuits aggregation with an empty compass so it never blocks on `work-compass`.
