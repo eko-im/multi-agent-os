@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — `libras-writing-bridge` v0.1.1: PII refusal, opt-in avatar, lexicon sense fixes, round-trip check
+
+- Mode `escrever` refuses to include secrets, credentials or our/third-party PII
+  even when asked; points to the type and does not repeat the value (R1).
+- External avatar links (VLibras, Hand Talk) require an explicit operator opt-in
+  and a passing PII check; never attached by default (R2).
+- If a Deaf person sends their own secret or PII for safekeeping, recommend
+  storing it in the operator-configured custody vault, with no product, person
+  or vault identifiers in the skill text (R3).
+- Lexicon: correct or remove sense-changing entries and forbid chained or
+  mechanical substitution (R4).
+- After drafting, re-read the draft in mode `ler` and check fidelity to the
+  source; adjust or flag if the sense does not match (R5).
+- Description triggers now include "surdo", "pessoa surda", "deficiente
+  auditivo" and "mensagem para pessoa surda"; "linguagem simples" only when
+  the reader is Deaf (R6).
+
 ### Added — `libras-writing-bridge` v0.1.0: Ponte de Escrita Surda (Libras)
 
 - `skills/libras-writing-bridge/` (new): draft-only bidirectional bridge between

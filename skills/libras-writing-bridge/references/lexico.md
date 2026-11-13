@@ -4,7 +4,7 @@ Este arquivo é o léxico genérico usado no **modo escrever** da skill `libras-
 
 ## Origem e licença
 
-Reaproveitado, com adaptação de formato, das listas `IDIOMS` (190 entradas) e `SIMPLIFICATIONS` (55 entradas) em:
+Reaproveitado, com adaptação de formato, das listas `IDIOMS` (188 entradas) e `SIMPLIFICATIONS` (50 entradas) em:
 
 - projeto de origem: Akasha Ekora
 - caminho de origem: `skills/libras-accessibility/src/index.ts`
@@ -14,11 +14,12 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 
 ## Como aplicar
 
-1. Substitua primeiro as expressões idiomáticas, das mais longas para as mais curtas, para não cortar locuções no meio.
-2. Depois substitua os formalismos e estrangeirismos desta lista, só em palavra inteira. Se a troca mudar a classe gramatical ou a construção da frase (por exemplo, “não obstante a falta de documentos” não vira “porém a falta de documentos”), reescreva o trecho inteiro para permanecer gramatical.
-3. Não aplique substituições mecânicas se o sentido literal for o pretendido (por exemplo, “enrolar” como enrolar um cabo), nem se o equivalente da tabela distorcer o sentido no contexto: nesse caso, reescreva pelo sentido ou peça confirmação.
-4. Registre o que mudou na nota de fidelidade do rascunho.
-5. Não use este léxico para reescrever a mensagem original da pessoa no modo ler.
+1. O léxico é um auxílio de sentido, não um substitutor automático. Leia o contexto antes de qualquer troca. Se o sentido literal for o pretendido (por exemplo, “enrolar” como enrolar um cabo), ou se o equivalente da tabela distorcer o sentido, a classe gramatical ou a construção (“não obstante a falta de documentos” não vira “porém a falta de documentos”), reescreva o trecho inteiro ou peça confirmação — não troque mesmo assim.
+2. É proibida a substituição mecânica: não aplicar uma troca só porque a chave aparece na tabela, sem olhar o enunciado.
+3. É proibida a substituição em cadeia: não aplicar uma troca sobre o resultado de outra. Uma passada só, sobre o texto original, das locuções mais longas para as mais curtas. Se duas chaves se sobrepuserem, vale a mais longa no texto original. O equivalente já deve ser a forma final (por exemplo, “doravante” e “a partir de agora” vão direto para “de agora em diante”, sem passar um pelo outro; “em consonância com” vai direto para “conforme”).
+4. Formalismos e estrangeirismos: só em palavra ou locução inteira.
+5. Registre o que mudou na nota de fidelidade do rascunho.
+6. Não use este léxico para reescrever a mensagem original da pessoa no modo ler.
 
 ## Expressões idiomáticas e formalismos
 
@@ -210,7 +211,6 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | a fim de | para |
 | a nível de | no/na |
 | a par disso | além disso |
-| a princípio | no início |
 | a título de | como |
 | ao passo que | enquanto |
 | com vistas a | para |
@@ -220,7 +220,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | de sorte que | de forma que |
 | devido ao fato de | porque |
 | diante do exposto | por isso |
-| em consonância com | de acordo com |
+| em consonância com | conforme |
 | em decorrência de | por causa de |
 | em face de | diante de |
 | em função de | por causa de |
@@ -238,13 +238,12 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | outrossim | também |
 | por conseguinte | então |
 | por intermédio de | por meio de |
-| por ora | agora |
+| por ora | por enquanto |
 | posto que | embora |
 | sem prejuízo de | sem afetar |
 | sendo assim | então |
 | tendo em vista | considerando |
 | vale ressaltar | é importante dizer |
-| uma vez que | porque |
 | via de regra | normalmente |
 
 ## Simplificações de vocabulário
@@ -260,18 +259,15 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | solicitamos | pedimos |
 | solicitou | pediu |
 | solicitado | pedido |
-| disponibilizar | dar, oferecer |
+| disponibilizar | oferecer |
 | viabilizar | permitir |
 | implementar | colocar em prática |
 | otimizar | melhorar |
 | priorizar | dar prioridade |
 | customizar | personalizar |
 | agendar | marcar |
-| cancelar | desmarcar |
 | postergar | adiar |
-| antecipar | adiantar |
-| colaboradores | funcionários |
-| usuários | pessoas |
+| usuários | pessoas que usam |
 | beneficiários | pessoas que recebem |
 | procedimento | processo |
 | metodologia | método |
@@ -281,16 +277,14 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | deadline | prazo |
 | briefing | resumo |
 | meeting | reunião |
-| call | ligação |
 | eventualmente | talvez, se indicar possibilidade; às vezes, se indicar frequência (escolha pelo contexto) |
 | basicamente | de forma simples |
-| literalmente | ao pé da letra |
 | obviamente | claro |
 | certamente | com certeza |
 | infelizmente | é triste, mas |
 | felizmente | que bom, |
 | porventura | talvez |
-| doravante | a partir de agora |
+| doravante | de agora em diante |
 | destarte | assim |
 | mormente | principalmente |
 | uma série de | vários |
@@ -300,7 +294,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | em grande quantidade | muito |
 | no momento atual | agora |
 | neste momento | agora |
-| a partir de agora | agora |
+| a partir de agora | de agora em diante |
 | em breve | logo |
 | brevemente | logo |
 | futuramente | depois |
