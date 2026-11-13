@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `libras-writing-bridge` v0.1.0: Ponte de Escrita Surda (Libras)
+
+- `skills/libras-writing-bridge/` (new): draft-only bidirectional bridge between
+  standard written Portuguese and Portuguese written with Libras influence
+  (mode `ler`: interpretation with confidence and marked ambiguity; mode
+  `escrever`: simple adult L2 Portuguese, with an opt-in interlanguage register).
+- Ports the generic idiom and formal-vocabulary lists from
+  the Akasha Ekora skill `libras-accessibility` (MIT); does not port
+  emoji packaging, tests, or personal fixtures.
+- Does not replace a professional Libras interpreter in legal, medical, or
+  official contexts.
+
 ### Changed — `session-wrapup` v0.5.0: covers the operator's wrap-up prompt v5
 
 - Two modes: `recall` (triggers recall · refresh · recap · retomada; Steps 0-4d + Report, no

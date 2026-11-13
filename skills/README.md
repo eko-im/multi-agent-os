@@ -4,9 +4,9 @@
 
 This folder contains reusable Agent Skills for the Multi-Agent OS framework. Skills follow the [Agent Skills open standard](https://agentskills.io) (SKILL.md format) and are compatible with 30+ AI tools including Claude Code, Cursor, Codex, Gemini CLI, Kiro, VS Code, GitHub Copilot, Goose, and others.
 
-> **Inventory provenance**: the 2026-08-25 refresh generated 87 rows from skill frontmatter `description`; `openrig-concierge` was added by hand 2026-09-23, `harness-concierge` by hand 2026-09-24, and `roadmap-tree-projector` on 2026-09-24. **Current snapshot 2026-10-08**: the table lists 93 git-tracked top-level skills (`person-agent-creator` added by hand 2026-10-08), including `live-session-continuity-recovery` and `session-to-vault`; `spec-backlog-ticket-reconciler` added by hand 2026-10-13 brings it to 94, and `ratchet-loop` by hand 2026-10-25 to 95; `claude-concierge` (successor, old name kept as an alias) on 2026-10-26 brings it to 96, and `fleet-campaign` by hand 2026-10-21 to 97, `virtuous-spiral` by hand 2026-10-25 to 98, and `verified-agentic-session-model` (by hand 2026-10-19, PR #421) to 99, and `instrument-self-heal-relay` by hand 2026-10-30 to 100, and `session-catalog` (added by hand 2026-09-24 on its branch, landed 2026-10-30) to 101. The dependency graph covers the session/agentic-tool/governance core families (edges extracted from `maos:` refs, `[[wikilinks]]`, `skills/` path refs in SKILL.md bodies); it is not an exhaustive dependency inventory.
+> **Inventory provenance**: the 2026-08-25 refresh generated 87 rows from skill frontmatter `description`; `openrig-concierge` was added by hand 2026-09-23, `harness-concierge` by hand 2026-09-24, and `roadmap-tree-projector` on 2026-09-24. **Current snapshot 2026-10-08**: the table lists 93 git-tracked top-level skills (`person-agent-creator` added by hand 2026-10-08), including `live-session-continuity-recovery` and `session-to-vault`; `spec-backlog-ticket-reconciler` added by hand 2026-10-13 brings it to 94, and `ratchet-loop` by hand 2026-10-25 to 95; `claude-concierge` (successor, old name kept as an alias) on 2026-10-26 brings it to 96, and `fleet-campaign` by hand 2026-10-21 to 97, `virtuous-spiral` by hand 2026-10-25 to 98, and `verified-agentic-session-model` (by hand 2026-10-19, PR #421) to 99, and `instrument-self-heal-relay` by hand 2026-10-30 to 100, and `session-catalog` (added by hand 2026-09-24 on its branch, landed 2026-10-30) to 101, and `session-wrapup` (by hand 2026-11-05, PR #570) to 102, and `libras-writing-bridge` (Ponte de Escrita Surda (Libras), added by hand 2026-11-13) to 103. The dependency graph covers the session/agentic-tool/governance core families (edges extracted from `maos:` refs, `[[wikilinks]]`, `skills/` path refs in SKILL.md bodies); it is not an exhaustive dependency inventory.
 
-## Available Skills (102)
+## Available Skills (103)
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
@@ -59,6 +59,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `hierarchical-merge` | `hierarchical-merge/SKILL.md` | Enforce hierarchical merge protocol - branches merge to parent, not directly to main |
 | `ichnos` | `ichnos/SKILL.md` | Use to apply Google-Analytics-style usage analytics to our OWN agentic-tools corpus — attribution (how was a skill actually reached: a direct /command |
 | `lens-dispatch` | `lens-dispatch/SKILL.md` | Deterministic dispatcher of cognitive lens-stacks per work-graph node. |
+| `libras-writing-bridge` | `libras-writing-bridge/SKILL.md` | Use when interpreting written Portuguese from a Deaf Libras user, or when drafting a simple adult Portuguese message for a Deaf reader. Draft only; not a sign-language interpreter. |
 | `live-session-continuity-recovery` | `live-session-continuity-recovery/SKILL.md` | Reconstruct the exact active conversation's intent and current work state with source-coverage checks, ordered corrections, evidence, a bounded review, and one next action after context loss. |
 | `maos-concierge` | `maos-concierge/SKILL.md` | Concierge / onboarding / guide / router / capability-detector / governance-anchor for the ENTIRE Multi-Agent OS (MAOS) framework — its agents, skills, |
 | `memory-gateway` | `memory-gateway/SKILL.md` | Use when creating, updating, superseding, archiving, reading, searching, or walking the persistent memory corpus. |
@@ -126,6 +127,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 - **Loops & recovery**: `ooda-loop` · `gap-loop` · `ratchet-loop` · `virtuous-spiral` · `goal-recovery` · `live-session-continuity-recovery` · `auto-pilot`
 - **Fleet & bulk convergence**: `fleet-campaign` (Classis — N resources → one declared config state, measured rounds) · `work-drain` (tracker register → DONE) · `repo-custody-transfer` (ONE repo, host→host)
 - **Founder journey**: `founder-playbook` · `founder-stage-idea` · `founder-stage-mvp` · `founder-stage-launch` · `founder-stage-scale`
+- **Content & language**: `content-recast` · `proofread` · `transcript-corrector` · `libras-writing-bridge` (Ponte de Escrita Surda (Libras) — draft-only written bridge, not a sign interpreter)
 - **Specification & backlog**: `spec-backlog-ticket-reconciler` · `sprint-carryover` · `work-drain`
 - **Roadmap & prioritization**: `roadmap-tree-projector` · `eisenhower-matrix` · `work-compass`
 
