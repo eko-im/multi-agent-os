@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (mode `ler`: interpretation with confidence and marked ambiguity; mode
   `escrever`: simple adult L2 Portuguese, with an opt-in interlanguage register).
 - Ports the generic idiom and formal-vocabulary lists from
-  `ekson73/akasha-ekora` `skills/libras-accessibility` (MIT); does not port
+  the Akasha Ekora skill `libras-accessibility` (MIT); does not port
   emoji packaging, tests, or personal fixtures.
 - Does not replace a professional Libras interpreter in legal, medical, or
   official contexts.

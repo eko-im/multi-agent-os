@@ -32,7 +32,7 @@ A Libras é língua natural, com gramática própria — não é “português c
 
 **When NOT to use**
 
-- Traduzir vídeo em Libras, gerar glosa como produto principal ou acionar avatar (VLibras, Hand Talk e afins só entram como anexo opcional ao rascunho).
+- Traduzir vídeo em Libras, gerar glosa como produto principal ou acionar avatar (um serviço opcional de avatar de Libras só entra como anexo ao rascunho).
 - “Ensinar português”, revisar a escrita da pessoa como prova ou devolver uma versão “certinha” da mensagem original.
 - Assunto jurídico, médico, escolar oficial ou outro ato formal: produza no máximo um rascunho de apoio e recomende intérprete profissional de Libras. A skill não fala em nome da comunidade surda.
 
@@ -72,7 +72,7 @@ Saída obrigatória, nesta ordem:
 **PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido
 ```
 
-Confiança baixa: diga o que a pessoa operadora deve confirmar antes de qualquer rascunho de resposta. Se pedirem resposta, vá ao modo `escrever` — em rascunho. Não use a skill `proofread` sobre o texto original da pessoa.
+Confiança baixa: diga o que a pessoa operadora deve confirmar e não redija resposta de conteúdo enquanto a leitura não for confirmada. Se pedirem resposta antes disso, o único rascunho permitido é um pedido de esclarecimento (qual das leituras vale). Não use a skill `proofread` sobre o texto original da pessoa.
 
 ## Modo `escrever` (ouvinte → destinatário surdo)
 
@@ -101,7 +101,7 @@ Toda saída traz, nesta ordem:
 **O que foi simplificado ou omitido:** <nota de fidelidade>
 **Confirmar com a pessoa:** <data, hora, valor, lugar, sim/não — ou "nada pendente">
 **Palavras-chave (opcional):** <substantivos e verbos de conteúdo que podem ter sinal em Libras; não descreva o sinal se não tiver fonte. Isto não é glosa.>
-**Anexo opcional:** <link para leitura em avatar (VLibras ou Hand Talk), com o aviso de que avatar não substitui o texto nem o intérprete — ou omita>
+**Anexo opcional:** <link para leitura em um serviço de avatar de Libras, com o aviso de que avatar não substitui o texto nem o intérprete — ou omita>
 **PII / segredos:** nenhum encontrado | apontado o tipo, valor omitido
 **Limite:** <se o assunto for jurídico, médico ou oficial, recomende intérprete>
 ```
@@ -170,4 +170,4 @@ Esta skill não lê vídeo de sinais, não certifica glosa e não substitui int�
 
 ## Proveniência
 
-O léxico de expressões e simplificações e as regras gerais de clareza (frases curtas, sem idioma nem sarcasmo) foram reaproveitados da skill `libras-accessibility` no repositório `ekson73/akasha-ekora` (MIT): `skills/libras-accessibility/src/index.ts` e `skills/libras-accessibility/SKILL.md`. O mapa de emojis, a formatação em caixa alta, testes e quaisquer artefatos pessoais daquela origem **não** foram portados. Detalhe e tabelas: `references/lexico.md`.
+O léxico de expressões e simplificações e as regras gerais de clareza (frases curtas, sem idioma nem sarcasmo) foram reaproveitados da skill `libras-accessibility` do projeto Akasha Ekora (licença MIT): `skills/libras-accessibility/src/index.ts` e `skills/libras-accessibility/SKILL.md`. O mapa de emojis, a formatação em caixa alta, testes e quaisquer artefatos pessoais daquela origem **não** foram portados. Detalhe e tabelas: `references/lexico.md`.

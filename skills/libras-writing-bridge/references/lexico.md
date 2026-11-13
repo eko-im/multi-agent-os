@@ -6,7 +6,7 @@ Este arquivo é o léxico genérico usado no **modo escrever** da skill `libras-
 
 Reaproveitado, com adaptação de formato, das listas `IDIOMS` (190 entradas) e `SIMPLIFICATIONS` (55 entradas) em:
 
-- repositório `ekson73/akasha-ekora`
+- projeto de origem: Akasha Ekora
 - caminho de origem: `skills/libras-accessibility/src/index.ts`
 - licença MIT, declarada em `skills/libras-accessibility/package.json` e no `SKILL.md` da mesma skill
 
@@ -15,7 +15,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 ## Como aplicar
 
 1. Substitua primeiro as expressões idiomáticas, das mais longas para as mais curtas, para não cortar locuções no meio.
-2. Depois substitua os formalismos e estrangeirismos desta lista, só em palavra inteira.
+2. Depois substitua os formalismos e estrangeirismos desta lista, só em palavra inteira. Se a troca mudar a classe gramatical ou a construção da frase (por exemplo, “não obstante a falta de documentos” não vira “porém a falta de documentos”), reescreva o trecho inteiro para permanecer gramatical.
 3. Não aplique substituições mecânicas se o sentido literal for o pretendido (por exemplo, “enrolar” como enrolar um cabo).
 4. Registre o que mudou na nota de fidelidade do rascunho.
 5. Não use este léxico para reescrever a mensagem original da pessoa no modo ler.
@@ -282,7 +282,7 @@ As regras gerais reaproveitadas (frases curtas, vocabulário comum, evitar idiom
 | briefing | resumo |
 | meeting | reunião |
 | call | ligação |
-| eventualmente | talvez |
+| eventualmente | talvez, se indicar possibilidade; às vezes, se indicar frequência (escolha pelo contexto) |
 | basicamente | de forma simples |
 | literalmente | realmente |
 | obviamente | claro |
