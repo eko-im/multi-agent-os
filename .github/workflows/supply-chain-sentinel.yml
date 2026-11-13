@@ -135,8 +135,11 @@ jobs:
           # Use the repo's .gitleaks.toml unchanged (it already has [extend]).
           # Full history plus merge diffs; --exit-code 1 fails the job on findings;
           # --redact keeps secret values out of logs. Same pin as the canary job.
+          # Do not use --diff-filter with lowercase letters: git treats those
+          # as exclusions, so `d` would skip deleted files and miss secrets
+          # that were committed and later removed.
           "$RUNNER_TEMP/gitleaks" git . --config .gitleaks.toml \
-            --log-opts="--full-history --all --diff-filter=tuxdb --diff-merges=first-parent" \
+            --log-opts="--full-history --all --diff-merges=first-parent" \
             --no-banner --redact --verbose --exit-code 1
 
   gitleaks-config-contract:
