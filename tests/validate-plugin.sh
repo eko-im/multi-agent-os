@@ -163,6 +163,22 @@ else
 fi
 echo ""
 
+# Delegation rules live in skills/agentic-delegation (SSOT): this test fails when
+# another file restates a different depth cap or the SSOT loses the
+# authority-inheritance rule / never-delegable list.
+DAS_TEST="$PLUGIN_ROOT/tests/governance/test-delegation-authority-ssot.sh"
+if [ ! -f "$DAS_TEST" ]; then
+    fail "tests/governance/test-delegation-authority-ssot.sh missing"
+elif [ ! -x "$DAS_TEST" ]; then
+    fail "tests/governance/test-delegation-authority-ssot.sh is not executable"
+elif DAS_OUT="$(bash "$DAS_TEST" "$PLUGIN_ROOT" 2>&1)"; then
+    pass "tests/governance/test-delegation-authority-ssot.sh passes"
+else
+    fail "tests/governance/test-delegation-authority-ssot.sh FAILED:"
+    printf '%s\n' "$DAS_OUT" | grep -E '✗|FAIL' | tail -10 | sed 's/^/      /'
+fi
+echo ""
+
 # Every artifact the loops below actually visit is recorded here (repo-relative) so the
 # reach assertion at the end can PROVE the walk did not under-reach. #337 fixed the
 # reach; this makes a future regression impossible to land silently. See #336.
@@ -451,18 +467,39 @@ if [ -x "$DELEGATE_CLI" ]; then
     fi
 
     # Simulated cross-provider contexts (env-isolated so ambient $TICKET can't skew)
-    H1=$(env -u TICKET bash "$DELEGATE_CLI" init --ticket=VKS-1706 --provider=bitbucket 2>/dev/null)
+    H1=$(env -u TICKET MAOS_JIRA_KEY_PREFIXES="PROJ OPS" bash "$DELEGATE_CLI" init --ticket=PROJ-1706 --provider=bitbucket 2>/dev/null)
     if echo "$H1" | grep -q "^TICKET_PROVIDER=jira$" && echo "$H1" | grep -q "^VCS_PROVIDER=bitbucket$"; then
         pass "delegate.sh detects jira+bitbucket context"
     else
         fail "delegate.sh should detect jira+bitbucket"
     fi
 
-    H2=$(env -u TICKET bash "$DELEGATE_CLI" init --ticket=VKO-88 --provider=github 2>/dev/null)
+    H1C=$(env -u TICKET MAOS_JIRA_KEY_PREFIXES="PROJ,OPS" bash "$DELEGATE_CLI" init --ticket=OPS-9 --provider=none 2>/dev/null)
+    if echo "$H1C" | grep -q "^TICKET_PROVIDER=jira$"; then
+        pass "delegate.sh accepts comma-separated Jira prefixes"
+    else
+        fail "delegate.sh should accept comma-separated Jira prefixes"
+    fi
+
+    H2=$(env -u TICKET MAOS_LINEAR_KEY_PREFIXES="ENG" bash "$DELEGATE_CLI" init --ticket=ENG-88 --provider=github 2>/dev/null)
     if echo "$H2" | grep -q "^TICKET_PROVIDER=linear$" && echo "$H2" | grep -q "^VCS_PROVIDER=github$"; then
         pass "delegate.sh detects linear+github context"
     else
         fail "delegate.sh should detect linear+github"
+    fi
+
+    H2C=$(env -u TICKET MAOS_LINEAR_KEY_PREFIXES="ENG,DES" bash "$DELEGATE_CLI" init --ticket=DES-2 --provider=none 2>/dev/null)
+    if echo "$H2C" | grep -q "^TICKET_PROVIDER=linear$"; then
+        pass "delegate.sh accepts comma-separated Linear prefixes"
+    else
+        fail "delegate.sh should accept comma-separated Linear prefixes"
+    fi
+
+    H4=$(env -u TICKET -u MAOS_JIRA_KEY_PREFIXES -u MAOS_LINEAR_KEY_PREFIXES bash "$DELEGATE_CLI" init --ticket=PROJ-1706 --provider=none 2>/dev/null)
+    if echo "$H4" | grep -q "^TICKET_PROVIDER=auto$"; then
+        pass "delegate.sh treats unconfigured key prefixes as auto (no hard-coded org keys)"
+    else
+        fail "delegate.sh should not hard-code ticket key prefixes"
     fi
 
     H3=$(env -u TICKET bash "$DELEGATE_CLI" init --provider=none 2>/dev/null)
@@ -470,6 +507,13 @@ if [ -x "$DELEGATE_CLI" ]; then
         pass "delegate.sh handles no-ticket/no-remote fallback"
     else
         fail "delegate.sh should handle no-ticket fallback"
+    fi
+
+    HELP_OUT=$(bash "$DELEGATE_CLI" --help 2>&1 || true)
+    if printf '%s\n' "$HELP_OUT" | grep -F '\n' >/dev/null; then
+        fail "delegate.sh usage prints a literal backslash-n"
+    else
+        pass "delegate.sh usage does not print a literal backslash-n"
     fi
 
     # Invalid --provider must be rejected (exit 2)
@@ -683,6 +727,17 @@ else
     fail "bin/tests/continuation-broadcast.test.sh missing"
 fi
 
+CM_TESTS="$PLUGIN_ROOT/bin/tests/close-out-manifest.test.sh"
+if [ -x "$PLUGIN_ROOT/bin/close-out-manifest.sh" ] && [ -f "$CM_TESTS" ]; then
+    if bash "$CM_TESTS" >/dev/null 2>&1; then
+        pass "bin/tests/close-out-manifest.test.sh passes"
+    else
+        fail "bin/tests/close-out-manifest.test.sh FAILED (run 'bash bin/tests/close-out-manifest.test.sh')"
+    fi
+else
+    fail "bin/close-out-manifest.sh or its test suite missing"
+fi
+
 # research-dossier: the two f=0 gates, proven in BOTH directions (valid passes,
 # each negative fixture fails for its OWN reason). Skips cleanly without node.
 RD_TESTS="$PLUGIN_ROOT/bin/tests/research-dossier.test.sh"
@@ -694,6 +749,18 @@ if [ -f "$RD_TESTS" ]; then
     fi
 else
     fail "bin/tests/research-dossier.test.sh missing"
+fi
+
+# context-budget: read-only per-source context measurement (disk + transcript modes).
+CB_TESTS="$PLUGIN_ROOT/bin/tests/context-budget.test.sh"
+if [ -f "$CB_TESTS" ]; then
+    if bash "$CB_TESTS" >/dev/null 2>&1; then
+        pass "bin/tests/context-budget.test.sh passes"
+    else
+        fail "bin/tests/context-budget.test.sh FAILED (run 'bash bin/tests/context-budget.test.sh')"
+    fi
+else
+    fail "bin/tests/context-budget.test.sh missing"
 fi
 
 # signoff skill + command frontmatter
@@ -711,6 +778,7 @@ fi
 # supporting SSOT docs
 for d in skills/postflight/references/continuation-broadcast-protocol.md \
          skills/postflight/references/close-out-hunt-checklist.md \
+         skills/postflight/references/close-out-manifest-protocol.md \
          docs/adrs/ADR-010-continuation-broadcast.md; do
     if [ -f "$PLUGIN_ROOT/$d" ]; then pass "$d exists"; else fail "$d missing"; fi
 done
@@ -760,6 +828,14 @@ if [ -x "$PLUGIN_ROOT/scripts/validate-skill-frontmatter.sh" ] || [ -f "$PLUGIN_
     fi
 else
     fail "scripts/validate-skill-frontmatter.sh missing"
+fi
+echo ""
+
+# Ticket-first public entry points and optional outbox adapter contract.
+if python3 "$PLUGIN_ROOT/tests/test-ticket-first-contract.py"; then
+    pass "ticket-first contract tests pass"
+else
+    fail "ticket-first contract tests FAILED"
 fi
 echo ""
 
