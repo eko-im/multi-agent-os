@@ -14,6 +14,7 @@ Agent definitions for the multi-agent-os plugin. These define specialized person
 | consolidator | `consolidator.md` | Output synthesis |
 | legacy-archaeologist | `legacy-archaeologist.md` | Legacy codebase reverse-engineering |
 | memory-curator | `memory-curator.md` | Knowledge/memory hygiene and curation |
+| wacli-delegate | `wacli-delegate.md` | Context-isolated delegate for any capability-detected wacli operation |
 | founder-coach | `founder-coach.md` | AI-native startup lifecycle coach (stage diagnosis + exit gates) |
 | angular-frontend-engineer | `angular-frontend-engineer.md` | Angular SPA frontend (signals, RxJS, Material/Tailwind) |
 | react-frontend-engineer | `react-frontend-engineer.md` | React frontend (hooks, Vite/Next, PWA, TanStack Query) |
@@ -23,6 +24,7 @@ Agent definitions for the multi-agent-os plugin. These define specialized person
 | agile-product-lead | `agile-product-lead.md` | Product/delivery lead (PO/PM/SM/BA composite) |
 | data-privacy-officer | `data-privacy-officer.md` | DPO/privacy engineer (GDPR/LGPD/CCPA, DPIA, residency) |
 | openrig-fleet-engineer | `openrig-fleet-engineer.md` | OpenRig fleet engineer: operate, observe, diagnose and heal rigs; crews on target repositories are a STOP until #453 (loads `openrig-concierge`) |
+| self-heal-relay-engineer | `self-heal-relay-engineer.md` | Polyglot systems engineer + SRE + security reviewer: instruments/ports/audits scripts into the self-heal-relay model |
 | solution-architect | `solution-architect.md` | Solution design: boundaries, contracts, NFRs, ADRs, topology, expand/contract, rollback design (L4; proposes L1) |
 | devsecops-engineer | `devsecops-engineer.md` | DevSecOps/AppSec: threat model, secrets hygiene, supply chain, IAM, authz/RLS review, negative tests, containment (L4) |
 | devops-engineer | `devops-engineer.md` | Hosted CI/CD + PaaS deploys (`specialty`), reproducible builds, previews, release records, rollback (L5; L4 release plans) |
@@ -49,6 +51,9 @@ Organizational levels (L0–L5), RACI defaults and the seat attributes every del
 
 ### Knowledge Management
 - `memory-curator` — Audit and maintain persistent memory/knowledge quality
+
+### Messaging Operations
+- `wacli-delegate` — applies the preloaded concierge knowledge to bounded wacli operations
 
 ### Startup Coaching
 
@@ -174,7 +179,7 @@ Note: The frontmatter `name` is a conceptual identifier. Use actual Task tool ty
 Orchestrator (root)
 ├── Sentinel Monitor (background)
 ├── Sub-Agent 1
-│   └── Sub-Sub-Agent 1.1 (max depth 3)
+│   └── Sub-Sub-Agent 1.1 (max depth 2 — `skills/agentic-delegation` §8)
 ├── Sub-Agent 2
 └── Consolidator (synthesis)
 ```

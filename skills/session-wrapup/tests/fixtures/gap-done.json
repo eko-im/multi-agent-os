@@ -1,0 +1,3 @@
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged", "delegated": false, "expected": "skill covers v4 sections A, B, C", "delivered": "skill covers A, B"}
+]}

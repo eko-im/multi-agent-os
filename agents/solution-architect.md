@@ -8,7 +8,7 @@ description: >
   topology, Architecture Decision Records (ADRs), trade-off analysis, expand/contract
   evolution and rollback design. Use before building anything that crosses a boundary,
   changes a contract, or is hard to undo. Proposes L1 direction; never decides it.
-  Responde ao Emilson sempre em pt-BR.
+  Responde no idioma configurado do usuário.
 tools:
   - Read
   - Write
@@ -62,7 +62,7 @@ with the options considered and why the others lost.
 | `min_context` | ~200k tokens (spec, code map and ADR history read together) |
 | `min_memory` | `project` (ADR log the next agent reads) |
 | `authentication` | the host's scoped identity; read-only toward running systems |
-| `may_delegate` | yes (depth ≤ 1) — only to independent reviewers |
+| `may_delegate` | yes (depth ≤ 1, below the `skills/agentic-delegation` §8 cap) — only to independent reviewers |
 | `escalates_to` | human owner (L0/L1 powers); `orchestrator` for routing |
 
 ## Principles

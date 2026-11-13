@@ -1,0 +1,49 @@
+{
+ "items": [
+  {
+   "id": "recon-similars",
+   "kind": "HOTL",
+   "state": "done",
+   "evidence": "read pulse, quiesce, signoff, forge, anima; artifact-registry lookup: no slug overlap"
+  },
+  {
+   "id": "type-decision",
+   "kind": "HOTL",
+   "state": "done",
+   "evidence": "forge router: recurring multi-step workflow -> skill + command"
+  },
+  {
+   "id": "name-decision",
+   "kind": "HOTL",
+   "state": "done",
+   "evidence": "anima: session-wrapup, runner-up helm rejected"
+  },
+  {
+   "id": "write-skill",
+   "kind": "HOTL",
+   "state": "done",
+   "evidence": "skills/session-wrapup/SKILL.md + commands/session-wrapup.md"
+  },
+  {
+   "id": "acceptance-tests",
+   "kind": "HOTL",
+   "state": "done",
+   "evidence": "tests/run-tests.sh 13 passed 0 failed"
+  },
+  {
+   "id": "pr-open-review-merge",
+   "kind": "HOTL",
+   "state": "open"
+  },
+  {
+   "id": "pointer-pr",
+   "kind": "HOTL",
+   "state": "open"
+  },
+  {
+   "id": "house-keeping",
+   "kind": "HOTL",
+   "state": "open"
+  }
+ ]
+}
