@@ -56,7 +56,7 @@ APP_DB_PASSWORD = "aws:///example-app/env/hml#APP_DB_PASSWORD"
 ## Naming Rules
 
 1. **Leading slash**: All `/example-app/*` secrets use leading `/` (set by `aws_prefix`)
-2. **IaC secrets** (k8s-eks-prd-002 managed): Use `org/` prefix WITHOUT leading slash
+2. **IaC secrets** (managed by the private IaC repo): Use `org/` prefix WITHOUT leading slash
    - Pattern: `org/{namespace}/{purpose}`
    - Example: `org/monitoring/grafana`
 3. **AWS-managed**: Use AWS-generated names (`rds-db-credentials/`, `ecr-pullthroughcache/`)

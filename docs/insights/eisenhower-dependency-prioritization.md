@@ -76,6 +76,6 @@ Every task — regardless of quadrant — MUST include:
 | ---- | ----- |
 | Eisenhower method (open-source) | `multi-agent-os/docs/insights/eisenhower-dependency-prioritization.md` |
 | Multi-agent governance | `multi-agent-os/docs/insights/multi-agent-backlog-governance.md` |
-| Domain backlog (Acme) | `org-devops-backlog/backlog/MASTER-PLAN-execution-order.md` |
-| Pre-flight checklist | `k8s-eks-prd-002/AGENTS.md → Pre-Flight Checklist` |
+| Domain backlog (example org) | `org-devops-backlog/backlog/MASTER-PLAN-execution-order.md` |
+| Pre-flight checklist | `<private-iac-repo>/AGENTS.md → Pre-Flight Checklist` |
 | Phase reports | `org-devops-backlog/reports/PHASE-NNN-*.md` |

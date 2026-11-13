@@ -1,0 +1,8 @@
+# gitleaks config for agent transcripts and tool output.
+# Default rules, minus the noisy generic one (it fires on hashes, ids and
+# GraphQL node ids in transcripts: 106 of 108 hits in the 2026-11-06 scan).
+title = "agent-transcripts"
+
+[extend]
+useDefault = true
+disabledRules = ["generic-api-key"]

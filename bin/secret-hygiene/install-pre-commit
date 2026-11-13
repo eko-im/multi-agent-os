@@ -1,0 +1,16 @@
+#!/bin/sh
+# Install pre-commit-gitleaks into each repo given. Never clobbers:
+# skips a repo that already has a pre-commit hook, or whose hooks dir is
+# tracked in the repo (husky & co. own it). Prints one line per repo.
+# Undo: rm "$(git -C REPO rev-parse --git-path hooks)/pre-commit" (only if it is our symlink).
+HOOK="$(cd "$(dirname "$0")" && pwd)/pre-commit-gitleaks"
+for r in "$@"; do
+  top=$(git -C "$r" rev-parse --show-toplevel 2>/dev/null) || { echo "SKIP $r: não é repo"; continue; }
+  hd=$(cd "$top" && git rev-parse --path-format=absolute --git-path hooks)
+  case "$hd" in "$top"/.git/*|*/.git/worktrees/*|*/.git/hooks) ;; "$top"/*) echo "SKIP $top: hooks em pasta versionada ($hd)"; continue ;; esac
+  if [ -e "$hd/pre-commit" ] || [ -L "$hd/pre-commit" ]; then
+    if [ "$(readlink "$hd/pre-commit")" = "$HOOK" ]; then echo "OK   $top: já instalado"; else echo "SKIP $top: já tem pre-commit próprio"; fi
+    continue
+  fi
+  mkdir -p "$hd" && ln -s "$HOOK" "$hd/pre-commit" && echo "NEW  $top -> $hd/pre-commit"
+done
