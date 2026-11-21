@@ -1,0 +1,10 @@
+{"items": [
+ {"id": "recon-similars", "kind": "HOTL", "state": "open"},
+ {"id": "type-decision", "kind": "HOTL", "state": "open"},
+ {"id": "name-decision", "kind": "HOTL", "state": "open"},
+ {"id": "write-skill", "kind": "HOTL", "state": "open"},
+ {"id": "acceptance-tests", "kind": "HOTL", "state": "open"},
+ {"id": "pr-open-review-merge", "kind": "HOTL", "state": "open"},
+ {"id": "pointer-pr", "kind": "HOTL", "state": "open"},
+ {"id": "house-keeping", "kind": "HOTL", "state": "open"}
+]}
