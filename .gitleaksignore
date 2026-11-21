@@ -12,6 +12,20 @@
 # (HITL H-0033 in the operator's private ledger). Current tree redacted by #473.
 # Remove this line if that rotation is ever reverted.
 44501845428e9a8762f242d573d5f230d7e5130b:docs/insights/secret-management-strategy.md:vek-db-password:46
+# 2026-11-21: same rotated credential (commit 4450184, lines 46-48), now also
+# matched by the new app-* rules and useDefault.
+44501845428e9a8762f242d573d5f230d7e5130b:docs/insights/secret-management-strategy.md:app-env-default-secret:46
+44501845428e9a8762f242d573d5f230d7e5130b:docs/insights/secret-management-strategy.md:app-env-default-secret:48
+44501845428e9a8762f242d573d5f230d7e5130b:docs/insights/secret-management-strategy.md:app-uri-userinfo-password:47
+# 2026-11-21: CI build-log capture (already path-exempted for vek-db-password
+# in .gitleaks.toml); file deleted from the tree. Same 2 lines in 2 commits.
+fa7a1230c3b098ef718bfcbaf522be79d2309745:mcp-tools/maos-mcp-hub/step1010_logs.txt:app-password-assignment:215
+fa7a1230c3b098ef718bfcbaf522be79d2309745:mcp-tools/maos-mcp-hub/step1010_logs.txt:app-password-assignment:519
+c4fb586635a446cbe00cee35c14c9da808cc4823:mcp-tools/maos-mcp-hub/step1010_logs.txt:app-password-assignment:215
+c4fb586635a446cbe00cee35c14c9da808cc4823:mcp-tools/maos-mcp-hub/step1010_logs.txt:app-password-assignment:519
+# NOT pinned on purpose: 9 aws-access-token findings in step1010_logs.txt and
+# step1012_fly_deploy_logs.txt (commits fa7a1230, c4fb5866, e0d5dd18). They are
+# added only after the operator confirms those AWS keys are inactive.
 
 # Format: commit:file:rule-id:start-line
 # Gitleaks 8.30.1 ignores `fingerprints` inside [allowlist] without warning.
