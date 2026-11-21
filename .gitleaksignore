@@ -281,3 +281,9 @@ d130391e3569f664d04fcddad07dc5d0944584a5:skills/decision-engine/bin/decision_eng
 d130391e3569f664d04fcddad07dc5d0944584a5:skills/decision-engine/bin/decision_engine.py:app-password-assignment:50
 d130391e3569f664d04fcddad07dc5d0944584a5:skills/session-catalog/scripts/session_catalog.py:app-password-assignment:2336
 d130391e3569f664d04fcddad07dc5d0944584a5:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:69
+
+# G05c 2026-11-21: same test-fixture findings of bin/tests/harness-mcp-sync.test.sh
+# seen by CI in commit 34f6dfbb (another branch). Test file only.
+34f6dfbb1ad85c645670dc32693da02433687d1a:bin/tests/harness-mcp-sync.test.sh:app-uri-userinfo-password:412
+34f6dfbb1ad85c645670dc32693da02433687d1a:bin/tests/harness-mcp-sync.test.sh:generic-api-key:2152
+34f6dfbb1ad85c645670dc32693da02433687d1a:bin/tests/harness-mcp-sync.test.sh:generic-api-key:780
