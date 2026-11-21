@@ -60,7 +60,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `ichnos` | `ichnos/SKILL.md` | Use to apply Google-Analytics-style usage analytics to our OWN agentic-tools corpus — attribution (how was a skill actually reached: a direct /command |
 | `lens-dispatch` | `lens-dispatch/SKILL.md` | Deterministic dispatcher of cognitive lens-stacks per work-graph node. |
 | `libras-writing-bridge` | `libras-writing-bridge/SKILL.md` | Use when interpreting written Portuguese from a Deaf Libras user, or when drafting a simple adult Portuguese message for a Deaf reader. Draft only; not a sign-language interpreter. |
-| `live-session-continuity-recovery` | `live-session-continuity-recovery/SKILL.md` | Reconstruct the exact active conversation's intent and current work state with source-coverage checks, ordered corrections, evidence, a bounded review, and one next action after context loss. |
+| `live-session-continuity-recovery` | `live-session-continuity-recovery/SKILL.md` | Read-only recovery of this exact active conversation: source coverage, ordered corrections, evidence, and one proposed next action. |
 | `maos-concierge` | `maos-concierge/SKILL.md` | Concierge / onboarding / guide / router / capability-detector / governance-anchor for the ENTIRE Multi-Agent OS (MAOS) framework — its agents, skills, |
 | `memory-gateway` | `memory-gateway/SKILL.md` | Use when creating, updating, superseding, archiving, reading, searching, or walking the persistent memory corpus. |
 | `morning-briefing` | `morning-briefing/SKILL.md` | Deterministic SitRep briefing of operator work state (repos/PRs/tasks/memory) for fast context restore. |
@@ -79,7 +79,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `praxis-audit` | `praxis-audit/SKILL.md` | Self-referential session-method audit — turn the firing/theater lens onto THIS session's OWN enacted methods/tools (not the standing governance corpus |
 | `preflight` | `preflight/SKILL.md` | Use at the start of a session or before starting an action/task in any git repo to get the workspace into a correct, healthy, isolated, ticket-anchore |
 | `proofread` | `proofread/SKILL.md` | Use when FINALIZING any text artifact — a doc / ADR / README / ticket body / PR description / commit message / release note — to check GRAMMAR (pt-BR  |
-| `pulse` | `pulse/SKILL.md` | Session re-orientation skill. |
+| `pulse` | `pulse/SKILL.md` | Reorient and prioritize known work: dependencies, Eisenhower quadrants, proposed routes; preview by default, persistence opt-in. |
 | `quiesce` | `quiesce/SKILL.md` | Drive the current work session to QUIESCENCE — a steady state with no pending work: no open ticket/gap/fix/failure/PR, every PR green, every PR commen |
 | `ratchet-loop` | `ratchet-loop/SKILL.md` | Round-scored productivity loop (HOTL within an inviolable HITL floor): six phases over an intent tree in BOTH directions — RECOVER (backward) → MEASURE (4 counters, at source) → DECIDE (forward) → EXECUTE → VERIFY → INTROSPECT (Repair on a refuted premise, Evolution on a measured gain). A round that moves none of the four counters is reported BUSY, not virtuous. |
 | `reactivate` | `reactivate/SKILL.md` | Cold-start reactivation conductor for new-fresh-born amnesic agents. |
@@ -95,7 +95,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `rule-quality-tests` | `rule-quality-tests/SKILL.md` | Use when creating new rules, modifying existing rules at MAJOR/MINOR version bump, OR when operator says "audit this rule" / "check rule quality" / "v |
 | `session-catalog` | `session-catalog/SKILL.md` | Read-only catalog of PAST AI-harness sessions (Claude Code, Codex, Gemini, omp, Antigravity, prime-agent, ChatGPT/claude.ai exports) into one private index, with topic-scoped, redacted extraction for continuity ledgers. |
 | `session-fission` | `session-fission/SKILL.md` | On-demand splitter for a tangled Claude session. |
-| `session-reentry` | `session-reentry/SKILL.md` | Cold/foreign-thread RE-ENTRY orchestrator (soul-name Anamnesis). |
+| `session-reentry` | `session-reentry/SKILL.md` | Re-onboard an identified dormant/foreign thread from persisted artifacts, progressively and read-only (Anamnesis). |
 | `session-wrapup` | `session-wrapup/SKILL.md` | Conductor verb that drives a delegating session to 100% and only then closes it. |
 | `session-to-vault` | `session-to-vault/SKILL.md` | Preserve an agent session's history as a durable, dated, tagged note in a markdown vault, optionally casting it into a human-readable medium; does not reseed the session or decide what to do next. |
 | `signoff` | `signoff/SKILL.md` | The operator's END-OF-SESSION SIGN-OFF (encerramento) verb — invoked when you are DONE and want the session closed out AND its pending work left disco |
@@ -119,6 +119,8 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `worktree-policy` | `worktree-policy/SKILL.md` | Enforce mandatory git worktree usage for multi-agent file modifications |
 
 ## Skill families (by name-cluster)
+
+For active-conversation recovery, dormant/foreign re-entry, or prioritization, use the [session orientation selector](maos-concierge/SKILL.md#session-orientation-selector); the selected skill owns its detailed contract.
 
 - **Agentic-tool lifecycle**: `agentic-tool-forge` (genesis) · `agentic-tool-intake` (adopt-or-not) · `agentic-tool-evaluator` (score/QA) · `agentic-tool-trainer` (improve/distill) · `agentic-tool-pipeline` (conductor)
 - **Session lifecycle**: `preflight` → `morning-briefing` → `postflight` (+ `quiesce` · `signoff` · `session-wrapup` · `sync-to-git` · `session-fission` · `session-reentry` · `live-session-continuity-recovery` · `session-to-vault` · `reactivate` · `context-prep` · `verified-agentic-session-model`)

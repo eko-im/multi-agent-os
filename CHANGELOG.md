@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — session orientation contracts
+
+- Keep `pulse`, `session-reentry`, and `live-session-continuity-recovery` distinct; the existing `maos-concierge` now selects by current intent and evidence source, not time since a pause.
+- Clarify read-only reconstruction, proposed priority routes, and current persistence opt-in. Session reload hints use natural-language skill requests without assuming host slash discovery; no new wrapper, parser, or execution pipeline.
+
 ### Added — `security-incident-responder` agent
 
 - New agent `agents/security-incident-responder.md`: runs a security exposure (leaked secret, credential in
