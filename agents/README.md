@@ -24,9 +24,11 @@ Agent definitions for the multi-agent-os plugin. These define specialized person
 | agile-product-lead | `agile-product-lead.md` | Product/delivery lead (PO/PM/SM/BA composite) |
 | data-privacy-officer | `data-privacy-officer.md` | DPO/privacy engineer (GDPR/LGPD/CCPA, DPIA, residency) |
 | openrig-fleet-engineer | `openrig-fleet-engineer.md` | OpenRig fleet engineer: operate, observe, diagnose and heal rigs; crews on target repositories are a STOP until #453 (loads `openrig-concierge`) |
+| self-heal-relay-engineer | `self-heal-relay-engineer.md` | Polyglot systems engineer + SRE + security reviewer: instruments/ports/audits scripts into the self-heal-relay model |
 | solution-architect | `solution-architect.md` | Solution design: boundaries, contracts, NFRs, ADRs, topology, expand/contract, rollback design (L4; proposes L1) |
 | devsecops-engineer | `devsecops-engineer.md` | DevSecOps/AppSec: threat model, secrets hygiene, supply chain, IAM, authz/RLS review, negative tests, containment (L4) |
 | devops-engineer | `devops-engineer.md` | Hosted CI/CD + PaaS deploys (`specialty`), reproducible builds, previews, release records, rollback (L5; L4 release plans) |
+| security-incident-responder | `security-incident-responder.md` | Security incident response for secrets/exposure findings (contain → rotate → prevent); prepares and verifies, never rotates itself |
 | person-agent-creator | `person-agent-creator.md` | Creates/elevates person-agents (sourced dossier, 33 person-questions, lint gate); first three: `consultants/elon-musk`, `consultants/sam-altman`, `consultants/amodei-siblings` (v2.0.0) |
 
 ## Agent Categories
@@ -64,7 +66,7 @@ Generic, product-agnostic delivery specialists materializing the standard softwa
 roles. Compose with the existing registry (most roles already covered — these fill the genuine
 per-stack/role gaps; see "Role Coverage Map" below).
 
-**Autonomy posture** (all 10): per [`COWORK-AUTONOMY-POLICY.md`](./COWORK-AUTONOMY-POLICY.md) —
+**Autonomy posture** (all 11): per [`COWORK-AUTONOMY-POLICY.md`](./COWORK-AUTONOMY-POLICY.md) —
 co-work as peers and **substitute over the human with NO-HITL when `autonomy_score ≥ 0.90`** in
 their own domain (a stricter bar than the default HIGH ≥0.85). ⛔ Carve-outs HOLD even at ≥0.90
 (HUMAN_DOMAIN · merge→main/prod = HITL human-owner · ABSOLUTE guardrails); council-before-HITL first. Seats still
@@ -81,6 +83,7 @@ NO-HITL grant: every domain decision goes to the human owner.
 - `solution-architect` — solution design, contracts, NFRs, ADRs (generic; proposes, never decides, L1 direction)
 - `devsecops-engineer` — threat modeling, supply chain, IAM, authz review (generic; privacy stays with DPO)
 - `devops-engineer` — hosted CI/CD + PaaS (`specialty`); Kubernetes/GitOps stays with `gitops-engineer`
+- `security-incident-responder` — secrets exposure / CSIRT lifecycle, prepares and verifies (generic)
 
 #### Role Coverage Map (reuse-first — most cowork roles already exist)
 
@@ -101,6 +104,7 @@ that used them keeps working.
 | DevOps (Fly/Render/Railway/CI-CD) | **GAP→NEW** | `devops-engineer` (hosted CI/CD + PaaS `specialty`) · optional: `cloud-infrastructure:deployment-engineer` · Kubernetes/GitOps → `maos:gitops-engineer` |
 | Infra Engineer (K8s/Network) | EXISTS | `cloud-infrastructure:kubernetes-architect` · `network-engineer` |
 | DevSecOps / Security | **GAP→NEW** | `devsecops-engineer` · optional: `architecture:security-reviewer` · `code-modernization:security-auditor` · `maos:governance-auditor` (audit) |
+| Security Incident Response (secrets exposure / CSIRT) | **GAP→NEW** | `security-incident-responder` (the DevSecOps row covers review and audit; no agent owned the detect → contain → rotate → prevent lifecycle) |
 | DBA (RDS/Aurora/Postgres) | EXTEND-candidate | community gap — covered today by `supabase-engineer` (Postgres) + `cloud-infrastructure:cloud-architect` for RDS/Aurora ops; a dedicated generic `postgres-dba` is a future extend (corp DBA binding lives in the corporate layer, intentionally out of this community map) |
 | Frontend — Angular | **GAP→NEW** | `angular-frontend-engineer` |
 | Frontend — React/PWA | **GAP→NEW** | `react-frontend-engineer` |
@@ -178,7 +182,7 @@ Note: The frontmatter `name` is a conceptual identifier. Use actual Task tool ty
 Orchestrator (root)
 ├── Sentinel Monitor (background)
 ├── Sub-Agent 1
-│   └── Sub-Sub-Agent 1.1 (max depth 3)
+│   └── Sub-Sub-Agent 1.1 (max depth 2 — `skills/agentic-delegation` §8)
 ├── Sub-Agent 2
 └── Consolidator (synthesis)
 ```

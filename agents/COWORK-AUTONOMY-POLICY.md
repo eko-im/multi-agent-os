@@ -3,9 +3,9 @@
 > **Single SSOT** for the autonomy posture of the cowork-team delivery agents
 > (`angular-frontend-engineer` · `react-frontend-engineer` · `quarkus-backend-engineer` ·
 > `supabase-engineer` · `prompt-context-engineer` · `agile-product-lead` ·
-> `data-privacy-officer` · `solution-architect` · `devsecops-engineer` · `devops-engineer`).
-> Each agent references this file (DRY — the bar + carve-outs live here once, not copied
-> into 10 frontmatters). Levels and seat attributes: [`SEAT-PROFILE.md`](./SEAT-PROFILE.md).
+> `data-privacy-officer` · `solution-architect` · `devsecops-engineer` · `devops-engineer` ·
+> `security-incident-responder`). Each agent references this file (DRY — the bar + carve-outs
+> live here once, not copied into 11 frontmatters). Levels and seat attributes: [`SEAT-PROFILE.md`](./SEAT-PROFILE.md).
 
 ## The principle — co-work as peers; substitute over the human at ≥0.90
 
@@ -93,6 +93,8 @@ resort, not the first reflex — human attention is the scarce resource.
 Substitution does NOT waive accountability — the agent (and its parent) remain accountable
 for the substituted decision. Audit-trail the substitution (commit message / PR comment /
 session record), citing the score and that the carve-outs were checked clean.
+
+Authority a cowork agent hands down when it delegates is a subset of its own and never widens; the never-delegable list applies at every depth (`skills/agentic-delegation` §4.1).
 
 ## Sunset
 
