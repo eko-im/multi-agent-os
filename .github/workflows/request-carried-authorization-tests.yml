@@ -1,0 +1,28 @@
+name: request-carried-authorization tests
+
+on:
+  pull_request:
+    paths:
+      - "skills/request-carried-authorization/**"
+      - ".github/workflows/request-carried-authorization-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/request-carried-authorization/**"
+      - ".github/workflows/request-carried-authorization-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  carried-authorization-tests:
+    name: Run carried_authorization tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Run tests incl. mutation checks (stdlib only)
+        run: python3 -W error::ResourceWarning skills/request-carried-authorization/tests/test_carried_authorization.py

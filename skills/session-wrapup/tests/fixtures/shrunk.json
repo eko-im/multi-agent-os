@@ -1,0 +1,5 @@
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "PR merged", "delegated": false},
+ {"id": "t2", "kind": "HOTL", "state": "done", "evidence": "PR merged", "delegated": false},
+ {"id": "h1", "kind": "HITL", "state": "open", "floor": "spend", "digest": true, "precheck": {"minds": {"thomas": "measured at source: state of the item", "critical": "premises current and consistent with the request", "curious": "no other means implied beyond the asked result", "suspicious": "grant origin checked against the operator turn", "resilient": "undo or stop point named before acting", "vulcan": "premise to conclusion holds without 'better to ask'", "red_team": "worst case of acting and of asking compared"}, "verdict": "C", "origin": "operator_turn", "basis": "request does not carry this action", "lock": "spend", "hitl_type": null}}
+]}
