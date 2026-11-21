@@ -1,0 +1,7 @@
+{
+  "destinations": {
+    "my-private-repo": {"world": "private", "sink": "git-repo", "public": false},
+    "client-toolkit": {"world": "client-a", "sink": "git-repo", "public": false}
+  },
+  "client_markers": ["\\bclient-a\\b", "\\bclient-a-[\\w-]+"]
+}

@@ -26,9 +26,15 @@
   "files": [
     "skills/**/SKILL.md",
     "skills/**/*.md",
+    "skills/verified-agentic-session-model/bin/**/*.mjs",
+    "skills/verified-agentic-session-model/schemas/**/*.json",
+    "commands/verified-agentic-session-model.md",
+    "rules/human-artifact-agentic-sidecar.md",
     "skills/*/scripts/**",
     "skills/*/bin/**",
     "skills/agentic-session-harness/hooks/lib.sh",
+    "skills/instrument-self-heal-relay/harnesses.json",
+    "skills/instrument-self-heal-relay/templates/*.tmpl",
     "skills/decompose-abstract-to-measurable/examples/*.json",
     "skills/decompose-abstract-to-measurable/templates/*.json",
     "skills/goal-recovery/templates/*.json",
@@ -63,6 +69,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "validate:skills": "bash scripts/validate-skill-frontmatter.sh"
+    "validate:skills": "bash scripts/validate-skill-frontmatter.sh",
+    "test:verified-agentic-session-model": "node --test skills/verified-agentic-session-model/tests/model-bundle.test.mjs"
   }
 }
