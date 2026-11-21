@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — git-cycle-sentinel A4: signing optional
+
+- `git-cycle-sentinel` 0.1.1 → 0.1.2: criterion A4 is now "signing optional" (operator decision D2, 2026-11-21). Try to sign where `commit.gpgsign=true`; on signer failure commit unsigned and continue. Only a remote `required_signatures` ruleset enforces. `--no-verify` stays forbidden.
+
+### Changed — session orientation contracts
+
+- Keep `pulse`, `session-reentry`, and `live-session-continuity-recovery` distinct; the existing `maos-concierge` now selects by current intent and evidence source, not time since a pause.
+- Clarify read-only reconstruction, proposed priority routes, and current persistence opt-in. Session reload hints use natural-language skill requests without assuming host slash discovery; no new wrapper, parser, or execution pipeline.
+
+### Added — `security-incident-responder` agent
+
+- New agent `agents/security-incident-responder.md`: runs a security exposure (leaked secret, credential in
+  history, open data store, unauthenticated surface) through detect → triage → contain → eradicate →
+  recover → learn. It writes the incident record, the ordered containment and rotation runbook for the
+  console-holding human, the prevention pull request and the post-incident review. It never rotates,
+  revokes, rewrites history or touches production; those stay HITL under `COWORK-AUTONOMY-POLICY.md`.
+  Registered in `agents/README.md` (Available Agents + Role Coverage Map row `GAP→NEW`).
+
 ### Changed — `libras-writing-bridge` v0.1.1: PII refusal, opt-in avatar, lexicon sense fixes, round-trip check
 
 - Mode `escrever` always refuses secrets, credentials, access codes and
@@ -589,6 +607,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `commands/hitl-digest.md`: thin `/hitl-digest` slash command over the `synopsis-panel` engine (`synopsis-fuse.py --hitl-only`). Renders the HITL DIGEST on demand — only the human-attention gates (credential, spend, irreversible, external-send, business), ⏫ high-severity and 👤 human-domain first. Reimplements nothing: it delegates rendering to `synopsis-fuse.py` and the ledger to the external `punch-list.md` SSOT; read-only. The engine path resolves from `CLAUDE_PLUGIN_ROOT` (with a git-root fallback), and the pure digest short-circuits aggregation with an empty compass so it never blocks on `work-compass`.
 
+### Changed — `ooda-loop` 0.3.1: tree cadence (one cycle per node)
+
+- `skills/ooda-loop/SKILL.md`: new §"Tree cadence" — apply the OODA+PDCA pass once per goal-tree node (forward plans by DoR, backward reconciles by DoD) with four beats that map onto the existing PDCA (execute = plan+do, feedback = check with verifier != generator, introspect = adjust, persist = close gate) and two checkable invariants (manual check, no enforcement yet): persist-before-close (the PR is the durable record where protected-branch pushes are forbidden) and one consolidated human package per cycle. Additive guidance only; no schema or marker change. `dogfood_status` set to a manual cycle-1 record. Dogfood record: `docs/dogfood/2026-10-25-ooda-loop-tree-cadence.md`.
+
 ### Changed — git-cycle-sentinel 0.1.1 (dogfood cycle-1 + cycle-2 real)
 
 - `skills/git-cycle-sentinel/SKILL.md` bumped 0.1.0 → 0.1.1 after dogfood cycle-1 (dry-run, decision-vs-norm) and cycle-2 (real execution in a throwaway `/tmp` git sandbox, 7/7 assertions PASS). Two previously-decorative guards made functional: **§A6** host-alias parse now strips any scp-style `[user@]host:` prefix (incl. a userless alias like `github.com-ekson73:`) so the alias never glues onto the owner, and RECUSA (STOP-ERROR) when the slug is not `owner/repo`; **§A7** idempotency probe scopes `git log --grep="idmp:<key>"` to the branch's unmerged range `origin/<base>..HEAD` (never whole reachable history) so a reused key on a merged-and-deleted branch cannot false-positive. Repo-awareness table corrected: `multi-agent-os gpgsign` re-measured `true` (read live, not the frozen cell). `dogfood_status → dogfood-cycle-2-real-7of7-pass-promotable`.
@@ -1097,6 +1119,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`status: latent`) for every new agent; the completion checklist requires both. The three new
   agents carry the mandatory pt-BR line in their descriptions.
 - `gitops-engineer` 1.0.1: boundary note — hosted CI/CD and PaaS go to `devops-engineer`.
+
+### Added — system-health memory_spine lag (EKO-106)
+
+- `system-health-guardian` collector 1.7.0 emits a top-level advisory `memory_spine` object: how long persisted memory under the memory-home `projects/` tree has been un-shipped (oldest unpushed commit vs `@{u}` or oldest dirty path, after a fresh fetch). Fail-closed: an unmeasurable spine reports `unknown`, never lag 0. Not rolled into `.system.status`; the responder seeds residue on warn/crit/unknown.
 
 ### Changed — ticket-first traceability (#484)
 
