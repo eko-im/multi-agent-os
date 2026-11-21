@@ -239,3 +239,45 @@ a640cc7502034c19e4cdd26318ee582b5c1335c1:bin/tests/harness-mcp-sync.test.sh:gene
 bc74cfc0ce6cc9d843ea77cf4ab4e44bd8a93c80:bin/secret-hygiene/tests/test_secret_guard.py:app-password-assignment:115
 c2220ad9c41b1bf6203f225ab76c695062db6d9c:tests/governance/test-agentshield.sh:app-password-assignment:97
 e0575e66a5e249ec29702744e0d32094ba20049a:bin/tests/harness-mcp-sync.test.sh:app-uri-userinfo-password:379
+
+# G05b 2026-11-21: code-reference false positives of the #520 rules (not credentials).
+# Values are lowercase identifiers or code expressions (len>=12) in prod code:
+# decision-engine labels, scoreboard/session-catalog keys, close-out-manifest
+# scanner-name default, harness-mcp-sync length check. Pinned by exact commit
+# because CI scans --all branches; a NEW commit with the same line still fires.
+# NOT here on purpose: the 18 aws-access-token findings of the March CI dumps
+# (real credentials; rotation is the operator's decision).
+004401881eb243e1160bad510a4c6c2ffa98d407:bin/close-out-manifest.sh:app-env-default-secret:397
+004401881eb243e1160bad510a4c6c2ffa98d407:skills/decision-engine/SKILL.md:app-password-assignment:66
+004401881eb243e1160bad510a4c6c2ffa98d407:skills/decision-engine/bin/decision_engine.py:app-password-assignment:408
+004401881eb243e1160bad510a4c6c2ffa98d407:skills/decision-engine/bin/decision_engine.py:app-password-assignment:50
+004401881eb243e1160bad510a4c6c2ffa98d407:skills/session-catalog/scripts/session_catalog.py:app-password-assignment:2336
+004401881eb243e1160bad510a4c6c2ffa98d407:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:69
+34f6dfbb1ad85c645670dc32693da02433687d1a:bin/harness-mcp-sync:app-password-assignment:719
+44ceb93500d344235e28042c0a07f334ddd7a966:bin/close-out-manifest.sh:app-env-default-secret:397
+44ceb93500d344235e28042c0a07f334ddd7a966:skills/decision-engine/SKILL.md:app-password-assignment:66
+44ceb93500d344235e28042c0a07f334ddd7a966:skills/decision-engine/bin/decision_engine.py:app-password-assignment:408
+44ceb93500d344235e28042c0a07f334ddd7a966:skills/decision-engine/bin/decision_engine.py:app-password-assignment:50
+44ceb93500d344235e28042c0a07f334ddd7a966:skills/session-catalog/scripts/session_catalog.py:app-password-assignment:2336
+44ceb93500d344235e28042c0a07f334ddd7a966:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:69
+50033981f4fa3f03b8f20a6ef0e2b3e8f29240e9:bin/close-out-manifest.sh:app-env-default-secret:397
+50033981f4fa3f03b8f20a6ef0e2b3e8f29240e9:skills/decision-engine/SKILL.md:app-password-assignment:66
+50033981f4fa3f03b8f20a6ef0e2b3e8f29240e9:skills/decision-engine/bin/decision_engine.py:app-password-assignment:408
+50033981f4fa3f03b8f20a6ef0e2b3e8f29240e9:skills/decision-engine/bin/decision_engine.py:app-password-assignment:50
+50033981f4fa3f03b8f20a6ef0e2b3e8f29240e9:skills/session-catalog/scripts/session_catalog.py:app-password-assignment:2336
+50033981f4fa3f03b8f20a6ef0e2b3e8f29240e9:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:69
+71b93ef333aa8071a729e98f33dcdf53fa05caf2:bin/close-out-manifest.sh:app-env-default-secret:397
+71b93ef333aa8071a729e98f33dcdf53fa05caf2:skills/decision-engine/SKILL.md:app-password-assignment:66
+71b93ef333aa8071a729e98f33dcdf53fa05caf2:skills/decision-engine/bin/decision_engine.py:app-password-assignment:408
+71b93ef333aa8071a729e98f33dcdf53fa05caf2:skills/decision-engine/bin/decision_engine.py:app-password-assignment:50
+71b93ef333aa8071a729e98f33dcdf53fa05caf2:skills/session-catalog/scripts/session_catalog.py:app-password-assignment:2336
+71b93ef333aa8071a729e98f33dcdf53fa05caf2:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:69
+8b5b28eb83d2e9c2204f1d6c40695d6af25a0644:bin/harness-mcp-sync:app-password-assignment:719
+aa7b8e0a9df76a1e3f48c9ce47a20bf7d45da07c:bin/close-out-manifest.sh:app-env-default-secret:397
+cbcee24191abe4871069c4f59d98005f5bafda81:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:58
+d130391e3569f664d04fcddad07dc5d0944584a5:bin/close-out-manifest.sh:app-env-default-secret:397
+d130391e3569f664d04fcddad07dc5d0944584a5:skills/decision-engine/SKILL.md:app-password-assignment:66
+d130391e3569f664d04fcddad07dc5d0944584a5:skills/decision-engine/bin/decision_engine.py:app-password-assignment:408
+d130391e3569f664d04fcddad07dc5d0944584a5:skills/decision-engine/bin/decision_engine.py:app-password-assignment:50
+d130391e3569f664d04fcddad07dc5d0944584a5:skills/session-catalog/scripts/session_catalog.py:app-password-assignment:2336
+d130391e3569f664d04fcddad07dc5d0944584a5:skills/session-wrapup/bin/scoreboard.py:app-password-assignment:69

@@ -185,6 +185,19 @@ regexes = [
     '''^process\.env\.[A-Za-z_][A-Za-z0-9_]*$''',
     '''^(?:self|request|settings|config)\.[A-Za-z_][A-Za-z0-9_.]*\[?$''',
 ]
+# Test fixtures only (G05b, 2026-11-21): these exact test files assert the
+# secret guards against credential-shaped literals, so this rule fires on them
+# by design. Anchored to the exact end-of-path ($): a suffixed sibling (.bak)
+# or any non-test file stays scanned. Never add production code here; the
+# other rules (and every default rule) still scan these files.
+paths = [
+    '''(^|/)skills/decision-engine/tests/test_decision_engine\.py$''',
+    '''(^|/)skills/verified-agentic-session-model/tests/model-bundle\.test\.mjs$''',
+    '''(^|/)tests/test-self-heal-relay\.sh$''',
+    '''(^|/)tests/test-session-catalog\.sh$''',
+    '''(^|/)bin/secret-hygiene/tests/test_secret_guard\.py$''',
+    '''(^|/)bin/tests/harness-mcp-sync\.test\.sh$''',
+]
 
 [[rules]]
 id = "app-env-default-secret"
