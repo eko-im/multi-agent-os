@@ -1,0 +1,16 @@
+#!/bin/sh
+# git pre-commit hook: refuse a commit whose staged changes contain a secret.
+# Uses the repo's own .gitleaks.toml when it has one. Output is redacted.
+# Bypass for a reviewed false positive: add it to .gitleaksignore.
+GL=$(command -v gitleaks || ls /opt/homebrew/bin/gitleaks /usr/local/bin/gitleaks 2>/dev/null | head -1)
+if [ -z "$GL" ]; then
+  echo "pre-commit-gitleaks: gitleaks não instalado; commit seguiu SEM varredura" >&2
+  exit 0
+fi
+cd "$(git rev-parse --show-toplevel)" || exit 1
+"$GL" git . --pre-commit --staged --redact --no-banner --log-level warn
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "pre-commit-gitleaks: commit bloqueado, há segredo no que está staged (veja acima, valor redigido)." >&2
+fi
+exit $rc

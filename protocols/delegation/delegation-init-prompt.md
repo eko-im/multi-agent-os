@@ -46,13 +46,13 @@ Branch naming: `feature/`, `bugfix/`, `hotfix/`, `docs/`, `refactor/`, `chore/` 
 Use `protocols/delegation/provider-matrix.md` for every external call. Detection:
 
 ```bash
-# ticket provider (matches plugin-scripts/gaac/delegate.sh exactly)
-case "${TICKET:-}" in
-  VKS-*|VKS_*) TICKET_PROVIDER=jira ;;
-  VKO-*|EKO-*) TICKET_PROVIDER=linear ;;
-  "") TICKET_PROVIDER=none ;;
-  *) TICKET_PROVIDER=auto ;;
-esac
+# ticket provider (same rule as ticket_provider_for in plugin-scripts/gaac/delegate.sh):
+# key prefix in $MAOS_JIRA_KEY_PREFIXES → jira; in $MAOS_LINEAR_KEY_PREFIXES → linear;
+# empty → none; anything else → auto
+# Root fallback: plugin root, else this checkout. Keep an already-provided value if detection yields nothing.
+_maos_root="${CLAUDE_PLUGIN_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+_tp=$(bash "${_maos_root}/plugin-scripts/gaac/delegate.sh" init --ticket="${TICKET:-}" --provider=none 2>/dev/null | sed -nE "s/^TICKET_PROVIDER=(jira|linear|auto|none)$/\1/p" | head -n1)
+TICKET_PROVIDER="${_tp:-${TICKET_PROVIDER:-auto}}"
 # VCS provider
 case "$(git config --get remote.origin.url 2>/dev/null)" in
   *bitbucket.org*) VCS_PROVIDER=bitbucket ;;
@@ -103,6 +103,13 @@ The CLI prepends a header with detected values before cat-ing this file. Expecte
 - `WORKTREE`: `<path>` or `(main — RO only)`
 - `AGENT_HEX`: 4 hex chars for this delegation (sub-agent seq, not orchestrator prime)
 - `PARENT_SESSION`: orchestrator session id
+- `DEPTH_REMAINING`: added by the delegator, not the CLI — its own value − 1
+  (the root uses cap − 1; `skills/agentic-delegation` §4.1). If absent, the child
+  is a leaf.
+- `AUTHORITY_SCOPE` + `AUTHORITY_ORIGIN`: delegator-set, only when granting
+  authority; the scope is a subset of the delegator's, the origin is the
+  operator's original grant passed down unchanged. A scope without an origin
+  counts as missing (§4.1).
 
 The delegated agent echoes these back in the first line of its output (one line, key=value) to confirm inheritance.
 
@@ -119,4 +126,5 @@ On rejection: emit a single-line refusal with the specific rule violated, do **n
 
 ---
 
-*Source of truth: `protocols/delegation/delegation-init-prompt.md` | Version 1.0 | 2026-04-18*
+*Source of truth: `protocols/delegation/delegation-init-prompt.md` | Version 1.1 | 2026-10-21*
+*v1.1 (2026-10-21): dynamic section gains the `DEPTH_REMAINING` header field (delegator-set, its own value − 1; absent = leaf).*

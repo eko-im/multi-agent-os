@@ -107,11 +107,40 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      - name: Install gitleaks (pinned version + SHA256)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_VERSION: "8.30.1"
+          # SHA-256 of gitleaks_8.30.1_linux_x64.tar.gz, from the release's official
+          # gitleaks_8.30.1_checksums.txt. Pin content, not just version — a tampered
+          # or replaced release asset must not run in CI. Bump both on upgrade.
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          curl -fsSL --tlsv1.2 --proto '=https' "$url" -o "$RUNNER_TEMP/$tarball"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/${tarball}" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" version
+
+      - name: Scan full git history
+        run: |
+          set -euo pipefail
+          # Repo config is required (canary job also depends on it). Fail closed
+          # if it disappears so the required check never runs unconfigured.
+          if [ ! -f .gitleaks.toml ]; then
+            echo "::error::.gitleaks.toml missing — refusing to scan without the repo rules"
+            exit 1
+          fi
+          # Use the repo's .gitleaks.toml unchanged (it already has [extend]).
+          # Full history plus merge diffs; --exit-code 1 fails the job on findings;
+          # --redact keeps secret values out of logs. Same pin as the canary job.
+          # Do not use --diff-filter with lowercase letters: git treats those
+          # as exclusions, so `d` would skip deleted files and miss secrets
+          # that were committed and later removed.
+          "$RUNNER_TEMP/gitleaks" git . --config .gitleaks.toml \
+            --log-opts="--full-history --all --diff-merges=first-parent" \
+            --no-banner --redact --verbose --exit-code 1
 
   gitleaks-config-contract:
     name: gitleaks config contract (canary)
@@ -119,7 +148,7 @@ jobs:
     # The .gitleaks.toml rules carry the repo's only secret gate. This job runs
     # tests/test-gitleaks-config.sh against a PINNED gitleaks so a config
     # regression (a weakened rule, an over-broad allowlist, a disabled canary)
-    # fails CI instead of merging green. The gitleaks-action job above cannot do
+    # fails CI instead of merging green. The scan job above cannot do
     # this — it scans content, it does not test that the RULES still fire.
     env:
       GITLEAKS_VERSION: "8.30.1"
