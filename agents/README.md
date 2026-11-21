@@ -29,6 +29,8 @@ Agent definitions for the multi-agent-os plugin. These define specialized person
 | devsecops-engineer | `devsecops-engineer.md` | DevSecOps/AppSec: threat model, secrets hygiene, supply chain, IAM, authz/RLS review, negative tests, containment (L4) |
 | devops-engineer | `devops-engineer.md` | Hosted CI/CD + PaaS deploys (`specialty`), reproducible builds, previews, release records, rollback (L5; L4 release plans) |
 | security-incident-responder | `security-incident-responder.md` | Security incident response for secrets/exposure findings (contain → rotate → prevent); prepares and verifies, never rotates itself |
+| secops-engineer | `secops-engineer.md` | SecOps/AppSec: exposure response, rotation runbooks for the owner, secret-scan triage (locations only), CVE fix PRs (v0.1.0, dogfooding) |
+| release-engineer | `release-engineer.md` | Release/CI: merge convergence across repos, fail-closed CI gates, pipeline parity, branch/release model (v0.1.0, dogfooding) |
 | person-agent-creator | `person-agent-creator.md` | Creates/elevates person-agents (sourced dossier, 33 person-questions, lint gate); first three: `consultants/elon-musk`, `consultants/sam-altman`, `consultants/amodei-siblings` (v2.0.0) |
 
 ## Agent Categories
@@ -52,6 +54,11 @@ Organizational levels (L0–L5), RACI defaults and the seat attributes every del
 
 ### Knowledge Management
 - `memory-curator` — Audit and maintain persistent memory/knowledge quality
+
+### Security & Release Operations
+
+- `secops-engineer` — prepares every credentialed or irreversible step for the human owner, never performs it
+- `release-engineer` — drives open PRs to mergeable-or-blocked; merges and releases stay with the owner
 
 ### Messaging Operations
 - `wacli-delegate` — applies the preloaded concierge knowledge to bounded wacli operations
@@ -105,6 +112,8 @@ that used them keeps working.
 | Infra Engineer (K8s/Network) | EXISTS | `cloud-infrastructure:kubernetes-architect` · `network-engineer` |
 | DevSecOps / Security | **GAP→NEW** | `devsecops-engineer` · optional: `architecture:security-reviewer` · `code-modernization:security-auditor` · `maos:governance-auditor` (audit) |
 | Security Incident Response (secrets exposure / CSIRT) | **GAP→NEW** | `security-incident-responder` (the DevSecOps row covers review and audit; no agent owned the detect → contain → rotate → prevent lifecycle) |
+| SecOps / incident response (exposure → rotation hand-off → verify) | **GAP→NEW** | `secops-engineer` (the reviewers above review code; none owned exposure response or secret-scan triage, and cross-plugin seats are not loadable in every harness) |
+| Release engineering / merge convergence | **GAP→NEW** | `release-engineer` (`gitops-engineer` owns cluster state; deployment agents deploy — neither drives many open PRs to green across repos) |
 | DBA (RDS/Aurora/Postgres) | EXTEND-candidate | community gap — covered today by `supabase-engineer` (Postgres) + `cloud-infrastructure:cloud-architect` for RDS/Aurora ops; a dedicated generic `postgres-dba` is a future extend (corp DBA binding lives in the corporate layer, intentionally out of this community map) |
 | Frontend — Angular | **GAP→NEW** | `angular-frontend-engineer` |
 | Frontend — React/PWA | **GAP→NEW** | `react-frontend-engineer` |
