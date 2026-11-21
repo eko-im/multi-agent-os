@@ -37,7 +37,7 @@ sobre a [`git-cycle-sentinel` skill](../skills/git-cycle-sentinel/SKILL.md).
   espera checks strict, resolve threads, assina, nunca `--no-verify`.
 - **Portão fraco → supre** (os outros repos): no-direct-main, scoped-add, gitleaks, worktree em
   software.
-- **Nunca regride assinatura** (A4): assina onde o repo assina/exige; não força onde `gpgsign=false`.
+- **Assinatura opcional** (A4, D2 2026-11-21): tenta assinar onde `gpgsign=true`; se o assinador falhar, commita sem assinatura e segue. Só ruleset `required_signatures` obriga.
 - **Idempotente** (A7): re-execução não duplica commit/PR/comentário (`idempotency_key`).
 - **Self-heal**: passo script que falha (rebase/push/check) é despachado a um ai-harness para
   resolver, dentro do teto de 6 tentativas; irreparável/HUMAN_DOMAIN → escala com a linha de status.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — git-cycle-sentinel A4: signing optional
+
+- `git-cycle-sentinel` 0.1.1 → 0.1.2: criterion A4 is now "signing optional" (operator decision D2, 2026-11-21). Try to sign where `commit.gpgsign=true`; on signer failure commit unsigned and continue. Only a remote `required_signatures` ruleset enforces. `--no-verify` stays forbidden.
+
 ### Changed — session orientation contracts
 
 - Keep `pulse`, `session-reentry`, and `live-session-continuity-recovery` distinct; the existing `maos-concierge` now selects by current intent and evidence source, not time since a pause.
