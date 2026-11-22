@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — `artifact-pdca` (dogfood candidate)
 
-- Added an editorial review cycle that ties corrections to delivered media and independent review of the exact version. [Training contrasts](skills/artifact-pdca/references/training.md) document the 1.0.1 counting rule; they do not establish behavioral validation or promotion.
+- Added `artifact-pdca` 1.0.3, an editorial review cycle that ties objections to specific passages and verifies new media independently. The [training contrasts](skills/artifact-pdca/references/training.md) distinguish human approval, CLI/provider prompts, editorial convergence and promotion; they are not a release certification.
 
 ### Changed — git-cycle-sentinel A4: signing optional
 
