@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `artifact-pdca` (dogfood candidate)
+
+- Added an editorial review cycle that ties corrections to delivered media and independent review of the exact version. [Training contrasts](skills/artifact-pdca/references/training.md) document the 1.0.1 counting rule; they do not establish behavioral validation or promotion.
+
 ### Changed — git-cycle-sentinel A4: signing optional
 
 - `git-cycle-sentinel` 0.1.1 → 0.1.2: criterion A4 is now "signing optional" (operator decision D2, 2026-11-21). Try to sign where `commit.gpgsign=true`; on signer failure commit unsigned and continue. Only a remote `required_signatures` ruleset enforces. `--no-verify` stays forbidden.
