@@ -189,7 +189,11 @@ findings() {
     not-found) echo "HUMAN|vm-not-found: --vm matches no machine in \`cmux vm ls\`"; return ;;
   esac
   [ "$(get CMUX_CLI)" = absent ] && echo "INFO|cmux-cli-absent: L3/L4 unavailable on this host"
-  if [ "$reach" != ok ]; then echo "L3|vm-unreachable: ssh and cmux vm exec both failed"; return; fi
+  if [ "$reach" != ok ]; then
+    if [ "$(get SYSTEM_TUNNEL)" = up ]; then echo "L3|vm-unreachable: ssh and cmux vm exec both failed"
+    else echo "HUMAN|vm-unreachable-tunnel-down: \`cmux vpn up\` may need macOS approval"; fi
+    return
+  fi
   if [ "$(get DNS)" != ok ]; then
     if [ "$(get STUB)" = present ] && [ "$(get RESOLV_LINK)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
       echo "L1|dns-broken: resolv.conf -> $(get RESOLV_NS) bypasses the resolved stub"

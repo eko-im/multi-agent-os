@@ -67,6 +67,15 @@ PROBE_FILE="$T/p-paused" run heal --max-level 4 --allow-reboot >"$T/o" 2>&1; rc=
 check "paused VM -> exit 2 needs-human" '[ $rc = 2 ] && grep -q "HUMAN|vm-paused" "$T/o"'
 check "paused VM -> never resume/restart/new" '! grep -Eq "resume|restart|new" "$T/cmux.log"'
 
+printf 'VM_ID=vm-1\nVM_STATUS=running\nREACH=down\nSYSTEM_TUNNEL=down\n' > "$T/p-tun"
+PROBE_FILE="$T/p-tun" run check >"$T/o" 2>&1; rc=$?
+check "unreachable + tunnel down -> exit 2 needs-human" '[ $rc = 2 ] && grep -q "HUMAN|vm-unreachable-tunnel-down" "$T/o"'
+
+printf 'VM_ID=vm-1\nVM_STATUS=running\nREACH=ok\nSTUB=absent\nDNS=fail\nEGRESS_443=fail\nSUDO=ok\n' > "$T/p-l4"
+: > "$T/cmux.log"
+PROBE_FILE="$T/p-l4" run heal --max-level 4 >"$T/o" 2>&1
+check "L4 without --allow-reboot never restarts" 'grep -q "\[L4\] SKIP: reboot needs --allow-reboot" "$T/o" && ! grep -q restart "$T/cmux.log"'
+
 echo "== L1 real action in a sandbox root"
 printf 'nameserver 10.32.0.28\n' > "$T/root/etc/resolv.conf"
 run heal --vm box --max-level 1 >"$T/o" 2>&1; rc=$?

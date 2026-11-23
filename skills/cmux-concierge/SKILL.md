@@ -104,12 +104,13 @@ any login verb. The test suite asserts a fake token in tool output never reaches
 
 ## Tests
 
-`bash bin/tests/cmux-concierge.test.sh` — 13 checks with a fake `cmux`, fake `getent` (resolves
+`bash bin/tests/cmux-concierge.test.sh` — 15 checks with a fake `cmux`, fake `getent` (resolves
 only when resolv.conf is a symlink, modelling the real fault), a sandbox root and fake harness
 CLIs that print a fake token. Test seams (env, defaults = the real host):
 `CMUX_CONCIERGE_TRANSPORT=local`, `CMUX_CONCIERGE_ROOT`, `CMUX_CONCIERGE_SUDO`,
 `CMUX_CONCIERGE_PROBE_FILE`, `CMUX_CONCIERGE_CMUX`. Mutation-checked: removing the paused guard,
-echoing raw login output, or removing the backup step each makes the suite fail.
+echoing raw login output, removing the backup step, or removing the `--allow-reboot` guard each
+makes the suite fail.
 
 ## §DUED sunset
 
