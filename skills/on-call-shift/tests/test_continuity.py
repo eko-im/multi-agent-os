@@ -177,7 +177,8 @@ class Continuity(unittest.TestCase):
         child_path = os.path.join(self.tmp.name, "child-a.json")
         saved = co.checkpoint_child(parent, "child-a", child, child_path)
         self.assertEqual(parent["children"]["child-a"],
-                         {"ref": "child-a.json", "sha256": saved["sha256"], "received": True})
+                         {"ref": "child-a.json", "sha256": saved["sha256"], "received": True,
+                          "pending": None})
         self.assertNotIn("log", parent["children"]["child-a"])
         bad = co.checkpoint_child(parent, "child-b", child,
                                   os.path.join(self.tmp.name, "child-b.json"),
@@ -185,6 +186,7 @@ class Continuity(unittest.TestCase):
         self.assertFalse(bad["saved"])
         self.assertEqual(parent["children"]["child-b"]["received"], False)
         self.assertEqual(parent["admission"]["reason"], "CHILD_PERSISTENCE_FAILED")
+
 
     def test_54_fencing_quarantines_the_holder_and_kills_no_third_party(self):
         bystander = spawn_disposable()
@@ -309,6 +311,157 @@ class Continuity(unittest.TestCase):
         self.assertTrue(wdg.register(registry, "shift-1", "wd-1")["registered"])  # idempotent
         self.assertEqual(wdg.register(registry, "shift-1", "wd-2")["reason"],
                          "WATCHDOG_ALREADY_REGISTERED")
+
+
+class ChildRecovery(unittest.TestCase):
+    """W5-P1: the parent recovers after a child's persistence failed."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = self.tmp.name
+        self.parent_path = os.path.join(self.d, "parent.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def child(self, shift_id="child-shift", holder="agent-c"):
+        return se.open_shift(shift_id=shift_id, principal="owner-1", scope="repo/x",
+                             backlog=None, capacity=2, budget=5, holder=holder,
+                             supervisor_target=SUP, now=1000, lease_secs=LEASE)
+
+    def failed(self, child_id="child-a", child=None):
+        parent, child = shift(), child or self.child()
+        se.adopt(parent, "agent-1", "k1", backlog(), 1001, generation=1)
+        se.apply_tick(parent, "agent-1", "t1", 1002, generation=1)
+        path = os.path.join(self.d, f"{child_id}.json")
+        co.checkpoint_child(parent, child_id, child, path, writer=failing_writer)
+        return parent, child, path
+
+    def fresh_checkpoint(self, child, path):
+        return co.autosave(child, path)["sha256"]
+
+    def recover(self, parent, child_id, path, sha, **kw):
+        args = dict(child_path=path, claimed_sha=sha, cause="CHILD_PERSISTENCE_FAILED",
+                    now=1003, generation=1, parent_path=self.parent_path)
+        args.update(kw)
+        return co.recover_child(parent, "agent-1", child_id, **args)
+
+    def test_73_child_failure_freezes_admission_and_records_cause(self):
+        parent, child, _ = self.failed()
+        self.assertEqual(parent["admission"], {"open": False,
+                                               "reason": "CHILD_PERSISTENCE_FAILED"})
+        self.assertEqual(parent["children"]["child-a"]["pending"],
+                         {"cause": "CHILD_PERSISTENCE_FAILED", "shift_id": "child-shift",
+                          "holder": "agent-c", "generation": 1})
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(parent, "agent-1", "k2", backlog(), 1003, generation=1)
+        self.assertEqual(err.exception.code, "ADMISSION_FROZEN")
+        # a second failure keeps the ORIGINAL cause record, not the newer attempt's
+        co.checkpoint_child(parent, "child-a", dict(child, generation=4),
+                            os.path.join(self.d, "child-a.json"), writer=failing_writer)
+        self.assertEqual(parent["children"]["child-a"]["pending"]["generation"], 1)
+
+    def test_74_valid_new_checkpoint_resolves_persists_and_reopens_once(self):
+        parent, child, path = self.failed()
+        sha = self.fresh_checkpoint(child, path)
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertEqual((out["recovered"], out["reopened"]), (True, True))
+        self.assertEqual(parent["children"]["child-a"],
+                         {"ref": "child-a.json", "sha256": sha, "received": True,
+                          "pending": None})
+        self.assertTrue(parent["admission"]["open"])
+        on_disk, which = co.load_checked(self.parent_path)
+        self.assertEqual((which, on_disk), ("current", json.loads(json.dumps(parent))))
+        again = self.recover(parent, "child-a", path, sha)  # repeated confirmation
+        self.assertEqual(again["reason"], "NO_PENDING_FAILURE")
+        # only the resolved pending is removed; another pending child keeps admission frozen
+        parent, child, path = self.failed()
+        other = self.child(shift_id="child-shift-b", holder="agent-d")
+        co.checkpoint_child(parent, "child-b", other, os.path.join(self.d, "child-b.json"),
+                            writer=failing_writer)
+        out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
+        self.assertEqual((out["recovered"], out["reopened"], out["still_pending"]),
+                         (True, False, ["child-b"]))
+        self.assertIsNotNone(parent["children"]["child-b"]["pending"])
+        self.assertFalse(parent["admission"]["open"])
+
+    def test_75_bad_checkpoints_are_rejected_and_change_nothing(self):
+        parent, child, path = self.failed()
+        sha = self.fresh_checkpoint(child, path)
+        before = se.snapshot(parent)
+        self.assertEqual(self.recover(parent, "child-a", path, "0" * 64)["reason"],
+                         "HASH_MISMATCH")
+        other_path = os.path.join(self.d, "other.json")
+        other_sha = co.autosave(self.child(shift_id="other-shift"), other_path)["sha256"]
+        self.assertEqual(self.recover(parent, "child-a", other_path, other_sha)["reason"],
+                         "WRONG_CHILD")
+        impostor = os.path.join(self.d, "impostor.json")
+        imp_sha = co.autosave(self.child(holder="agent-z"), impostor)["sha256"]
+        self.assertEqual(self.recover(parent, "child-a", impostor, imp_sha)["reason"],
+                         "WRONG_CHILD")
+        self.assertEqual(self.recover(parent, "child-a", path, sha,
+                                      cause="SOMETHING_ELSE")["reason"], "CAUSE_MISMATCH")
+        self.assertEqual(self.recover(parent, "child-z", path, sha)["reason"],
+                         "NO_PENDING_FAILURE")
+        self.assertEqual(parent, before)
+        # an older version than the one that failed
+        parent, child, path = self.failed(child=dict(self.child(), generation=3))
+        old_sha = co.autosave(dict(child, generation=2), path)["sha256"]
+        self.assertEqual(self.recover(parent, "child-a", path, old_sha)["reason"],
+                         "STALE_CHECKPOINT")
+        # wrong caller identity or generation of the parent holder
+        with self.assertRaises(se.ShiftError):
+            co.recover_child(parent, "agent-9", "child-a", child_path=path, claimed_sha=old_sha,
+                             cause="CHILD_PERSISTENCE_FAILED", now=1003, generation=1,
+                             parent_path=self.parent_path)
+        with self.assertRaises(se.ShiftError):
+            self.recover(parent, "child-a", path, old_sha, generation=2)
+
+    def test_76_parent_save_failure_keeps_the_safe_frozen_state(self):
+        parent, child, path = self.failed()
+        sha = self.fresh_checkpoint(child, path)
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, sha, writer=failing_writer)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "PARENT_PERSISTENCE_FAILED"))
+        self.assertEqual(parent, before)
+        self.assertFalse(parent["admission"]["open"])
+        self.assertTrue(self.recover(parent, "child-a", path, sha)["recovered"])
+
+    def test_77_no_privilege_widening_and_human_gates_stay_frozen(self):
+        parent, child, path = self.failed()
+        se.set_gate(parent, "agent-1", "k2", {"kind": "approval", "by": "owner-1",
+                                              "state": "pending"}, 1002, generation=1)
+        lease, budget = dict(parent["lease"]), dict(parent["budget"])
+        self.assertTrue(self.recover(parent, "child-a", path,
+                                     self.fresh_checkpoint(child, path))["recovered"])
+        self.assertEqual(parent["gates"]["k2"]["state"], "pending")
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(parent, "agent-1", "k2", backlog(), 1004, generation=1)
+        self.assertEqual(err.exception.code, "HUMAN_GATE")
+        self.assertEqual((parent["lease"], parent["budget"], parent["holder"],
+                          parent["generation"]), (lease, budget, "agent-1", 1))
+        # a freeze with another cause is never lifted by a child recovery
+        parent, child, path = self.failed()
+        parent["admission"] = {"open": False, "reason": "PREFLIGHT_INCONSISTENT"}
+        out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
+        self.assertEqual((out["recovered"], out["reopened"]), (True, False))
+        self.assertEqual(parent["admission"]["reason"], "PREFLIGHT_INCONSISTENT")
+
+    def test_78_restart_preserves_cursor_and_in_flight_through_recovery(self):
+        parent, child, path = self.failed()
+        cursor, in_flight = dict(parent["cursor"]), list(parent["in_flight"])
+        co.autosave(parent, self.parent_path)
+        restored, _ = co.load_checked(self.parent_path)  # restart
+        self.assertEqual(restored["children"]["child-a"]["pending"]["cause"],
+                         "CHILD_PERSISTENCE_FAILED")
+        self.assertFalse(restored["admission"]["open"])
+        self.assertTrue(self.recover(restored, "child-a", path,
+                                     self.fresh_checkpoint(child, path))["recovered"])
+        again, _ = co.load_checked(self.parent_path)  # second restart after recovery
+        for state in (restored, again):
+            self.assertEqual((state["cursor"], state["in_flight"]), (cursor, in_flight))
+        self.assertTrue(again["admission"]["open"])
 
 
 class OwnTeam(unittest.TestCase):

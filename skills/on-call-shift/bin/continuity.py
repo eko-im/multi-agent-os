@@ -103,14 +103,70 @@ def load_checked(path):
 
 def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
     """A child (leaf) keeps its own checkpoint file. The parent stores only a pointer, the
-    hash and whether the save was received. Secrets and child logs never go to the parent."""
+    hash and whether the save was received. Secrets and child logs never go to the parent.
+    A failed child save records a pending entry (cause, child identity, generation) and
+    freezes the parent's admission until `recover_child` resolves it."""
     saved = autosave(child_state, child_path, writer=writer)
+    previous = parent["children"].get(child_id, {}).get("pending")
     parent["children"][child_id] = {"ref": os.path.basename(child_path),
                                     "sha256": saved.get("sha256"),
-                                    "received": saved["saved"]}
+                                    "received": saved["saved"],
+                                    "pending": previous}
     if not saved["saved"]:
+        parent["children"][child_id]["pending"] = previous or {
+            "cause": "CHILD_PERSISTENCE_FAILED", "shift_id": child_state["shift_id"],
+            "holder": child_state["holder"], "generation": child_state["generation"]}
         parent["admission"] = {"open": False, "reason": "CHILD_PERSISTENCE_FAILED"}
     return saved
+
+
+def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, now,
+                  generation, parent_path, writer=None):
+    """Resolve ONE pending child failure from a new child checkpoint, then reopen once.
+
+    Checks: the parent caller holds the lease in the current generation; a pending entry
+    exists for this child (a repeated confirmation finds none); the bytes read from the
+    child file hash to `claimed_sha`; the checkpoint is from the same child (shift and
+    holder) and not older than the failed one; the cause matches. The parent change is
+    persisted first; if that save fails, the parent keeps its frozen state. Admission
+    reopens only if it was frozen by a child failure and no child is still pending; gates
+    and every other freeze stay as they are."""
+    se._require_holder(parent, actor, now, generation)
+    entry = parent["children"].get(child_id)
+    pending = entry.get("pending") if entry else None
+    if not pending:
+        return {"recovered": False, "reason": "NO_PENDING_FAILURE"}
+    try:
+        with open(child_path, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != claimed_sha:
+        return {"recovered": False, "reason": "HASH_MISMATCH"}
+    try:
+        doc = json.loads(data)
+    except ValueError:
+        return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
+    if (doc.get("shift_id"), doc.get("holder")) != (pending["shift_id"], pending["holder"]):
+        return {"recovered": False, "reason": "WRONG_CHILD"}
+    if not isinstance(doc.get("generation"), int) or doc["generation"] < pending["generation"]:
+        return {"recovered": False, "reason": "STALE_CHECKPOINT"}
+    if cause != pending["cause"]:
+        return {"recovered": False, "reason": "CAUSE_MISMATCH"}
+    trial = copy.deepcopy(parent)
+    trial["children"][child_id].update(sha256=digest, received=True, pending=None)
+    others = [k for k, v in trial["children"].items() if v.get("pending")]
+    reopen = trial["admission"]["reason"] == "CHILD_PERSISTENCE_FAILED" and not others
+    if reopen:
+        trial["admission"] = {"open": True, "reason": None}
+    saved = autosave(trial, parent_path, writer=writer)
+    if not saved["saved"]:
+        return {"recovered": False, "reason": "PARENT_PERSISTENCE_FAILED"}  # parent unchanged
+    parent.clear()
+    parent.update(trial)
+    return {"recovered": True, "reason": None, "reopened": reopen,
+            "still_pending": sorted(others), "sha256": saved["sha256"]}
 
 
 # --------------------------------------------------------------------------- handoff

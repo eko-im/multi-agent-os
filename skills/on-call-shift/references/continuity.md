@@ -22,6 +22,13 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
 - `load_checked` loads the newest revision whose hash matches, else `.prev`, else fails.
 - Children keep their own checkpoint (`checkpoint_child`); the parent stores only a pointer, the
   hash and whether it was received. A child save failure closes the parent's admission.
+- Recovery (`recover_child`): the parent holder (lease + current generation) reads the new child
+  checkpoint, checks the hash of the bytes read, the same child (shift and holder), a generation
+  not older than the failed one, and the original cause. It removes only that pending entry,
+  persists the parent first (a failed parent save leaves the parent frozen and unchanged) and
+  reopens admission once, only if it was frozen by a child failure and no child is still
+  pending. A repeated confirmation finds nothing pending. Gates, lease, budget and other
+  freezes are untouched.
 - No agent recursion just to save, no secrets copied, no rescans, no overwriting someone's WIP.
 
 ## Handoff

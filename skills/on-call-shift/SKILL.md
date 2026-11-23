@@ -169,7 +169,8 @@ satisfaction to unknown.
 | Wakeup live | no: `NO_BOUND_NOTIFICATION_TRANSPORT`; the existing timer only observes |
 
 - Autosave after every transition (children too: pointer + hash in the parent). A failed
-  save rolls back and freezes admission; it is never reported as saved.
+  save rolls back and freezes admission; it is never reported as saved. A failed child save
+  freezes the parent until `recover_child` accepts a new checkpoint from that same child.
 - The handoff is derived from the snapshot, never hand-written; the previous revision stays.
 - Preflight and postflight every turn, with one graded action; missing metrics are `unknown`.
 - A separate watchdog greets with a nonce and waits for an ACK with a timeout. Silence alone
@@ -286,6 +287,12 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 70. Shutdown rehearsal only on a disposable child; a replay affects no new process.
 71. Creating or deleting a shared resource is parked, never done.
 72. An own tool retires without touching another owner's dependents; active dependents block.
+73. A child persistence failure freezes admission and records cause, identity and generation.
+74. A valid new child checkpoint resolves only its pending entry, persists the parent, reopens once.
+75. Another child's, an older, a wrong-hash or a repeated checkpoint is rejected with no change.
+76. A failed parent save during recovery keeps the frozen state.
+77. Recovery widens no privilege and never lifts a human gate or another freeze.
+78. Restart keeps cursor and in-flight work through the recovery.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
