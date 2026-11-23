@@ -3,6 +3,7 @@
 Processes: only a disposable `sleep` child created by the test itself is ever signalled.
 Run: python3 -m unittest discover -s skills/on-call-shift/tests -v
 """
+import hashlib
 import json
 import os
 import subprocess
@@ -520,6 +521,74 @@ class ChildRecovery(unittest.TestCase):
         out = self.recover(parent, "child-a", path, parent["children"]["child-a"]["sha256"])
         self.assertEqual((out["recovered"], out["reopened"]), (True, True))
 
+
+    def test_82_same_generation_and_cursor_checkpoint_missing_in_flight_work_is_refused(self):
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        old_sha = co.checkpoint_child(parent, "child-a", child, path)["sha256"]  # no work yet
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)  # no tick: same cursor
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        failed = parent["children"]["child-a"]["pending"]["failed_at"]
+        with open(path, "rb") as handle:
+            old = json.loads(handle.read())
+        self.assertEqual((old["generation"], old["cursor"]["seq"], old["in_flight"]),
+                         (failed["generation"], failed["cursor_seq"], []))
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, old_sha)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_SAVE_SEQ"))
+        self.assertEqual(parent, before)
+        self.assertFalse(parent["admission"]["open"])
+
+    def test_83_valid_recovery_after_restart_reopens_once_and_keeps_the_item(self):
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        co.autosave(parent, self.parent_path)
+        restored, _ = co.load_checked(self.parent_path)  # parent restart
+        child_back = json.loads(json.dumps(child))  # child restarts from its own memory
+        good = co.autosave(child_back, path)["sha256"]  # newer save, item in flight
+        out = co.recover_child(restored, "agent-1", "child-a", child_path=path,
+                               claimed_sha=good, cause="CHILD_PERSISTENCE_FAILED", now=1003,
+                               generation=1, parent_path=self.parent_path)
+        self.assertEqual((out["recovered"], out["reopened"]), (True, True))
+        with open(path, "rb") as handle:
+            self.assertEqual(json.loads(handle.read())["in_flight"], ["k1"])
+        again = co.recover_child(restored, "agent-1", "child-a", child_path=path,
+                                 claimed_sha=good, cause="CHILD_PERSISTENCE_FAILED", now=1004,
+                                 generation=1, parent_path=self.parent_path)
+        self.assertEqual(again["reason"], "NO_PENDING_FAILURE")  # exactly one reopening
+        on_disk, _ = co.load_checked(self.parent_path)
+        self.assertTrue(on_disk["admission"]["open"])
+
+    def test_84_save_counter_never_goes_back_and_equal_count_is_not_newer(self):
+        state = shift()
+        co.autosave(state, self.parent_path)
+        seq = state["save_seq"]
+        co.transition(state, self.parent_path, se.apply_tick, "agent-1", "t1", 1001,
+                      generation=1, writer=failing_writer)  # failed save rolls back the state
+        self.assertGreater(state["save_seq"], seq)  # ...but never the counter
+        # the failed save wrote the child file but not its sidecar: same count, not newer
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)
+
+        def sidecar_fails(target, data):
+            if target.endswith(".sha256"):
+                raise OSError("sidecar write failed (simulated)")
+            co._atomic_write(target, data)
+
+        co.checkpoint_child(parent, "child-a", child, path, writer=sidecar_fails)
+        with open(path, "rb") as handle:
+            data = handle.read()
+        self.assertEqual(json.loads(data)["save_seq"],
+                         parent["children"]["child-a"]["pending"]["failed_at"]["save_seq"])
+        out = self.recover(parent, "child-a", path, hashlib.sha256(data).hexdigest())
+        self.assertEqual(out["reason"], "STALE_CHECKPOINT_SAVE_SEQ")
+        out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
+        self.assertTrue(out["recovered"])
 
 class OwnTeam(unittest.TestCase):
     """The holder's own team: admission, drain, idempotent retirement, other owners untouched."""

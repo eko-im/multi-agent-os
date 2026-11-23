@@ -39,6 +39,9 @@ def autosave(state, path, *, writer=None):
     sidecar, and read it back. Only a read-back hash match counts as saved. A failure closes
     admission and is reported; it is never reported as saved."""
     writer = writer or _atomic_write
+    # Monotonic save counter: every attempt gets a new number, even one that fails, so a
+    # file written before a failed save is always older than it (Q1: changes without a tick).
+    state["save_seq"] = state.get("save_seq", 0) + 1
     data = _canonical(state)
     digest = hashlib.sha256(data).hexdigest()
     try:
@@ -63,8 +66,10 @@ def transition(state, path, fn, *args, writer=None, **kwargs):
     result = fn(state, *args, **kwargs)
     saved = autosave(state, path, writer=writer)
     if not saved["saved"]:
+        seq = state["save_seq"]
         state.clear()
         state.update(before)
+        state["save_seq"] = seq  # the counter never goes back
         state["admission"] = {"open": False, "reason": "PERSISTENCE_FAILED"}
     return result, saved
 
@@ -117,13 +122,15 @@ def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
     if not saved["saved"]:
         attempt = {"generation": child_state["generation"],
                    "cursor_seq": child_state["cursor"]["seq"],
+                   "save_seq": child_state["save_seq"],
                    "sha256": snapshot_sha(child_state)}
         pending = dict(previous) if previous else {
             "cause": "CHILD_PERSISTENCE_FAILED", "shift_id": child_state["shift_id"],
             "holder": child_state["holder"], "generation": child_state["generation"],
             "failed_at": attempt}
-        if (attempt["generation"], attempt["cursor_seq"]) >= (
-                pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"]):
+        if (attempt["generation"], attempt["cursor_seq"], attempt["save_seq"]) >= (
+                pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"],
+                pending["failed_at"].get("save_seq", 0)):
             pending["failed_at"] = attempt  # floor = newest state that failed to save
         parent["children"][child_id]["pending"] = pending
         # Never overwrite an earlier freeze (POSTFLIGHT, PREFLIGHT_INCONSISTENT, ...):
@@ -168,6 +175,10 @@ def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, no
     if (not all(isinstance(v, int) for v in version)
             or version < (floor["generation"], floor["cursor_seq"])):
         return {"recovered": False, "reason": "STALE_CHECKPOINT"}
+    # Same generation and cursor can still be older (e.g. an adoption without a tick):
+    # only a save made AFTER the failed one can recover it.
+    if not isinstance(doc.get("save_seq"), int) or doc["save_seq"] <= floor.get("save_seq", 0):
+        return {"recovered": False, "reason": "STALE_CHECKPOINT_SAVE_SEQ"}
     if cause != pending["cause"]:
         return {"recovered": False, "reason": "CAUSE_MISMATCH"}
     trial = copy.deepcopy(parent)

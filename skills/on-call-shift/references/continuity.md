@@ -32,7 +32,10 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
   (`POSTFLIGHT`, `PREFLIGHT_INCONSISTENT`, `PERSISTENCE_FAILED`), and `reopen_admission`
   waits while any child is pending. `pending.failed_at` keeps the generation, cursor and hash
   of the newest save that failed; a checkpoint older than that is refused. A later good save
-  never clears `pending` by itself.
+  never clears `pending` by itself. Every save attempt bumps a monotonic `save_seq` (kept even
+  when a failed transition rolls back); only a checkpoint with a higher `save_seq` than the
+  failed save can recover it (`STALE_CHECKPOINT_SAVE_SEQ`), which covers changes made without
+  a tick (same generation and cursor).
 - No agent recursion just to save, no secrets copied, no rescans, no overwriting someone's WIP.
 
 ## Handoff

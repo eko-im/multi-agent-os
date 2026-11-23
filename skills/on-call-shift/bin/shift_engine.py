@@ -82,6 +82,7 @@ def open_shift(*, shift_id, principal, scope, backlog, capacity, budget, holder,
         "decisions": {},
         # Admission closes when persistence fails or preflight freezes new work.
         "admission": {"open": True, "reason": None},
+        "save_seq": 0,  # bumped by every autosave attempt (continuity.autosave)
         # Child checkpoints: id -> {"ref", "sha256", "received"}; the child keeps its own file.
         "children": {},
         "conflict_log": {},

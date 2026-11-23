@@ -296,6 +296,9 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 79. A child failure never lifts an earlier parent freeze; the parent waits for pending children.
 80. A checkpoint older than the failed save is refused, even with the same generation.
 81. A later good child save does not clear the pending failure without `recover_child`.
+82. A checkpoint with the same generation and cursor that lacks in-flight work is refused.
+83. A valid recovery after restart reopens once and keeps the item.
+84. The save counter never goes back; an equal count is not newer.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.

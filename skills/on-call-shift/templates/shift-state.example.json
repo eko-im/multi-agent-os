@@ -63,6 +63,7 @@
     "tick-1"
   ],
   "reopened": {},
+  "save_seq": 0,
   "schema": "on-call-shift/state@1",
   "scope": "repo/x + team B",
   "shift_id": "shift-1",

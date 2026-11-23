@@ -40,7 +40,8 @@
     "admission",
     "children",
     "conflict_log",
-    "team"
+    "team",
+    "save_seq"
   ],
   "properties": {
     "schema": {
@@ -428,6 +429,11 @@
           "description": "member id -> {owner, role, scope, risk, cost, mode ephemeral|persistent, review_at, disarm, status admitted|active|draining|retired, in_flight, admitted_at, exit_receipt}"
         }
       }
+    },
+    "save_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "monotonic count of save attempts (failed ones too); a checkpoint with a lower or equal value than a failed save cannot recover it"
     }
   }
 }
