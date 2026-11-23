@@ -350,9 +350,13 @@ class ChildRecovery(unittest.TestCase):
         parent, child, _ = self.failed()
         self.assertEqual(parent["admission"], {"open": False,
                                                "reason": "CHILD_PERSISTENCE_FAILED"})
-        self.assertEqual(parent["children"]["child-a"]["pending"],
+        pending = parent["children"]["child-a"]["pending"]
+        self.assertEqual({k: v for k, v in pending.items() if k != "failed_at"},
                          {"cause": "CHILD_PERSISTENCE_FAILED", "shift_id": "child-shift",
                           "holder": "agent-c", "generation": 1})
+        self.assertEqual((pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"],
+                          pending["failed_at"]["sha256"]),
+                         (1, 0, co.snapshot_sha(child)))
         with self.assertRaises(se.ShiftError) as err:
             se.adopt(parent, "agent-1", "k2", backlog(), 1003, generation=1)
         self.assertEqual(err.exception.code, "ADMISSION_FROZEN")
@@ -462,6 +466,59 @@ class ChildRecovery(unittest.TestCase):
         for state in (restored, again):
             self.assertEqual((state["cursor"], state["in_flight"]), (cursor, in_flight))
         self.assertTrue(again["admission"]["open"])
+
+    def test_79_child_failure_never_lifts_an_earlier_parent_freeze(self):
+        for reason in ("POSTFLIGHT", "PREFLIGHT_INCONSISTENT", "PERSISTENCE_FAILED"):
+            parent, child = shift(), self.child()
+            parent["admission"] = {"open": False, "reason": reason}
+            path = os.path.join(self.d, f"child-{reason}.json")
+            co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+            self.assertEqual(parent["admission"]["reason"], reason)  # earlier reason kept
+            self.assertIsNotNone(parent["children"]["child-a"]["pending"])
+            out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
+            self.assertEqual((out["recovered"], out["reopened"]), (True, False))
+            self.assertEqual(parent["admission"], {"open": False, "reason": reason})
+        # and the parent's own recovery does not reopen while a child is still pending
+        parent, child = shift(), self.child()
+        parent["admission"] = {"open": False, "reason": "PERSISTENCE_FAILED"}
+        path = os.path.join(self.d, "child-x.json")
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        out = co.reopen_admission(parent, self.parent_path, "agent-1", 1003, generation=1)
+        self.assertEqual((out["reopened"], out["reason"]), (False, "CHILD_FAILURE_PENDING"))
+        self.assertFalse(parent["admission"]["open"])
+
+    def test_80_checkpoint_older_than_the_failed_save_is_refused_same_generation(self):
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        old_sha = co.checkpoint_child(parent, "child-a", child, path)["sha256"]  # cursor 0, ok
+        se.apply_tick(child, "agent-c", "t1", 1001, generation=1)  # cursor 1
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        self.assertEqual(parent["children"]["child-a"]["pending"]["failed_at"]["cursor_seq"], 1)
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, old_sha)  # the file still holds cursor 0
+        self.assertEqual(out["reason"], "STALE_CHECKPOINT")
+        self.assertEqual(parent, before)
+        out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
+        self.assertEqual((out["recovered"], out["reopened"]), (True, True))
+        # a second failure at a newer cursor raises the floor: the cursor-1 file is now old
+        parent, child = shift(), self.child()
+        se.apply_tick(child, "agent-c", "t1", 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        mid_sha = co.autosave(child, path)["sha256"]  # child file at cursor 1
+        se.apply_tick(child, "agent-c", "t2", 1002, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path + ".x", writer=failing_writer)
+        self.assertEqual(parent["children"]["child-a"]["pending"]["failed_at"]["cursor_seq"], 2)
+        self.assertEqual(self.recover(parent, "child-a", path, mid_sha)["reason"],
+                         "STALE_CHECKPOINT")
+
+    def test_81_a_later_good_save_does_not_clear_pending_without_recovery(self):
+        parent, child, path = self.failed()
+        co.checkpoint_child(parent, "child-a", child, path)  # good save, no recover_child
+        self.assertIsNotNone(parent["children"]["child-a"]["pending"])
+        self.assertEqual(parent["admission"], {"open": False,
+                                               "reason": "CHILD_PERSISTENCE_FAILED"})
+        out = self.recover(parent, "child-a", path, parent["children"]["child-a"]["sha256"])
+        self.assertEqual((out["recovered"], out["reopened"]), (True, True))
 
 
 class OwnTeam(unittest.TestCase):

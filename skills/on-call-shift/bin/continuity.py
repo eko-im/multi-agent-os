@@ -76,6 +76,8 @@ def reopen_admission(state, path, actor, now, *, generation, writer=None):
         return {"reopened": False, "reason": "NOT_FROZEN_BY_PERSISTENCE"}
     trial = copy.deepcopy(state)
     trial["admission"] = {"open": True, "reason": None}
+    if any(v.get("pending") for v in state["children"].values()):
+        return {"reopened": False, "reason": "CHILD_FAILURE_PENDING"}
     saved = autosave(trial, path, writer=writer)
     if not saved["saved"]:
         return {"reopened": False, "reason": "PERSISTENCE_FAILED"}
@@ -113,10 +115,21 @@ def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
                                     "received": saved["saved"],
                                     "pending": previous}
     if not saved["saved"]:
-        parent["children"][child_id]["pending"] = previous or {
+        attempt = {"generation": child_state["generation"],
+                   "cursor_seq": child_state["cursor"]["seq"],
+                   "sha256": snapshot_sha(child_state)}
+        pending = dict(previous) if previous else {
             "cause": "CHILD_PERSISTENCE_FAILED", "shift_id": child_state["shift_id"],
-            "holder": child_state["holder"], "generation": child_state["generation"]}
-        parent["admission"] = {"open": False, "reason": "CHILD_PERSISTENCE_FAILED"}
+            "holder": child_state["holder"], "generation": child_state["generation"],
+            "failed_at": attempt}
+        if (attempt["generation"], attempt["cursor_seq"]) >= (
+                pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"]):
+            pending["failed_at"] = attempt  # floor = newest state that failed to save
+        parent["children"][child_id]["pending"] = pending
+        # Never overwrite an earlier freeze (POSTFLIGHT, PREFLIGHT_INCONSISTENT, ...):
+        # that reason stays, so a child recovery cannot lift it.
+        if parent["admission"]["open"]:
+            parent["admission"] = {"open": False, "reason": "CHILD_PERSISTENCE_FAILED"}
     return saved
 
 
@@ -150,7 +163,10 @@ def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, no
         return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
     if (doc.get("shift_id"), doc.get("holder")) != (pending["shift_id"], pending["holder"]):
         return {"recovered": False, "reason": "WRONG_CHILD"}
-    if not isinstance(doc.get("generation"), int) or doc["generation"] < pending["generation"]:
+    floor = pending["failed_at"]
+    version = (doc.get("generation"), (doc.get("cursor") or {}).get("seq"))
+    if (not all(isinstance(v, int) for v in version)
+            or version < (floor["generation"], floor["cursor_seq"])):
         return {"recovered": False, "reason": "STALE_CHECKPOINT"}
     if cause != pending["cause"]:
         return {"recovered": False, "reason": "CAUSE_MISMATCH"}

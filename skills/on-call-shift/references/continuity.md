@@ -28,7 +28,11 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
   persists the parent first (a failed parent save leaves the parent frozen and unchanged) and
   reopens admission once, only if it was frozen by a child failure and no child is still
   pending. A repeated confirmation finds nothing pending. Gates, lease, budget and other
-  freezes are untouched.
+  freezes are untouched. A child failure never overwrites an earlier parent freeze
+  (`POSTFLIGHT`, `PREFLIGHT_INCONSISTENT`, `PERSISTENCE_FAILED`), and `reopen_admission`
+  waits while any child is pending. `pending.failed_at` keeps the generation, cursor and hash
+  of the newest save that failed; a checkpoint older than that is refused. A later good save
+  never clears `pending` by itself.
 - No agent recursion just to save, no secrets copied, no rescans, no overwriting someone's WIP.
 
 ## Handoff

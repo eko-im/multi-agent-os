@@ -293,6 +293,9 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 76. A failed parent save during recovery keeps the frozen state.
 77. Recovery widens no privilege and never lifts a human gate or another freeze.
 78. Restart keeps cursor and in-flight work through the recovery.
+79. A child failure never lifts an earlier parent freeze; the parent waits for pending children.
+80. A checkpoint older than the failed save is refused, even with the same generation.
+81. A later good child save does not clear the pending failure without `recover_child`.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
