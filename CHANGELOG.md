@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added — `cmux-concierge` skill + `bin/cmux-concierge` executor
 
 - New skill `skills/cmux-concierge/SKILL.md` (0.1.0) and executor `bin/cmux-concierge`: unattended care for cmux-cloud VMs. `check` diagnoses tunnel, VM state, ssh, DNS, resolver, egress and the login status of kiro-cli, claude, codex and kirocrew (one word each, never the output). `heal` climbs L1 relink resolv.conf to the systemd-resolved stub (backup + `undo`) → L2 restart resolver → L3 restart the local cmux system tunnel → L4 `cmux vm restart` (opt-in `--allow-reboot`). Every rung is GUARD → ACTION → POST-CHECK, idempotent, `--dry-run`. Sign-in, credentials and spend (resume/create VM, pool) return NEEDS-HUMAN (exit 2).
-- Hermetic tests `bin/tests/cmux-concierge.test.sh` (15 checks; mutation-checked). VM unreachable with the system tunnel down returns NEEDS-HUMAN (exit 2), matching §Boundaries.
+- Hermetic tests `bin/tests/cmux-concierge.test.sh` (17 checks; mutation-checked). VM unreachable with the system tunnel down, and DNS broken without passwordless sudo, return NEEDS-HUMAN (exit 2), matching §Boundaries. After a real L4 reboot, heal re-runs L1/L2 once.
 
 ### Changed — git-cycle-sentinel A4: signing optional
 

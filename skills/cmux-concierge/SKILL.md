@@ -104,7 +104,7 @@ any login verb. The test suite asserts a fake token in tool output never reaches
 
 ## Tests
 
-`bash bin/tests/cmux-concierge.test.sh` — 15 checks with a fake `cmux`, fake `getent` (resolves
+`bash bin/tests/cmux-concierge.test.sh` — 17 checks with a fake `cmux`, fake `getent` (resolves
 only when resolv.conf is a symlink, modelling the real fault), a sandbox root and fake harness
 CLIs that print a fake token. Test seams (env, defaults = the real host):
 `CMUX_CONCIERGE_TRANSPORT=local`, `CMUX_CONCIERGE_ROOT`, `CMUX_CONCIERGE_SUDO`,

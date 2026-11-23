@@ -21,6 +21,7 @@ echo "\$*" >> "$T/cmux.log"
 case "\$1 \$2" in
   "vpn status") printf 'Terminal tunnel: up (user-space WireGuard)\nTunnel: down\n' ;;
   "vm ls") echo '{"vms":[{"id":"vm-1","displayName":"box","status":"'"\${FAKE_VM_STATUS:-running}"'"}]}' ;;
+  "vm restart") cp "$T/p-l1" "$T/p-boot" ;;  # models the platform rewriting resolv.conf on reboot
 esac
 EOF
 # Fake getent: github.com resolves only when resolv.conf is a symlink (models the real fault).
@@ -95,6 +96,16 @@ run undo --backup "$T/root/etc/$b" >"$T/o" 2>&1
 check "undo restores the original file" '[ ! -L "$T/root/etc/resolv.conf" ] && grep -q 10.32.0.28 "$T/root/etc/resolv.conf"'
 run undo --backup /etc/passwd >"$T/o" 2>&1; rc=$?
 check "undo refuses a non-concierge path" '[ $rc != 0 ] && grep -q not-a-concierge-backup "$T/o"'
+
+echo "== sudo + reboot"
+sed 's/^SUDO=ok$/SUDO=no/' "$T/p-l1" > "$T/p-nosudo"
+PROBE_FILE="$T/p-nosudo" run check >"$T/o" 2>&1; rc=$?
+check "no passwordless sudo -> exit 2, no L1 rung" '[ $rc = 2 ] && grep -q "HUMAN|no-passwordless-sudo" "$T/o" && ! grep -q "L1|" "$T/o"'
+
+# Real L4 in the sandbox: fake `cmux vm restart` swaps the probe to a rewritten resolv.conf.
+cp "$T/p-l4" "$T/p-boot"; rm -f "$T/root/etc/resolv.conf"; printf 'nameserver 10.32.0.28\n' > "$T/root/etc/resolv.conf"
+PROBE_FILE="$T/p-boot" run heal --max-level 4 --allow-reboot >"$T/o" 2>&1
+check "after L4 reboot, L1 runs again" 'grep -q "\[L4\] ACTION" "$T/o" && sed -n "/\[L4\] ACTION/,\$p" "$T/o" | grep -q "\[L1\] ACTION"'
 
 echo "== $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

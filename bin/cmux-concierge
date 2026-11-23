@@ -195,15 +195,17 @@ findings() {
     return
   fi
   if [ "$(get DNS)" != ok ]; then
+    local nosudo=0; [ "$(get SUDO)" = no ] && nosudo=1
     if [ "$(get STUB)" = present ] && [ "$(get RESOLV_LINK)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
-      echo "L1|dns-broken: resolv.conf -> $(get RESOLV_NS) bypasses the resolved stub"
+      if [ "$nosudo" = 1 ]; then echo "HUMAN|no-passwordless-sudo: L1 (relink resolv.conf) cannot act"
+      else echo "L1|dns-broken: resolv.conf -> $(get RESOLV_NS) bypasses the resolved stub"; fi
     elif [ "$(get EGRESS_443)" = ok ]; then
-      echo "L2|dns-broken: resolv.conf already on the stub; resolver itself failing"
+      if [ "$nosudo" = 1 ]; then echo "HUMAN|no-passwordless-sudo: L2 (restart resolver) cannot act"
+      else echo "L2|dns-broken: resolv.conf already on the stub; resolver itself failing"; fi
     else
       echo "L4|no-egress: tcp/443 to 1.1.1.1 fails and DNS fails"
     fi
   fi
-  [ "$(get SUDO)" = no ] && [ "$(get DNS)" != ok ] && echo "HUMAN|no-passwordless-sudo: L1/L2 cannot act"
   [ "$(get INTERNAL_DNS)" = fail ] && echo "INFO|internal-dns-fail: *.cmux.internal needs the platform resolver (cmux ticket)"
   local n v
   for n in KIRO_CLI CLAUDE CODEX KIROCREW; do
@@ -254,8 +256,11 @@ l4() {
 heal() {
   run_probe; report; local rc=$?
   [ "$rc" = 3 ] || { say "== heal: nothing a rung can fix (exit $rc)"; return "$rc"; }
-  local lvl
-  for lvl in 1 2 3 4; do
+  local lvl i=0 rebooted=0
+  # Second pass (1 2) runs only after a real L4 reboot: the platform can rewrite resolv.conf again.
+  for lvl in 1 2 3 4 1 2; do
+    i=$((i + 1))
+    [ "$i" -le 4 ] || [ "$rebooted" = 1 ] || break
     [ "$lvl" -le "$MAX_LEVEL" ] || break
     needs "L$lvl" || continue
     case "$lvl" in
@@ -265,11 +270,10 @@ heal() {
          else say "[L3] SKIP: system tunnel was down; \`cmux vpn up\` may need macOS approval (human)"; fi ;;
       4) if [ "$ALLOW_REBOOT" != 1 ]; then say "[L4] SKIP: reboot needs --allow-reboot"
          elif [ -z "$VM_ID" ] || [ "$VM_STATUS" != running ]; then say "[L4] SKIP: needs --vm of a running machine (never resumes/creates)"
-         else act L4 "cmux vm restart $VM_ID (running processes may be lost)" l4; fi ;;
+         else act L4 "cmux vm restart $VM_ID (running processes may be lost)" l4; [ "$DRY_RUN" = 1 ] || rebooted=1; fi ;;
     esac
     [ "$DRY_RUN" = 1 ] && continue
     say "== post-check after L$lvl"; run_probe
-    # A reboot can make the platform rewrite resolv.conf again: L1 is re-checked by the next pass.
     report >/dev/null; rc=$?
     if [ "$rc" != 3 ]; then report; return $?; fi
   done
