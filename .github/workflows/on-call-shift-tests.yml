@@ -1,0 +1,43 @@
+# on-call-shift tests: the numbered acceptance scenarios of the shift contract.
+# Stdlib only (unittest), so no dependency install step.
+
+name: on-call-shift tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "skills/on-call-shift/**"
+      - ".github/workflows/on-call-shift-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "skills/on-call-shift/**"
+      - ".github/workflows/on-call-shift-tests.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: on-call-shift-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  on-call-shift:
+    name: shift contract scenarios
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Run the scenarios
+        run: python -m unittest discover -s skills/on-call-shift/tests -v
