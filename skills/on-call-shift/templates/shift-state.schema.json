@@ -36,7 +36,11 @@
     "parked",
     "consumed_takeovers",
     "incident",
-    "decisions"
+    "decisions",
+    "admission",
+    "children",
+    "conflict_log",
+    "team"
   ],
   "properties": {
     "schema": {
@@ -372,6 +376,58 @@
     "decisions": {
       "type": "object",
       "description": "decision key -> {choice, seen (source#digest), changes [{from,to,evidence,lens,at}]}; a repeated source#digest never changes the choice"
+    },
+    "admission": {
+      "type": "object",
+      "required": [
+        "open",
+        "reason"
+      ],
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "description": "closed on persistence failure, preflight freeze, fencing or postflight; new adoption is refused while closed"
+    },
+    "children": {
+      "type": "object",
+      "description": "child id -> {ref, sha256, received}; the child keeps its own checkpoint",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "ref",
+          "sha256",
+          "received"
+        ]
+      }
+    },
+    "conflict_log": {
+      "type": "object",
+      "description": "conflict id -> {facts, authorities, alternatives, reversible, review_criterion, decision, status, reason, at}"
+    },
+    "team": {
+      "type": "object",
+      "required": [
+        "seats",
+        "members"
+      ],
+      "properties": {
+        "seats": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "members": {
+          "type": "object",
+          "description": "member id -> {owner, role, scope, risk, cost, mode ephemeral|persistent, review_at, disarm, status admitted|active|draining|retired, in_flight, admitted_at, exit_receipt}"
+        }
+      }
     }
   }
 }

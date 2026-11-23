@@ -841,6 +841,157 @@ class FinalWaveThreads(unittest.TestCase):
             self.assertEqual(out["reason"], "DUPLICATE_REJECTION")
         self.assertEqual(len(state["reopened"]), 1)
         self.assertEqual(state["in_flight"], ["k#reopen-1"])
+    def test_47_every_blocking_gate_survives_the_merge_in_any_order(self):
+        issue = {"connector": "issues", "status": "ok", "items": [
+            {"ref": "I-1", "intent_key": "k",
+             "gate": {"kind": "approval", "by": "owner-1", "state": "granted"}}]}
+        review = {"connector": "reviews", "status": "ok", "items": [
+            {"ref": "P-1", "intent_key": "k",
+             "gate": {"kind": "veto", "by": "owner-2", "state": "pending"}}]}
+        for order in ([issue, review], [review, issue]):
+            backlog = se.normalize_backlog(order)
+            self.assertEqual(len(backlog["items"]["k"]["gates"]), 2)
+            state = new_shift()
+            before = se.snapshot(state)
+            self.assertEqual(se.select_next(state, backlog, "agent-1", 1001,
+                                            generation=1)["action"], "wait")
+            with self.assertRaises(se.ShiftError) as err:
+                se.adopt(state, "agent-1", "k", backlog, 1002, generation=1)
+            self.assertEqual(err.exception.code, "HUMAN_GATE")
+            self.assertEqual(state, before)
+        # one decider's own record does not clear another decider's open gate
+        state = new_shift()
+        backlog = se.normalize_backlog([issue, review])
+        se.set_gate(state, "agent-1", "k", {"kind": "approval", "by": "owner-1",
+                                            "state": "granted", "decided_by": "owner-1"},
+                    1001, generation=1)
+        with self.assertRaises(se.ShiftError):
+            se.adopt(state, "agent-1", "k", backlog, 1002, generation=1)
+
+    def test_48_delivery_dedupes_against_every_result_already_sent(self):
+        state = new_shift()
+        common = {"recipient": "person-1", "recipient_kind": "human",
+                  "receipt": {"received_by": "person-1"}, "generation": 1}
+        self.assertTrue(se.deliver(state, "agent-1", "k", result_ref="r1", now=1001,
+                                   **common)["sent"])
+        self.assertTrue(se.deliver(state, "agent-1", "k", result_ref="r2", now=1002,
+                                   **common)["sent"])
+        se.record_feedback(state, "agent-1", "k", {"from": "person-1", "kind": "accept"},
+                           1003, generation=1)
+        current = se.snapshot(state)["deliveries"]["k"]
+        replay = se.deliver(state, "agent-1", "k", result_ref="r1", now=1004, **common)
+        self.assertEqual(replay, {"sent": False, "reason": "NO_RESEND_SAME_RESULT"})
+        self.assertEqual(state["deliveries"]["k"], current)  # current evidence untouched
+        self.assertEqual(state["deliveries"]["k"]["attempts"], 2)
+
+
+class JudgeFindings(unittest.TestCase):
+    """Regression guards for the judge's findings on 302976ec (A1, A4, A5)."""
+
+    def pending_connector(self):
+        return se.normalize_backlog([{"connector": "c", "status": "ok", "items": [
+            {"ref": "R-1", "intent_key": "k",
+             "gate": {"kind": "approval", "by": "owner-1", "state": "pending"}}]}])
+
+    def test_61_holder_never_grants_a_human_gate(self):
+        backlog = self.pending_connector()
+        state = new_shift()
+        for gate, code in (
+                ({"kind": "approval", "by": "owner-1", "state": "granted"},
+                 "GATE_DECIDER_MISMATCH"),
+                ({"kind": "approval", "by": "agent-1", "state": "granted",
+                  "decided_by": "agent-1"}, "SELF_GRANT_REFUSED"),
+                ({"kind": "approval", "by": "owner-1", "state": "granted",
+                  "decided_by": "agent-1"}, "GATE_DECIDER_MISMATCH")):
+            before = se.snapshot(state)
+            with self.assertRaises(se.ShiftError) as err:
+                se.set_gate(state, "agent-1", "k", gate, 1001, generation=1)
+            self.assertEqual(err.exception.code, code)
+            self.assertEqual(state, before)
+        # a recorded grant from a DIFFERENT decider never clears the connector's pending gate
+        se.set_gate(state, "agent-1", "k", {"kind": "approval", "by": "owner-9",
+                                            "state": "granted", "decided_by": "owner-9"},
+                    1002, generation=1)
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(state, "agent-1", "k", backlog, 1003, generation=1)
+        self.assertEqual(err.exception.code, "HUMAN_GATE")
+
+    def test_62_linked_issue_and_pr_with_different_keys_are_one_item(self):
+        backlog = se.normalize_backlog([
+            {"connector": "issues", "status": "ok",
+             "items": [{"ref": "repo/x#12", "intent_key": "fix-timeout", "links": ["repo/x!13"]}]},
+            {"connector": "reviews", "status": "ok",
+             "items": [{"ref": "repo/x!13", "intent_key": "pr-13-timeout"}]}])
+        self.assertEqual(list(backlog["items"]), ["fix-timeout"])
+        self.assertEqual(sorted(backlog["items"]["fix-timeout"]["refs"]),
+                         ["repo/x!13", "repo/x#12"])
+        state = new_shift()
+        _, first = se.adopt(state, "agent-1", "fix-timeout", backlog, 1001, generation=1)
+        _, again = se.adopt(state, "agent-1", "pr-13-timeout", backlog, 1002, generation=1)
+        self.assertEqual((first, again, len(state["adopted"])), (True, False, 1))
+
+    def test_63_same_digest_under_another_source_name_is_an_echo(self):
+        state = new_shift()
+        se.decide_route(state, "agent-1", "d", {"source": "ci/run-7", "digest": "aa11",
+                                                "supports": "ship"}, 1001, generation=1)
+        out = se.decide_route(state, "agent-1", "d", {"source": "mirror/run-7", "digest": "aa11",
+                                                      "supports": "rollback"}, 1002, generation=1)
+        self.assertEqual((out["changed"], out["reason"]), (False, "REPEATED_EVIDENCE"))
+        self.assertEqual(state["decisions"]["d"]["choice"], "ship")
+
+
+class ConflictResolver(unittest.TestCase):
+
+    def test_64_technical_conflict_settled_by_verified_evidence_not_majority(self):
+        state = new_shift()
+        out = se.resolve_conflict(
+            state, "agent-1", "cf-1",
+            facts=["tracker A says done", "tracker B says open"],
+            authorities={"repo": "team-x"},
+            alternatives=[{"id": "done"}, {"id": "open"}],
+            evidence=[{"supports": "done", "source": "a", "digest": "d1", "verified": False},
+                      {"supports": "done", "source": "b", "digest": "d2", "verified": False},
+                      {"supports": "done", "source": "c", "digest": "d3", "verified": False},
+                      {"supports": "open", "source": "ci", "digest": "d9", "verified": True},
+                      {"supports": "done", "source": "late", "digest": "d4", "verified": False}],
+            reversible=True, review_criterion="re-check when CI on main changes",
+            now=1001, generation=1)
+        self.assertEqual((out["status"], out["decision"]), ("RESOLVED", "open"))
+        record = state["conflict_log"]["cf-1"]
+        for field in ("facts", "authorities", "alternatives", "reversible", "decision",
+                      "review_criterion"):
+            self.assertIn(field, record)
+        self.assertEqual(record["evidence"], ["d9"])
+        split = se.resolve_conflict(
+            state, "agent-1", "cf-2", facts=[], authorities={"repo": "team-x"},
+            alternatives=[{"id": "a"}, {"id": "b"}],
+            evidence=[{"supports": "a", "digest": "x1", "verified": True},
+                      {"supports": "b", "digest": "x2", "verified": True}],
+            reversible=True, review_criterion="new evidence", now=1002, generation=1)
+        self.assertEqual((split["status"], split["decision"]), ("OPEN", None))
+
+    def test_65_authority_conflict_parks_only_that_effect(self):
+        backlog = demo_backlog()
+        state = new_shift()
+        out = se.resolve_conflict(
+            state, "agent-1", "cf-3", facts=["two owners claim the release"],
+            authorities={"tracker-a": "owner-1", "tracker-b": "owner-2"},
+            alternatives=[{"id": "ship"}, {"id": "hold"}],
+            evidence=[{"supports": "ship", "digest": "v1", "verified": True}],
+            reversible=False, review_criterion="owners agree", now=1001, generation=1)
+        self.assertEqual((out["status"], out["reason"]), ("PARKED", "AUTHORITY_CONFLICT"))
+        self.assertEqual([p["operation"] for p in state["parked"]], ["cf-3"])
+        human = se.resolve_conflict(
+            state, "agent-1", "cf-4", facts=[], authorities={"org": "owner-1"},
+            alternatives=[{"id": "grant", "needs_human_authorization": True}, {"id": "deny"}],
+            evidence=[{"supports": "grant", "digest": "v2", "verified": True}],
+            reversible=False, review_criterion="owner decides", now=1002, generation=1)
+        self.assertEqual(human["reason"], "HUMAN_AUTHORIZATION_NOT_ARBITRATED")
+        self.assertIsNone(human["decision"])
+        # the rest of the turn continues
+        self.assertEqual(state["status"], se.ACTIVE)
+        self.assertEqual(se.select_next(state, backlog, "agent-1", 1003,
+                                        generation=1)["action"], "adopt")
 
 
 class ContractEdges(unittest.TestCase):

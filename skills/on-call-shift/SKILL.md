@@ -17,7 +17,7 @@ description: |
 allowed-tools: "Read Write Edit Bash Grep Glob"
 compatibility: "Portable Agent Skills core. Host-neutral: every runtime maps timer, wakeup, tracker connectors and identity through an adapter that declares its capabilities; a missing capability fails closed or reports DEGRADED. No vendor runtime is required."
 metadata:
-  version: "0.1.1"
+  version: "0.2.0"
   scope: AAIF cross-vendor
   family: orchestration-convergence
   cross_link_slug: on-call-shift
@@ -160,6 +160,41 @@ its bound target is the exact supervisor. A late receipt (`record_receipt`) is r
 without sending again; a different result or recipient resets technical verification and
 satisfaction to unknown.
 
+**Continuity, watchdog, conflicts** (`references/continuity.md`).
+
+| Layer | Today |
+|---|---|
+| Tested (synthetic, no network, no model) | yes |
+| Watchdog installed | no: no supervisor with proven identity, authorization and revocation |
+| Wakeup live | no: `NO_BOUND_NOTIFICATION_TRANSPORT`; the existing timer only observes |
+
+- Autosave after every transition (children too: pointer + hash in the parent). A failed
+  save rolls back and freezes admission; it is never reported as saved.
+- The handoff is derived from the snapshot, never hand-written; the previous revision stays.
+- Preflight and postflight every turn, with one graded action; missing metrics are `unknown`.
+- A separate watchdog greets with a nonce and waits for an ACK with a timeout. Silence alone
+  is only suspicion. Fencing removes the lease; it signals no process. Real process stop is
+  out of scope; tests stop only their own disposable child, re-verified at that moment.
+- Conflicts are recorded (facts, authority per world, alternatives, reversibility, decision,
+  review criterion) and settled only by verified evidence, never by majority or the latest
+  message; authority conflicts and human authorizations park only that effect.
+- The holder never grants a human gate. Every source's blocking gate survives the merge.
+- Limits: the engine does not authenticate identities (the host must); the host must run
+  `assess_effect` before `deliver`.
+- **Own team.** The holder may admit members to its own team only (by scope, risk and
+  budget, within a seat limit; ephemeral by default, persistent only with a review date and a
+  disarm path). Roles are not instances: one executor for atomic work, a distinct judge for
+  material work. Retirement drains in-flight work first, leaves an exit receipt, and is
+  idempotent. Members of another owner are never touched. Nothing here stops or promotes a
+  real session; reuse `work-drain` for draining a work register.
+- **Own tools.** A tool, skill, CLI, MCP, app or technique is admitted through the same roster
+  (`kind="tool"`), only for a proven gap in current work, with a recorded decision (reuse,
+  configure, extend, create or none), scope, owner, risk, expiry, dependents, a health check
+  and a safe disarm. Owning tools or a team is no power over shared resources: a request to
+  create or delete one is parked for its owner. A tool with active dependents is not retired;
+  retiring touches only the own capability, never another owner's dependents. Installed is
+  not proof of benefit; idle is not proof of obsolescence.
+
 ## Reporting rules
 - "100%" needs named criteria and proof from the recipient side. What cannot be proven stays
   visible with its reason; a provider-side HITL is never claimed as done by the shift.
@@ -225,12 +260,39 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 44. A granted gate allows adoption; a pending one still blocks; the decider's recorded gate wins.
 45. Two sources naming different owners make the item ineligible, in any order.
 46. A replayed rejection of the same result reopens the intent only once.
+47. Every blocking gate from every connector survives the merge, in any order.
+48. A delivery is deduplicated against every result already sent (r1, r2, r1).
+49. Preflight greets the watchdog; backup OK only on a timely ACK.
+50. Backup absent, silent or late → DEGRADED; a wrong nonce is rejected.
+51. Persistence failure rolls back and freezes admission; never "saved".
+52. Recovery after the failure and after a torn write (previous revision).
+53. Child checkpoint: parent keeps pointer, hash and received flag only.
+54. Fencing quarantines the holder and kills no third party; one successor.
+55. A reused or changed pid is not stopped; only the disposable child is.
+56. Handoff derived from the snapshot and delegated to a successor with ACK.
+57. Postflight without a successor ends without relief.
+58. Preflight grades its action on observable signals.
+59. Diagnosis is readable and carries no private data.
+60. One watchdog per scope.
+61. The holder never grants a human gate.
+62. A linked issue and PR with different keys are one item.
+63. The same digest under another source name is an echo.
+64. A technical conflict is settled by verified evidence, not majority or recency.
+65. An authority conflict parks only that effect; the turn continues.
+66. Team admission refused by risk, budget, scope or full seats, without duplicates.
+67. Draining finishes in-flight work before retiring.
+68. Retirement is idempotent.
+69. A member of another owner is never touched.
+70. Shutdown rehearsal only on a disposable child; a replay affects no new process.
+71. Creating or deleting a shared resource is parked, never done.
+72. An own tool retires without touching another owner's dependents; active dependents block.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
 - `references/backlog-adoption.md` — connectors, normalization, RACI/DARCI, selection, waiting.
 - `templates/shift-state.schema.json` + `templates/shift-state.example.json` — persisted state.
 - `templates/handoff-ack.schema.json` — the successor ACK.
+- `references/continuity.md` + `bin/continuity.py` + `bin/watchdog.py` — autosave, handoff, pre/postflight, diagnosis, watchdog, conflicts.
 
 ## §DUED Sunset
 Retire when the host runtime provides a native shift holder with lease, cursor and ACKed relief
@@ -249,5 +311,6 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
+| 0.2.0 | 2026-11-23 | Continuity: autosave per transition (children too), handoff derived from the snapshot, preflight/postflight, diagnosis, a separate logic-only watchdog (nonce + ACK, timeout, one per scope, logical fencing, disposable-only stop). Conflict resolver. Judge fixes: holder never grants a human gate; every connector gate kept; delivery dedupe over all sent results; linked keys merge; digest echo. 72 numbered scenarios. Own team and own tools: admission, drain, idempotent retirement, shared resources parked. |
 | 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 46 numbered scenarios. |
 | 0.1.0 | 2026-11-23 | Genesis via `agentic-tool-forge`; name by `anima` (`on-call-shift`, runner-up `shift-handoff` rejected as covering only the end of a shift). Reference engine plus 23 acceptance scenarios (13 shift + UDV, blast radius, holder loss), stdlib only. |

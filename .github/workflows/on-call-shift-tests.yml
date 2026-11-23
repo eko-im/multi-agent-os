@@ -1,4 +1,4 @@
-# on-call-shift tests: the 13 acceptance scenarios of the shift contract.
+# on-call-shift tests: the numbered acceptance scenarios of the shift contract.
 # Stdlib only (unittest), so no dependency install step.
 
 name: on-call-shift tests

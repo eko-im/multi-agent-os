@@ -45,7 +45,7 @@ class ShiftError(Exception):
 
 def open_shift(*, shift_id, principal, scope, backlog, capacity, budget, holder,
                supervisor_target, now, lease_secs, mantras=None, capabilities=None,
-               successor_policy=None):
+               successor_policy=None, team_seats=None):
     """Assume a shift. Every field the contract needs is required; none is guessed."""
     for name, value in (("shift_id", shift_id), ("principal", principal), ("scope", scope),
                         ("holder", holder), ("supervisor_target", supervisor_target)):
@@ -80,6 +80,13 @@ def open_shift(*, shift_id, principal, scope, backlog, capacity, budget, holder,
         "consumed_takeovers": [],
         "incident": None,
         "decisions": {},
+        # Admission closes when persistence fails or preflight freezes new work.
+        "admission": {"open": True, "reason": None},
+        # Child checkpoints: id -> {"ref", "sha256", "received"}; the child keeps its own file.
+        "children": {},
+        "conflict_log": {},
+        # The holder's OWN team. Roster states: admitted -> active -> draining -> retired.
+        "team": {"seats": int(team_seats) if team_seats else int(capacity), "members": {}},
         "deliveries": {},
         "reopened": {},
         "parked": [],
@@ -266,6 +273,27 @@ def normalize_backlog(connector_results):
     """
     merged = {}
     connectors = []
+    # A4: union keys whose items link each other's refs (issue <-> PR with different keys).
+    parent = {}
+
+    def root(key):
+        while parent.setdefault(key, key) != key:
+            key = parent[key]
+        return key
+
+    ref_key = {}
+    for result in connector_results:
+        for item in result.get("items") or []:
+            if item.get("ref") and item.get("intent_key"):
+                ref_key[item["ref"]] = item["intent_key"]
+                root(item["intent_key"])
+    for result in connector_results:
+        for item in result.get("items") or []:
+            for link in item.get("links") or []:
+                if link in ref_key and item.get("intent_key"):
+                    a, b = sorted((root(item["intent_key"]), root(ref_key[link])))
+                    parent[b] = a
+    aliases = {k: root(k) for k in list(parent) if root(k) != k}
     for result in connector_results:
         status = result.get("status")
         if status not in CONNECTOR_STATES:
@@ -277,9 +305,12 @@ def normalize_backlog(connector_results):
             key = item.get("intent_key")
             if not key:
                 raise ShiftError("MISSING_INTENT_KEY", str(item.get("ref")))
+            key = aliases.get(key, key)
             target = merged.setdefault(key, {
                 "intent_key": key, "refs": [], "assignee": None, "in_flight_by": None,
-                "gate": None, "gut": 0, "raci": {}})
+                "gate": None, "gates": [], "gut": 0, "raci": {}})
+            if item.get("gate") and item["gate"] not in target["gates"]:
+                target["gates"].append(dict(item["gate"]))  # every source's gate is kept
             for ref in [item.get("ref")] + list(item.get("links") or []):
                 if ref and ref not in target["refs"]:
                     target["refs"].append(ref)
@@ -300,7 +331,9 @@ def normalize_backlog(connector_results):
         for role in ("driver", "responsible", "approver", "consulted", "informed"):
             item["raci"].setdefault(role, "unknown")  # never invented
     every_connector_empty = bool(connectors) and all(c["status"] == "empty" for c in connectors)
-    return {"items": merged, "connectors": connectors,
+    for alias, canonical in aliases.items():
+        merged[canonical].setdefault("aliases", []).append(alias)
+    return {"items": merged, "connectors": connectors, "aliases": aliases,
             "queue_empty": every_connector_empty and not merged}
 
 
@@ -313,9 +346,16 @@ def _ineligible(state, item, actor):
     if item.get("conflicts"):
         return "OWNERSHIP_CONFLICT"
     recorded = state["gates"].get(item["intent_key"])
-    gate = recorded if recorded else item["gate"]  # the decider's recorded gate wins
-    if gate and gate.get("state") != "granted":
+    if recorded and recorded.get("state") != "granted":
         return "HUMAN_GATE"
+    sources = item.get("gates") or ([item["gate"]] if item["gate"] else [])
+    for gate in sources:
+        # Only the same decider's own recorded grant supersedes its connector copy
+        # (set_gate guarantees a recorded grant was decided by its `by`).
+        if recorded and gate.get("by") and recorded.get("by") == gate.get("by"):
+            continue
+        if gate.get("state") != "granted":
+            return "HUMAN_GATE"  # fail closed: any open gate from any source blocks
     return None
 
 
@@ -324,6 +364,8 @@ def select_next(state, backlog, actor, now, *, generation):
     _require_holder(state, actor, now, generation)
     if state.get("incident"):
         return {"action": "handle_incident", "incident": state["incident"]["id"]}
+    if not state["admission"]["open"]:
+        return {"action": "wait", "reason": "ADMISSION_FROZEN"}
     if state["budget"]["spent"] >= state["budget"]["limit"]:
         return {"action": "wait", "reason": "BUDGET_EXHAUSTED"}
     if len(state["in_flight"]) >= state["capacity"]:
@@ -360,6 +402,7 @@ def adopt(state, actor, intent_key, backlog, now, *, generation):
     _require_holder(state, actor, now, generation)
     if state["backlog"] and not state.get("backlog_exhausted"):
         raise ShiftError("BACKLOG_GIVEN", "adopt only when no backlog was given or it is done")
+    intent_key = (backlog.get("aliases") or {}).get(intent_key, intent_key)
     if intent_key in state["adopted"]:
         return state, False
     item = backlog["items"].get(intent_key)
@@ -370,6 +413,8 @@ def adopt(state, actor, intent_key, backlog, now, *, generation):
         raise ShiftError(why, intent_key)
     if state.get("incident"):
         raise ShiftError("INCIDENT_ACTIVE", intent_key)
+    if not state["admission"]["open"]:
+        raise ShiftError("ADMISSION_FROZEN", str(state["admission"]["reason"]))
     if state["budget"]["spent"] >= state["budget"]["limit"]:
         raise ShiftError("BUDGET_EXHAUSTED", intent_key)
     if len(state["in_flight"]) >= state["capacity"]:
@@ -395,9 +440,16 @@ def set_gate(state, actor, intent_key, gate, now, *, generation):
     gate's own decider, so a veto is never flipped by anyone else."""
     _require_holder(state, actor, now, generation)
     current = state["gates"].get(intent_key)
-    if current and gate.get("decided_by") != current.get("by"):
+    decider = current.get("by") if current else gate.get("by")
+    if current and gate.get("decided_by") != decider:
         raise ShiftError("GATE_DECIDER_MISMATCH", intent_key)
-    state["gates"][intent_key] = dict(gate, by=current.get("by") if current else gate.get("by"))
+    if gate.get("state") == "granted":
+        # A grant must name its decider, and the holder is never that decider.
+        if not decider or gate.get("decided_by") != decider:
+            raise ShiftError("GATE_DECIDER_MISMATCH", intent_key)
+        if decider in (actor, state["holder"]):
+            raise ShiftError("SELF_GRANT_REFUSED", intent_key)
+    state["gates"][intent_key] = dict(gate, by=decider)
     return state
 
 
@@ -503,7 +555,8 @@ def _delivery(state, intent_key):
     return state["deliveries"].setdefault(intent_key, {
         "technical_verified": False, "delivered_to_recipient": False,
         "satisfaction": "unknown", "recipient": None, "recipient_kind": None,
-        "attempts": 0, "result_ref": None, "reservations": None, "reopened_as": None})
+        "attempts": 0, "result_ref": None, "reservations": None, "reopened_as": None,
+        "sent": []})
 
 
 def deliver(state, actor, intent_key, *, recipient, recipient_kind, result_ref, receipt, now,
@@ -518,14 +571,16 @@ def deliver(state, actor, intent_key, *, recipient, recipient_kind, result_ref, 
     if recipient_kind not in ("human", "agent"):
         raise ShiftError("BAD_RECIPIENT_KIND", str(recipient_kind))
     record = _delivery(state, intent_key)
-    if record["attempts"] and record["result_ref"] == result_ref:
-        if record["recipient"] == recipient:
-            return {"sent": False, "reason": "NO_RESEND_SAME_RESULT"}
+    if [result_ref, recipient] in record["sent"]:
+        # Sent before (current or historical, e.g. r1 -> r2 -> r1): never again, and the
+        # current delivery and its evidence stay untouched.
+        return {"sent": False, "reason": "NO_RESEND_SAME_RESULT"}
     if record["attempts"] and (record["result_ref"], record["recipient"]) != (result_ref, recipient):
         # The accepted evidence was for another result or another person: it no longer applies.
         record.update(technical_verified=False, delivered_to_recipient=False,
                       satisfaction="unknown", reservations=None)
     record.update(recipient=recipient, recipient_kind=recipient_kind, result_ref=result_ref)
+    record["sent"].append([result_ref, recipient])
     record["attempts"] += 1
     record["delivered_to_recipient"] = (receipt or {}).get("received_by") == recipient
     return {"sent": True,
@@ -661,10 +716,11 @@ def decide_route(state, actor, decision_key, evidence, now, *, generation):
     _require_holder(state, actor, now, generation)
     record = state["decisions"].setdefault(decision_key, {"choice": None, "seen": [],
                                                           "changes": []})
-    fingerprint = f"{evidence.get('source')}#{evidence.get('digest')}"
     if not evidence.get("source") or not evidence.get("digest"):
         return {"changed": False, "reason": "EVIDENCE_WITHOUT_SOURCE", "choice": record["choice"]}
-    if fingerprint in record["seen"]:
+    fingerprint = f"{evidence.get('source')}#{evidence.get('digest')}"
+    seen_digests = {f.rsplit("#", 1)[-1] for f in record["seen"]}
+    if evidence["digest"] in seen_digests:  # same content under any source name = echo
         return {"changed": False, "reason": "REPEATED_EVIDENCE", "choice": record["choice"]}
     record["seen"].append(fingerprint)
     if evidence.get("supports") == record["choice"]:
@@ -673,6 +729,152 @@ def decide_route(state, actor, decision_key, evidence, now, *, generation):
                               "evidence": fingerprint, "lens": evidence.get("lens"), "at": now})
     record["choice"] = evidence.get("supports")
     return {"changed": True, "reason": None, "choice": record["choice"]}
+
+
+# --------------------------------------------------------------------------- conflicts
+
+def resolve_conflict(state, actor, conflict_id, *, facts, authorities, alternatives,
+                     evidence, reversible, review_criterion, now, generation):
+    """Record and settle a disagreement between sources or owners.
+
+    authorities: {world: owner} (who may decide in each world, e.g. tracker, repo, org).
+    alternatives: [{"id", "needs_human_authorization": bool}].
+    evidence: [{"supports": alt id, "source", "digest", "verified": bool}].
+    Never decided by majority or by the latest message: only VERIFIED evidence counts, and
+    duplicates of one digest count once. A human authorization is never arbitrated, and
+    owners who disagree across worlds are an authority conflict: only that effect is parked,
+    the rest of the shift continues.
+    """
+    _require_holder(state, actor, now, generation)
+    record = {"facts": list(facts), "authorities": dict(authorities),
+              "alternatives": [dict(a) for a in alternatives], "reversible": bool(reversible),
+              "review_criterion": review_criterion, "at": now}
+    owners = {v for v in authorities.values() if v}
+    human = [a["id"] for a in alternatives if a.get("needs_human_authorization")]
+    if len(owners) > 1 or human:
+        reason = "HUMAN_AUTHORIZATION_NOT_ARBITRATED" if human else "AUTHORITY_CONFLICT"
+        record.update(decision=None, status="PARKED", reason=reason)
+        state["parked"].append({"operation": conflict_id, "reason": reason,
+                                "recovery_owner": sorted(owners) or None, "at": now})
+    else:
+        support = {}
+        for item in evidence:
+            if item.get("verified") and item.get("digest"):
+                support.setdefault(item["supports"], set()).add(item["digest"])
+        winners = [alt for alt, digests in support.items() if digests]
+        if len(winners) == 1:
+            record.update(decision=winners[0], status="RESOLVED", reason="VERIFIED_EVIDENCE",
+                          evidence=sorted(support[winners[0]]))
+        else:
+            record.update(decision=None, status="OPEN",
+                          reason="NO_VERIFIED_EVIDENCE" if not winners else "EVIDENCE_SPLIT")
+    state["conflict_log"][conflict_id] = record
+    return {"status": record["status"], "decision": record["decision"],
+            "reason": record["reason"]}
+
+
+# --------------------------------------------------------------------------- own team
+
+RISK_ADMITTED = ("low", "medium")
+CAPABILITY_DECISIONS = ("reuse", "configure", "extend", "create", "none")
+
+
+def admit_member(state, actor, member_id, *, role, scope, risk, cost, now, generation,
+                 persistent=False, review_at=None, disarm=None, kind="member",
+                 decision="create", dependents=None, verification=None, expires_at=None):
+    """Admit one capability to the holder's OWN roster: a team member or an own tool (skill,
+    CLI, MCP, app, technique). By scope, risk and budget; ephemeral by default; persistent
+    needs a review date and a disarm path. Every admission records its decision (reuse,
+    configure, extend, create or none). Re-admitting is a no-op (no duplicate)."""
+    _require_holder(state, actor, now, generation)
+    if decision not in CAPABILITY_DECISIONS:
+        raise ShiftError("BAD_DECISION", str(decision))
+    if decision == "none":
+        return {"admitted": False, "reason": "DECIDED_NOT_TO"}
+    team = state["team"]
+    if member_id in team["members"]:
+        return {"admitted": False, "reason": "ALREADY_ADMITTED"}
+    if scope != state["scope"]:
+        return {"admitted": False, "reason": "OUT_OF_SCOPE"}
+    if risk not in RISK_ADMITTED:
+        return {"admitted": False, "reason": "RISK_TOO_HIGH"}
+    if state["budget"]["spent"] + int(cost) > state["budget"]["limit"]:
+        return {"admitted": False, "reason": "BUDGET_EXCEEDED"}
+    active = [m for m in team["members"].values() if m["status"] != "retired"]
+    if len(active) >= team["seats"]:
+        return {"admitted": False, "reason": "SEATS_FULL"}
+    if persistent and not (review_at and disarm):
+        return {"admitted": False, "reason": "PERSISTENT_NEEDS_REVIEW_AND_DISARM"}
+    state["budget"]["spent"] += int(cost)
+    team["members"][member_id] = {
+        "owner": state["shift_id"], "role": role, "scope": scope, "risk": risk,
+        "cost": int(cost), "mode": "persistent" if persistent else "ephemeral",
+        "review_at": review_at, "disarm": disarm, "status": "admitted", "in_flight": [],
+        "admitted_at": now, "exit_receipt": None, "kind": kind, "decision": decision,
+        "dependents": [dict(d) for d in (dependents or [])], "verification": verification,
+        "expires_at": expires_at}
+    return {"admitted": True, "reason": None}
+
+
+def request_shared_change(state, actor, resource, action, now, *, generation, owner=None):
+    """Owning tools or a team grants no power over SHARED resources. Any request to create or
+    delete a resource this shift does not own is parked for its owner, never performed."""
+    _require_holder(state, actor, now, generation)
+    if action not in ("create", "delete"):
+        raise ShiftError("BAD_ACTION", str(action))
+    state["parked"].append({"operation": f"{action}:{resource}",
+                            "reason": "SHARED_RESOURCE_NOT_OWNED",
+                            "recovery_owner": owner, "at": now})
+    return {"done": False, "decision": "park", "reason": "SHARED_RESOURCE_NOT_OWNED"}
+
+
+def _own_member(state, member_id):
+    member = state["team"]["members"].get(member_id)
+    if member is None:
+        raise ShiftError("UNKNOWN_MEMBER", member_id)
+    if member["owner"] != state["shift_id"]:
+        raise ShiftError("NOT_YOUR_MEMBER", member_id)  # other owners are never touched
+    return member
+
+
+def assign_member(state, actor, member_id, intent_key, now, *, generation):
+    _require_holder(state, actor, now, generation)
+    member = _own_member(state, member_id)
+    if member["status"] in ("draining", "retired"):
+        return {"assigned": False, "reason": "MEMBER_" + member["status"].upper()}
+    if intent_key not in member["in_flight"]:
+        member["in_flight"].append(intent_key)
+    member["status"] = "active"
+    return {"assigned": True, "reason": None}
+
+
+def member_done(state, actor, member_id, intent_key, now, *, generation):
+    _require_holder(state, actor, now, generation)
+    member = _own_member(state, member_id)
+    if intent_key in member["in_flight"]:
+        member["in_flight"].remove(intent_key)
+    return {"done": True, "left": list(member["in_flight"])}
+
+
+def retire_member(state, actor, member_id, now, *, generation):
+    """Normal retirement: stop new work, drain what is in flight, then retire with an exit
+    receipt. Idempotent: retiring a retired member changes nothing. History is kept."""
+    _require_holder(state, actor, now, generation)
+    member = _own_member(state, member_id)
+    if member["status"] == "retired":
+        return {"retired": True, "reason": "ALREADY_RETIRED", "receipt": member["exit_receipt"]}
+    active_dependents = [d for d in member.get("dependents", []) if d.get("active")]
+    if active_dependents:
+        # Retiring would break someone relying on it: refuse; dependents are not touched.
+        return {"retired": False, "reason": "DEPENDENTS_ACTIVE",
+                "dependents": [d.get("id") for d in active_dependents]}
+    if member["in_flight"]:
+        member["status"] = "draining"
+        return {"retired": False, "reason": "DRAINING", "in_flight": list(member["in_flight"])}
+    member["status"] = "retired"
+    member["exit_receipt"] = {"member": member_id, "cursor_seq": state["cursor"]["seq"],
+                              "generation": state["generation"], "at": now}
+    return {"retired": True, "reason": None, "receipt": member["exit_receipt"]}
 
 
 # --------------------------------------------------------------------------- holder loss

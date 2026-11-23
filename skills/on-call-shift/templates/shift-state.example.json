@@ -1,4 +1,8 @@
 {
+  "admission": {
+    "open": true,
+    "reason": null
+  },
   "adopted": {},
   "backlog": null,
   "budget": {
@@ -6,6 +10,8 @@
     "spent": 0
   },
   "capacity": 2,
+  "children": {},
+  "conflict_log": {},
   "consumed_takeovers": [],
   "continuity": {
     "mode": "DEGRADED",
@@ -63,6 +69,10 @@
   "status": "ACTIVE",
   "successor_policy": null,
   "supervisor_target": "supervisor://shift-desk-1",
+  "team": {
+    "members": {},
+    "seats": 2
+  },
   "wakeup": {
     "always_on_claim": false,
     "bound_target": null,
