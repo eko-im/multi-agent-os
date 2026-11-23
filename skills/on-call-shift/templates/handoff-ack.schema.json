@@ -2,15 +2,48 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "on-call-shift/handoff-ack@1",
   "title": "on-call-shift successor ACK",
-  "description": "Relief happens only when the identified successor echoes the cursor, the in-flight items and the open gates recorded at proposal time. A heartbeat is not this document.",
+  "description": "Relief happens only when the identified successor echoes the cursor, the in-flight items and the open gates recorded at proposal time. A heartbeat is not this document. The ACK must match the LIVE state at acceptance; if work moved after the proposal, it is refused and must be repeated.",
   "type": "object",
-  "required": ["kind", "from", "cursor_seq", "in_flight", "gates"],
+  "required": [
+    "kind",
+    "from",
+    "generation",
+    "cursor_seq",
+    "in_flight",
+    "gates"
+  ],
   "additionalProperties": false,
   "properties": {
-    "kind": {"const": "handoff_ack"},
-    "from": {"type": "string", "minLength": 1, "description": "the successor named in the proposal"},
-    "cursor_seq": {"type": "integer", "minimum": 0},
-    "in_flight": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "gates": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+    "kind": {
+      "const": "handoff_ack"
+    },
+    "from": {
+      "type": "string",
+      "minLength": 1,
+      "description": "the successor named in the proposal"
+    },
+    "cursor_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "in_flight": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "the generation the proposal was made in"
+    }
   }
 }

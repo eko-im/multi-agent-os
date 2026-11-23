@@ -44,11 +44,11 @@ class Scenarios(unittest.TestCase):
         self.assertEqual(item["raci"]["responsible"], "agent-1")
         self.assertEqual(item["raci"]["consulted"], "unknown")  # never invented
         state = new_shift()
-        pick = se.select_next(state, backlog, "agent-1", 1001)
+        pick = se.select_next(state, backlog, "agent-1", 1001, generation=state["generation"])
         self.assertEqual(pick["action"], "adopt")
         self.assertEqual(pick["intent_key"], "fix-login-timeout")
-        state, first = se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1002)
-        state, again = se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1003)
+        state, first = se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1002, generation=state["generation"])
+        state, again = se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1003, generation=state["generation"])
         self.assertTrue(first)
         self.assertFalse(again)
         self.assertEqual(len(state["adopted"]), 1)
@@ -58,44 +58,44 @@ class Scenarios(unittest.TestCase):
     def test_02_item_in_flight_by_other_is_not_adopted_only_offered_help(self):
         backlog = demo_backlog()
         state = new_shift()
-        pick = se.select_next(state, backlog, "agent-1", 1001)
+        pick = se.select_next(state, backlog, "agent-1", 1001, generation=state["generation"])
         skipped = {s["intent_key"]: s for s in pick["skipped"]}
         self.assertEqual(skipped["rotate-report-cron"]["why"], "IN_FLIGHT_BY_OTHER")
         self.assertIn("remove impediment", skipped["rotate-report-cron"]["offer"])
         with self.assertRaises(se.ShiftError) as err:
-            se.adopt(state, "agent-1", "rotate-report-cron", backlog, 1002)
+            se.adopt(state, "agent-1", "rotate-report-cron", backlog, 1002, generation=state["generation"])
         self.assertEqual(err.exception.code, "IN_FLIGHT_BY_OTHER")
 
     def test_03_human_gate_waits_with_reason_and_deadline(self):
         backlog = demo_backlog()
         state = new_shift()
-        pick = se.select_next(state, backlog, "agent-1", 1001)
+        pick = se.select_next(state, backlog, "agent-1", 1001, generation=state["generation"])
         skipped = {s["intent_key"]: s for s in pick["skipped"]}
         self.assertEqual(skipped["publish-pricing-page"]["why"], "HUMAN_GATE")
         state["in_flight"].append("publish-pricing-page")
-        se.set_gate(state, "publish-pricing-page",
-                    {"kind": "approval", "by": "owner-1", "deadline": 5000, "state": "pending"})
+        se.set_gate(state, "agent-1", "publish-pricing-page",
+                    {"kind": "approval", "by": "owner-1", "deadline": 5000, "state": "pending"}, 1001, generation=state["generation"])
         result = se.complete_item(state, "agent-1", "publish-pricing-page",
-                                  author="agent-1", reviewer="agent-2", now=1002)
+                                  author="agent-1", reviewer="agent-2", now=1002, generation=state["generation"])
         self.assertEqual(result, {"completed": False, "reason": "AWAITING_HUMAN_GATE",
                                   "deadline": 5000})
         self.assertIn("publish-pricing-page", state["in_flight"])
 
     def test_04_handoff_needs_successor_ack_and_keeps_one_holder_and_cursor(self):
         state = new_shift()
-        se.apply_tick(state, "t1", 1001)
+        se.apply_tick(state, "agent-1", "t1", 1001, generation=state["generation"])
         state["in_flight"] = ["fix-login-timeout"]
-        se.set_gate(state, "publish-pricing-page", {"kind": "approval", "state": "pending"})
-        se.propose_handoff(state, "agent-1", "agent-2", 1002)
+        se.set_gate(state, "agent-1", "publish-pricing-page", {"kind": "approval", "state": "pending"}, 1001, generation=state["generation"])
+        se.propose_handoff(state, "agent-1", "agent-2", 1002, generation=state["generation"])
         # a heartbeat is not an ACK
         self.assertEqual(se.accept_handoff(state, {"kind": "heartbeat", "from": "agent-2"}, 1003),
                          {"relieved": False, "reason": "NOT_A_HANDOFF_ACK"})
         # an ACK that drops in-flight work is refused
-        bad = {"kind": "handoff_ack", "from": "agent-2", "cursor_seq": 1, "in_flight": [],
+        bad = {"kind": "handoff_ack", "generation": 1, "from": "agent-2", "cursor_seq": 1, "in_flight": [],
                "gates": ["publish-pricing-page"]}
         self.assertEqual(se.accept_handoff(state, bad, 1004)["reason"], "ACK_MISMATCH_IN_FLIGHT")
         self.assertEqual(state["holder"], "agent-1")
-        good = {"kind": "handoff_ack", "from": "agent-2", "cursor_seq": 1,
+        good = {"kind": "handoff_ack", "generation": 1, "from": "agent-2", "cursor_seq": 1,
                 "in_flight": ["fix-login-timeout"], "gates": ["publish-pricing-page"]}
         self.assertEqual(se.accept_handoff(state, good, 1005), {"relieved": True, "reason": None})
         self.assertEqual(state["holder"], "agent-2")
@@ -107,7 +107,7 @@ class Scenarios(unittest.TestCase):
 
     def test_04b_silence_is_not_relief(self):
         state = new_shift()
-        se.propose_handoff(state, "agent-1", "agent-2", 1002)
+        se.propose_handoff(state, "agent-1", "agent-2", 1002, generation=state["generation"])
         self.assertTrue(se.handoff_timed_out(state, 1002 + 300, deadline_secs=300))
         self.assertEqual(state["holder"], "agent-1")
         self.assertEqual(state["status"], se.ACTIVE)
@@ -119,13 +119,13 @@ class Scenarios(unittest.TestCase):
             {"connector": "tracker-d", "status": "denied", "items": []},
         ])
         self.assertFalse(backlog["queue_empty"])
-        pick = se.select_next(new_shift(), backlog, "agent-1", 1001)
+        pick = se.select_next(new_shift(), backlog, "agent-1", 1001, generation=new_shift()["generation"])
         self.assertEqual(pick["action"], "wait")
         self.assertEqual(pick["reason"], "CONNECTORS_NOT_READABLE")
         self.assertEqual(pick["connectors"], ["tracker-c", "tracker-d"])
         empty = se.normalize_backlog([{"connector": "tracker-a", "status": "empty", "items": []}])
         self.assertTrue(empty["queue_empty"])
-        self.assertEqual(se.select_next(new_shift(), empty, "agent-1", 1001)["reason"],
+        self.assertEqual(se.select_next(new_shift(), empty, "agent-1", 1001, generation=new_shift()["generation"])["reason"],
                          "NO_ELIGIBLE_ITEM")
 
     def test_06_no_mantra_gets_defaults_explicit_is_kept_verbatim(self):
@@ -140,8 +140,8 @@ class Scenarios(unittest.TestCase):
 
     def test_07_duplicate_tick_has_one_effect(self):
         state = new_shift()
-        _, first = se.apply_tick(state, "tick-42", 1001)
-        _, second = se.apply_tick(state, "tick-42", 1002)
+        _, first = se.apply_tick(state, "agent-1", "tick-42", 1001, generation=state["generation"])
+        _, second = se.apply_tick(state, "agent-1", "tick-42", 1002, generation=state["generation"])
         self.assertIsNotNone(first)
         self.assertIsNone(second)
         self.assertEqual(len(state["effects"]), 1)
@@ -160,42 +160,42 @@ class Scenarios(unittest.TestCase):
 
     def test_09_event_without_ack_is_not_concluded(self):
         state = new_shift()
-        se.open_event(state, "agent-1", "ev-1", 1001)
-        self.assertEqual(se.conclude_event(state, "agent-1", "ev-1", None, 1002),
+        se.open_event(state, "agent-1", "ev-1", 1001, recipient="owner-1", generation=state["generation"])
+        self.assertEqual(se.conclude_event(state, "agent-1", "ev-1", None, 1002, generation=state["generation"]),
                          {"concluded": False, "reason": "NO_ACK"})
         self.assertEqual(
             se.conclude_event(state, "agent-1", "ev-1",
-                              {"event_id": "ev-1", "from": "x", "kind": "heartbeat"}, 1003),
+                              {"event_id": "ev-1", "from": "x", "kind": "heartbeat"}, 1003, generation=state["generation"]),
             {"concluded": False, "reason": "HEARTBEAT_IS_NOT_ACK"})
         self.assertIn("ev-1", state["pending_events"])
         self.assertTrue(se.conclude_event(state, "agent-1", "ev-1",
                                           {"event_id": "ev-1", "from": "owner-1"},
-                                          1004)["concluded"])
+                                          1004, generation=state["generation"])["concluded"])
         self.assertNotIn("ev-1", state["pending_events"])
 
     def test_10_restart_restores_lease_cursor_and_work(self):
         backlog = demo_backlog()
         state = new_shift()
-        se.apply_tick(state, "t1", 1001)
-        se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1002)
+        se.apply_tick(state, "agent-1", "t1", 1001, generation=state["generation"])
+        se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1002, generation=state["generation"])
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "shift.json")
             se.save(state, path)
             restored = se.load(path)
         self.assertEqual(restored, state)
         self.assertTrue(se.lease_valid(restored, "agent-1", 1003))
-        _, replay = se.apply_tick(restored, "t1", 1004)
+        _, replay = se.apply_tick(restored, "agent-1", "t1", 1004, generation=restored["generation"])
         self.assertIsNone(replay)  # replay after restart is still one effect
-        _, readopt = se.adopt(restored, "agent-1", "fix-login-timeout", backlog, 1005)
+        _, readopt = se.adopt(restored, "agent-1", "fix-login-timeout", backlog, 1005, generation=restored["generation"])
         self.assertFalse(readopt)
 
     def test_11_human_veto_is_respected_not_faked(self):
         state = new_shift()
         state["in_flight"].append("fix-login-timeout")
-        se.set_gate(state, "fix-login-timeout", {"kind": "veto", "by": "owner-1",
-                                                 "state": "vetoed"})
+        se.set_gate(state, "agent-1", "fix-login-timeout", {"kind": "veto", "by": "owner-1",
+                                                 "state": "vetoed"}, 1001, generation=state["generation"])
         result = se.complete_item(state, "agent-1", "fix-login-timeout",
-                                  author="agent-1", reviewer="agent-2", now=1001)
+                                  author="agent-1", reviewer="agent-2", now=1001, generation=state["generation"])
         self.assertEqual(result["reason"], "VETOED")
         self.assertIn("fix-login-timeout", state["in_flight"])
 
@@ -203,10 +203,10 @@ class Scenarios(unittest.TestCase):
         state = new_shift()
         state["in_flight"].append("fix-login-timeout")
         result = se.complete_item(state, "agent-1", "fix-login-timeout",
-                                  author="agent-1", reviewer="agent-1", now=1001)
+                                  author="agent-1", reviewer="agent-1", now=1001, generation=state["generation"])
         self.assertEqual(result, {"completed": False, "reason": "REVIEWER_IS_AUTHOR"})
         ok = se.complete_item(state, "agent-1", "fix-login-timeout",
-                              author="agent-1", reviewer="agent-2", now=1002)
+                              author="agent-1", reviewer="agent-2", now=1002, generation=state["generation"])
         self.assertTrue(ok["completed"])
 
     def test_13_wakeup_kind_is_proven_and_degraded_without_transport(self):
@@ -216,22 +216,22 @@ class Scenarios(unittest.TestCase):
         self.assertFalse(state["wakeup"]["always_on_claim"])
         self.assertTrue(state["wakeup"]["recovery"])
         # claiming a wakeup without support is recorded as what the receipt proves
-        entry = se.record_signal(state, "wakeup", "ev-1",
-                                 {"delivered_to": SUPERVISOR, "woken": SUPERVISOR}, 1001)
+        entry = se.record_signal(state, "agent-1", "wakeup", "ev-1",
+                                 {"delivered_to": SUPERVISOR, "woken": SUPERVISOR}, 1001, generation=state["generation"])
         self.assertEqual(entry["signal"], "notification")
         self.assertTrue(entry["downgraded"])
         supported = new_shift(capabilities={"wakeup_transport": "host-push",
                                             "bound_target": SUPERVISOR})
         self.assertEqual(supported["wakeup"]["mode"], "SUPPORTED")
-        woke = se.record_signal(supported, "resume", "ev-2",
-                                {"delivered_to": SUPERVISOR, "woken": SUPERVISOR}, 1002)
+        woke = se.record_signal(supported, "agent-1", "resume", "ev-2",
+                                {"delivered_to": SUPERVISOR, "woken": SUPERVISOR}, 1002, generation=supported["generation"])
         self.assertEqual(woke["signal"], "wakeup")  # not consumed yet, so not a resume
-        resumed = se.record_signal(supported, "resume", "ev-3",
+        resumed = se.record_signal(supported, "agent-1", "resume", "ev-3",
                                    {"delivered_to": SUPERVISOR, "woken": SUPERVISOR,
-                                    "consumed_by": "agent-1", "effects": 1}, 1003)
+                                    "consumed_by": "agent-1", "effects": 1}, 1003, generation=supported["generation"])
         self.assertEqual(resumed["signal"], "resume")
         self.assertFalse(resumed["downgraded"])
-        wrong = se.record_signal(supported, "wakeup", "ev-4", {"woken": "supervisor://other"}, 1004)
+        wrong = se.record_signal(supported, "agent-1", "wakeup", "ev-4", {"woken": "supervisor://other"}, 1004, generation=supported["generation"])
         self.assertEqual(wrong["signal"], "tick")
 
 
@@ -242,17 +242,17 @@ class UserDeliveredValue(unittest.TestCase):
         state = new_shift()
         state["in_flight"].append("fix-login-timeout")
         se.complete_item(state, "agent-1", "fix-login-timeout",
-                         author="agent-1", reviewer="agent-2", now=1001)
+                         author="agent-1", reviewer="agent-2", now=1001, generation=state["generation"])
         result = se.deliver(state, "agent-1", "fix-login-timeout", recipient=recipient,
                             recipient_kind=kind, result_ref="repo/x!13@abc123",
-                            receipt={"received_by": recipient if received else None}, now=1002)
+                            receipt={"received_by": recipient if received else None}, now=1002, generation=state["generation"])
         return state, result
 
     def test_14_technical_done_alone_is_not_udv(self):
         state = new_shift()
         state["in_flight"].append("fix-login-timeout")
         se.complete_item(state, "agent-1", "fix-login-timeout",
-                         author="agent-1", reviewer="agent-2", now=1001)
+                         author="agent-1", reviewer="agent-2", now=1001, generation=state["generation"])
         status = se.udv_status(state, "fix-login-timeout")
         self.assertTrue(status["technical_verified"])
         self.assertEqual(status["udv_percent"], 0)
@@ -266,11 +266,11 @@ class UserDeliveredValue(unittest.TestCase):
                          (0, "unknown", "AWAITING_RECIPIENT"))
         again = se.deliver(state, "agent-1", "fix-login-timeout", recipient="person-1",
                            recipient_kind="human", result_ref="repo/x!13@abc123",
-                           receipt={"received_by": None}, now=1003)
+                           receipt={"received_by": None}, now=1003, generation=state["generation"])
         self.assertEqual(again, {"sent": False, "reason": "NO_RESEND_SAME_RESULT"})
         self.assertEqual(state["deliveries"]["fix-login-timeout"]["attempts"], 1)
         # the shift may still pick other eligible work; the pending item stays pending
-        pick = se.select_next(state, demo_backlog(), "agent-1", 1004)
+        pick = se.select_next(state, demo_backlog(), "agent-1", 1004, generation=state["generation"])
         self.assertEqual(pick["action"], "adopt")
         self.assertEqual(se.udv_status(state, "fix-login-timeout")["udv_percent"], 0)
 
@@ -278,7 +278,7 @@ class UserDeliveredValue(unittest.TestCase):
         state, _ = self.delivered()
         out = se.record_feedback(state, "agent-1", "fix-login-timeout",
                                  {"from": "person-1", "kind": "reject",
-                                  "note": "still times out"}, 1003)
+                                  "note": "still times out"}, 1003, generation=state["generation"])
         self.assertTrue(out["recorded"])
         status = se.udv_status(state, "fix-login-timeout")
         self.assertEqual((status["satisfaction"], status["udv_percent"], status["pending"]),
@@ -291,7 +291,7 @@ class UserDeliveredValue(unittest.TestCase):
     def test_17_valid_acceptance_is_udv_100(self):
         state, _ = self.delivered()
         se.record_feedback(state, "agent-1", "fix-login-timeout",
-                           {"from": "person-1", "kind": "accept"}, 1003)
+                           {"from": "person-1", "kind": "accept"}, 1003, generation=state["generation"])
         status = se.udv_status(state, "fix-login-timeout")
         self.assertEqual(status, {"technical_verified": True, "delivered_to_recipient": True,
                                   "satisfaction": "confirmed", "udv_percent": 100,
@@ -301,7 +301,7 @@ class UserDeliveredValue(unittest.TestCase):
         state, _ = self.delivered()
         se.record_feedback(state, "agent-1", "fix-login-timeout",
                            {"from": "person-1", "kind": "accept_with_reservation",
-                            "note": "ok for now, slow on mobile"}, 1003)
+                            "note": "ok for now, slow on mobile"}, 1003, generation=state["generation"])
         status = se.udv_status(state, "fix-login-timeout")
         self.assertEqual((status["satisfaction"], status["udv_percent"], status["pending"]),
                          ("unknown", 0, "QUALIFIED_ACCEPTANCE"))
@@ -310,10 +310,10 @@ class UserDeliveredValue(unittest.TestCase):
         state, _ = self.delivered(recipient="agent-7", kind="agent")
         out = se.record_feedback(state, "agent-1", "fix-login-timeout",
                                  {"from": "agent-7", "kind": "accept",
-                                  "on_behalf_of": "person-1"}, 1003)
+                                  "on_behalf_of": "person-1"}, 1003, generation=state["generation"])
         self.assertEqual(out["reason"], "AGENT_CANNOT_ACCEPT_FOR_A_PERSON")
         other = se.record_feedback(state, "agent-1", "fix-login-timeout",
-                                   {"from": "agent-9", "kind": "accept"}, 1004)
+                                   {"from": "agent-9", "kind": "accept"}, 1004, generation=state["generation"])
         self.assertEqual(other["reason"], "NOT_THE_RECIPIENT")
         self.assertEqual(se.udv_status(state, "fix-login-timeout")["udv_percent"], 0)
 
@@ -330,16 +330,16 @@ class BlastRadius(unittest.TestCase):
 
     def test_20_local_reversible_proceeds_authority_crossing_parks_only_that_op(self):
         state = new_shift()
-        self.assertEqual(se.assess_effect(state, "agent-1", "op-1", self.blast(), 1001)["decision"],
+        self.assertEqual(se.assess_effect(state, "agent-1", "op-1", self.blast(), 1001, generation=state["generation"])["decision"],
                          "proceed")
         parked = se.assess_effect(state, "agent-1", "op-2",
-                                  self.blast(crosses_authority=True, accounts="org-b"), 1002)
+                                  self.blast(crosses_authority=True, accounts="org-b"), 1002, generation=state["generation"])
         self.assertEqual(parked, {"decision": "park", "reason": "CROSSES_AUTHORITY"})
         self.assertEqual([p["operation"] for p in state["parked"]], ["op-2"])
         self.assertEqual(state["status"], se.ACTIVE)  # the shift keeps running
-        self.assertEqual(se.assess_effect(state, "agent-1", "op-3", self.blast(), 1003)["decision"],
+        self.assertEqual(se.assess_effect(state, "agent-1", "op-3", self.blast(), 1003, generation=state["generation"])["decision"],
                          "proceed")
-        incomplete = se.assess_effect(state, "agent-1", "op-4", {"data": "x"}, 1004)
+        incomplete = se.assess_effect(state, "agent-1", "op-4", {"data": "x"}, 1004, generation=state["generation"])
         self.assertEqual(incomplete["reason"], "INCOMPLETE_BLAST_RADIUS")
 
 
@@ -350,9 +350,9 @@ class HolderLoss(unittest.TestCase):
                               backlog=None, capacity=2, budget=5, holder="agent-1",
                               supervisor_target=SUPERVISOR, now=1000, lease_secs=LEASE,
                               successor_policy={"pre_authorized": "agent-2"})
-        se.apply_tick(state, "t1", 1001)
+        se.apply_tick(state, "agent-1", "t1", 1001, generation=state["generation"])
         state["in_flight"].append("fix-login-timeout")
-        se.set_gate(state, "publish-pricing-page", {"kind": "approval", "state": "pending"})
+        se.set_gate(state, "agent-1", "publish-pricing-page", {"kind": "approval", "state": "pending"}, 1001, generation=state["generation"])
         old_gen = state["generation"]
         self.assertEqual(se.take_over(state, "agent-2", 1100)["reason"],
                          "HOLDER_LEASE_STILL_VALID")
@@ -388,11 +388,398 @@ class HolderLoss(unittest.TestCase):
 
     def test_23_relief_cannot_be_decided_alone_by_predecessor(self):
         state = new_shift()
-        se.propose_handoff(state, "agent-1", "agent-2", 1001)
-        forged = {"kind": "handoff_ack", "from": "agent-1", "cursor_seq": 0,
+        se.propose_handoff(state, "agent-1", "agent-2", 1001, generation=state["generation"])
+        forged = {"kind": "handoff_ack", "generation": 1, "from": "agent-1", "cursor_seq": 0,
                   "in_flight": [], "gates": []}
         self.assertEqual(se.accept_handoff(state, forged, 1002)["reason"], "ACK_FROM_WRONG_PARTY")
         self.assertEqual(state["holder"], "agent-1")
+
+
+class SuccessionHardening(unittest.TestCase):
+    """Root objection: one authorization, one succession; no replay; no self-succession."""
+
+    def armed_shift(self):
+        state = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
+                              backlog=None, capacity=2, budget=5, holder="agent-1",
+                              supervisor_target=SUPERVISOR, now=1000, lease_secs=LEASE,
+                              successor_policy={"pre_authorized": "agent-2"})
+        return state
+
+    def test_24_policy_consumed_second_expiry_refused_and_degraded(self):
+        state = self.armed_shift()
+        dead1 = 1000 + LEASE + 1
+        self.assertTrue(se.take_over(state, "agent-2", dead1)["taken_over"])
+        self.assertIsNone(state["successor_policy"])
+        self.assertEqual(state["continuity"]["mode"], "DEGRADED")
+        dead2 = dead1 + LEASE + 1  # agent-2 dies too, nobody re-armed
+        out = se.take_over(state, "agent-3", dead2)
+        self.assertEqual(out["reason"], "NO_PREAUTHORIZED_SUCCESSOR")
+        self.assertEqual(state["holder"], "agent-2")
+        self.assertEqual(state["generation"], 2)
+        self.assertEqual(state["continuity"]["reason"], "NO_PREAUTHORIZED_SUCCESSOR")
+
+    def test_25_policy_from_older_generation_does_not_apply(self):
+        state = self.armed_shift()
+        se.propose_handoff(state, "agent-1", "agent-3", 1001, generation=state["generation"])
+        se.accept_handoff(state, {"kind": "handoff_ack", "generation": 1, "from": "agent-3", "cursor_seq": 0,
+                                  "in_flight": [], "gates": []}, 1002)
+        self.assertEqual(state["generation"], 2)
+        self.assertEqual(state["continuity"]["mode"], "DEGRADED")
+        out = se.take_over(state, "agent-2", 1002 + LEASE + 1)
+        self.assertEqual(out["reason"], "NO_PREAUTHORIZED_SUCCESSOR")
+        self.assertEqual(state["holder"], "agent-3")
+
+    def test_26_replayed_takeover_and_ack_have_no_second_effect(self):
+        state = self.armed_shift()
+        dead = 1000 + LEASE + 1
+        first = se.take_over(state, "agent-2", dead)
+        nonce = first["nonce"]
+        snap = se.snapshot(state)
+        replay = se.take_over(state, "agent-3", dead + LEASE + 1, nonce=nonce)
+        self.assertEqual(replay["reason"], "REPLAY")
+        self.assertEqual(state, snap)
+        self.assertEqual(se.take_over(state, "agent-2", dead + LEASE + 1,
+                                      nonce=nonce)["reason"], "SELF_SUCCESSION")
+        self.assertEqual(state, snap)
+        # re-arming with a used nonce is refused too
+        self.assertEqual(se.arm_successor(state, "owner-1", "agent-3", state["generation"],
+                                          dead + 1, nonce=nonce)["reason"], "NONCE_ALREADY_USED")
+        # replayed handoff ACK after relief
+        other = new_shift()
+        se.propose_handoff(other, "agent-1", "agent-2", 1001, generation=other["generation"])
+        ack = {"kind": "handoff_ack", "generation": 1, "from": "agent-2", "cursor_seq": 0, "in_flight": [],
+               "gates": []}
+        self.assertTrue(se.accept_handoff(other, ack, 1002)["relieved"])
+        gen = other["generation"]
+        with self.assertRaises(se.ShiftError) as err:
+            se.accept_handoff(other, ack, 1003)
+        self.assertEqual(err.exception.code, "NO_PENDING_HANDOFF")
+        self.assertEqual(other["generation"], gen)
+
+    def test_27_holder_cannot_be_its_own_successor(self):
+        with self.assertRaises(se.ShiftError) as err:
+            se.open_shift(shift_id="s", principal="owner-1", scope="x", backlog=None,
+                          capacity=1, budget=1, holder="agent-1", supervisor_target=SUPERVISOR,
+                          now=0, lease_secs=LEASE, successor_policy={"pre_authorized": "agent-1"})
+        self.assertEqual(err.exception.code, "SELF_SUCCESSION")
+        state = new_shift()
+        self.assertEqual(se.arm_successor(state, "owner-1", "agent-1", 1, 1001)["reason"],
+                         "SELF_SUCCESSION")
+        self.assertEqual(se.take_over(state, "agent-1", 1000 + LEASE + 1)["reason"],
+                         "SELF_SUCCESSION")
+
+    def test_28_only_valid_authority_in_current_generation_can_arm(self):
+        state = new_shift()
+        self.assertEqual(se.arm_successor(state, "agent-1", "agent-2", 1, 1001)["reason"],
+                         "NOT_AUTHORIZED_TO_ARM")
+        self.assertEqual(se.arm_successor(state, "owner-1", "agent-2", 0, 1001)["reason"],
+                         "STALE_GENERATION")
+        self.assertTrue(se.arm_successor(state, "owner-1", "agent-2", 1, 1001)["armed"])
+        self.assertEqual(state["continuity"]["mode"], "SUPPORTED")
+        self.assertTrue(se.take_over(state, "agent-2", 1000 + LEASE + 1)["taken_over"])
+        # re-armed for the new generation, a second succession works exactly once
+        self.assertEqual(se.arm_successor(state, "owner-1", "agent-3", 1, 1700)["reason"],
+                         "STALE_GENERATION")
+        self.assertTrue(se.arm_successor(state, "owner-1", "agent-3", 2, 1700)["armed"])
+        dead2 = state["lease"]["expires_at"] + 1
+        self.assertTrue(se.take_over(state, "agent-3", dead2)["taken_over"])
+        self.assertEqual(state["generation"], 3)
+
+    def test_29_takeover_without_ack_preserves_all_work_and_fences_stale_owner(self):
+        state = self.armed_shift()
+        se.apply_tick(state, "agent-1", "t1", 1001, generation=state["generation"])
+        se.open_event(state, "agent-1", "ev-1", 1002, recipient="owner-1", generation=state["generation"])
+        state["in_flight"].append("fix-login-timeout")
+        se.set_gate(state, "agent-1", "publish-pricing-page", {"kind": "approval", "state": "pending"}, 1001, generation=state["generation"])
+        se.complete_item(state, "agent-1", "fix-login-timeout", author="agent-1",
+                         reviewer="agent-9", now=1003, generation=state["generation"])
+        se.deliver(state, "agent-1", "fix-login-timeout", recipient="person-1",
+                   recipient_kind="human", result_ref="repo/x!13@abc",
+                   receipt={"received_by": None}, now=1004, generation=state["generation"])
+        state["in_flight"].append("rotate-report-cron")
+        keep = {k: se.snapshot(state)[k] for k in
+                ("cursor", "processed_events", "pending_events", "in_flight", "gates",
+                 "deliveries", "adopted", "reopened", "parked", "effects")}
+        udv_before = se.udv_status(state, "fix-login-timeout")
+        old_gen = state["generation"]
+        dead = 1000 + LEASE + 1
+        self.assertTrue(se.take_over(state, "agent-2", dead)["taken_over"])  # no ACK from owner
+        for key, value in keep.items():
+            self.assertEqual(state[key], value, key)
+        self.assertEqual(se.udv_status(state, "fix-login-timeout"), udv_before)
+        self.assertFalse(se.lease_valid(state, "agent-1", dead + 1))
+        self.assertFalse(se.lease_valid(state, "agent-2", dead + 1, generation=old_gen))
+        self.assertEqual(se.authorize_send(state, "agent-1", SUPERVISOR, dead + 1,
+                                           generation=old_gen)["reason"], "STALE_GENERATION")
+        with self.assertRaises(se.ShiftError):
+            se.open_event(state, "agent-1", "ev-2", dead + 1, recipient="owner-1", generation=state["generation"])
+        self.assertTrue(se.lease_valid(state, "agent-2", dead + 1, generation=old_gen + 1))
+
+
+class ReviewThreadInvariants(unittest.TestCase):
+    """Regression guards for the PR #605 review threads (defensive, no abuse demo)."""
+
+    def test_30_adopt_rechecks_gate_owner_budget_capacity_before_mutating(self):
+        backlog = demo_backlog()
+        cases = [
+            ("publish-pricing-page", {}, "HUMAN_GATE"),
+            ("rotate-report-cron", {}, "IN_FLIGHT_BY_OTHER"),
+            ("fix-login-timeout", {"budget": 0}, "BUDGET_EXHAUSTED"),
+        ]
+        for key, kw, code in cases:
+            state = new_shift(**kw)
+            before = se.snapshot(state)
+            with self.assertRaises(se.ShiftError) as err:
+                se.adopt(state, "agent-1", key, backlog, 1001, generation=1)
+            self.assertEqual(err.exception.code, code)
+            self.assertEqual(state, before, key)
+        state = new_shift(capacity=1)
+        state["in_flight"].append("other")
+        before = se.snapshot(state)
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1001, generation=1)
+        self.assertEqual(err.exception.code, "CAPACITY_FULL")
+        self.assertEqual(state, before)
+        owned = se.normalize_backlog([{"connector": "c", "status": "ok", "items": [
+            {"ref": "R-1", "intent_key": "k", "assignee": "agent-9"}]}])
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(new_shift(), "agent-1", "k", owned, 1001, generation=1)
+        self.assertEqual(err.exception.code, "OWNED_BY_OTHER")
+        gated = new_shift()
+        se.set_gate(gated, "agent-1", "fix-login-timeout",
+                    {"kind": "approval", "by": "owner-1", "state": "pending"}, 1001, generation=1)
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(gated, "agent-1", "fix-login-timeout", backlog, 1002, generation=1)
+        self.assertEqual(err.exception.code, "HUMAN_GATE")
+
+    def test_31_every_mutator_needs_current_lease_and_generation(self):
+        backlog = demo_backlog()
+        calls = {
+            "renew_lease": lambda s, a, g: se.renew_lease(s, a, 1001, generation=g),
+            "apply_tick": lambda s, a, g: se.apply_tick(s, a, "t9", 1001, generation=g),
+            "record_signal": lambda s, a, g: se.record_signal(s, a, "tick", "e9", {}, 1001,
+                                                              generation=g),
+            "open_event": lambda s, a, g: se.open_event(s, a, "ev9", 1001, recipient="owner-1",
+                                                        generation=g),
+            "select_next": lambda s, a, g: se.select_next(s, backlog, a, 1001, generation=g),
+            "adopt": lambda s, a, g: se.adopt(s, a, "fix-login-timeout", backlog, 1001,
+                                              generation=g),
+            "mark_backlog_exhausted": lambda s, a, g: se.mark_backlog_exhausted(s, a, 1001,
+                                                                                generation=g),
+            "set_gate": lambda s, a, g: se.set_gate(s, a, "k", {"kind": "veto", "by": "o"},
+                                                    1001, generation=g),
+            "complete_item": lambda s, a, g: se.complete_item(s, a, "k", author="a",
+                                                              reviewer="b", now=1001,
+                                                              generation=g),
+            "propose_handoff": lambda s, a, g: se.propose_handoff(s, a, "agent-2", 1001,
+                                                                  generation=g),
+            "deliver": lambda s, a, g: se.deliver(s, a, "k", recipient="p", recipient_kind="human",
+                                                  result_ref="r", receipt={}, now=1001,
+                                                  generation=g),
+            "record_receipt": lambda s, a, g: se.record_receipt(s, a, "k", {}, 1001,
+                                                                generation=g),
+            "record_feedback": lambda s, a, g: se.record_feedback(s, a, "k", {}, 1001,
+                                                                  generation=g),
+            "assess_effect": lambda s, a, g: se.assess_effect(s, a, "op", {}, 1001, generation=g),
+            "raise_incident": lambda s, a, g: se.raise_incident(s, a, "inc", 1001, generation=g),
+            "decide_route": lambda s, a, g: se.decide_route(s, a, "d", {}, 1001, generation=g),
+        }
+        for name, call in calls.items():
+            for actor, gen, code in (("agent-1", None, "GENERATION_REQUIRED"),
+                                     ("agent-1", 0, "STALE_GENERATION"),
+                                     ("agent-2", 1, "LEASE_INVALID")):
+                state = new_shift()
+                before = se.snapshot(state)
+                with self.assertRaises(se.ShiftError, msg=name) as err:
+                    call(state, actor, gen)
+                self.assertEqual(err.exception.code, code, name)
+                self.assertEqual(state, before, name)
+
+    def test_32_gate_changes_only_by_its_decider(self):
+        state = new_shift()
+        se.set_gate(state, "agent-1", "k", {"kind": "veto", "by": "owner-1", "state": "vetoed"},
+                    1001, generation=1)
+        with self.assertRaises(se.ShiftError) as err:
+            se.set_gate(state, "agent-1", "k", {"kind": "veto", "state": "granted",
+                                                "decided_by": "agent-1"}, 1002, generation=1)
+        self.assertEqual(err.exception.code, "GATE_DECIDER_MISMATCH")
+        self.assertEqual(state["gates"]["k"]["state"], "vetoed")
+        se.set_gate(state, "agent-1", "k", {"kind": "veto", "state": "granted",
+                                            "decided_by": "owner-1"}, 1003, generation=1)
+        self.assertEqual(state["gates"]["k"]["by"], "owner-1")
+
+    def test_33_stale_handoff_ack_refused_and_in_flight_preserved(self):
+        backlog = demo_backlog()
+        state = new_shift()
+        se.propose_handoff(state, "agent-1", "agent-2", 1001, generation=1)
+        old_ack = {"kind": "handoff_ack", "generation": 1, "from": "agent-2", "cursor_seq": 0,
+                   "in_flight": [], "gates": []}
+        se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1002, generation=1)
+        out = se.accept_handoff(state, old_ack, 1003)
+        self.assertEqual(out["reason"], "PROPOSAL_STALE_REACK")
+        self.assertEqual(state["holder"], "agent-1")
+        self.assertEqual(state["in_flight"], ["fix-login-timeout"])
+        new_ack = dict(old_ack, in_flight=["fix-login-timeout"])
+        wrong_gen = dict(new_ack, generation=7)
+        self.assertEqual(se.accept_handoff(state, wrong_gen, 1004)["reason"],
+                         "ACK_MISMATCH_GENERATION")
+        self.assertEqual(state["holder"], "agent-1")
+        self.assertTrue(se.accept_handoff(state, new_ack, 1004)["relieved"])
+        self.assertEqual(state["in_flight"], ["fix-login-timeout"])
+        self.assertEqual(state["holder"], "agent-2")
+
+    def _delivered(self, received):
+        state = new_shift()
+        se.complete_item(state, "agent-1", "k", author="agent-1", reviewer="agent-2", now=1001,
+                         generation=1)
+        se.deliver(state, "agent-1", "k", recipient="person-1", recipient_kind="human",
+                   result_ref="r1", receipt={"received_by": "person-1" if received else None},
+                   now=1002, generation=1)
+        return state
+
+    def test_34_late_receipt_recorded_without_resending(self):
+        state = self._delivered(received=False)
+        self.assertEqual(se.record_receipt(state, "agent-1", "k", {"received_by": "person-9"},
+                                           1003, generation=1)["reason"], "NOT_THE_RECIPIENT")
+        out = se.record_receipt(state, "agent-1", "k", {"received_by": "person-1"}, 1004,
+                                generation=1)
+        self.assertEqual(out, {"recorded": True, "reason": None, "attempts": 1})
+        self.assertEqual(state["deliveries"]["k"]["attempts"], 1)
+        se.record_feedback(state, "agent-1", "k", {"from": "person-1", "kind": "accept"}, 1005,
+                           generation=1)
+        self.assertEqual(se.udv_status(state, "k")["udv_percent"], 100)
+
+    def test_35_changed_result_after_acceptance_resets_udv(self):
+        state = self._delivered(received=True)
+        se.record_feedback(state, "agent-1", "k", {"from": "person-1", "kind": "accept"}, 1003,
+                           generation=1)
+        self.assertEqual(se.udv_status(state, "k")["udv_percent"], 100)
+        se.deliver(state, "agent-1", "k", recipient="person-2", recipient_kind="human",
+                   result_ref="r2", receipt={"received_by": "person-2"}, now=1004, generation=1)
+        status = se.udv_status(state, "k")
+        self.assertEqual((status["udv_percent"], status["satisfaction"],
+                          status["technical_verified"]), (0, "unknown", False))
+        self.assertEqual(se.record_feedback(state, "agent-1", "k",
+                                            {"from": "person-2", "kind": "accept",
+                                             "result_ref": "r1"}, 1005,
+                                            generation=1)["reason"], "FEEDBACK_FOR_OTHER_RESULT")
+
+    def test_36_event_ack_must_come_from_its_recipient(self):
+        state = new_shift()
+        se.open_event(state, "agent-1", "ev-1", 1001, recipient="owner-1", generation=1)
+        out = se.conclude_event(state, "agent-1", "ev-1", {"event_id": "ev-1", "from": "agent-7"},
+                                1002, generation=1)
+        self.assertEqual(out["reason"], "ACK_NOT_FROM_RECIPIENT")
+        self.assertIn("ev-1", state["pending_events"])
+
+    def test_37_wakeup_bound_to_other_target_is_degraded(self):
+        state = new_shift(capabilities={"wakeup_transport": "host-push",
+                                        "bound_target": "supervisor://other"})
+        self.assertEqual((state["wakeup"]["mode"], state["wakeup"]["reason"]),
+                         ("DEGRADED", "BOUND_TARGET_MISMATCH"))
+
+
+class DecisionLenses(unittest.TestCase):
+    """Lens addendum: behaviour at the decision point, not text."""
+
+    def test_38_incident_preempts_backlog_and_cursor_is_unchanged(self):
+        backlog = demo_backlog()
+        state = new_shift()
+        se.apply_tick(state, "agent-1", "t1", 1001, generation=1)
+        se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1002, generation=1)
+        cursor = dict(state["cursor"])
+        in_flight = list(state["in_flight"])
+        se.raise_incident(state, "agent-1", "inc-1", 1003, generation=1)
+        self.assertEqual(se.select_next(state, backlog, "agent-1", 1004, generation=1),
+                         {"action": "handle_incident", "incident": "inc-1"})
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(state, "agent-1", "other", se.normalize_backlog([
+                {"connector": "c", "status": "ok",
+                 "items": [{"ref": "R", "intent_key": "other"}]}]), 1005, generation=1)
+        self.assertEqual(err.exception.code, "INCIDENT_ACTIVE")
+        se.resolve_incident(state, "agent-1", "inc-1", 1006, generation=1)
+        self.assertEqual(state["cursor"], cursor)
+        self.assertEqual(state["in_flight"], in_flight)
+        self.assertNotEqual(se.select_next(state, backlog, "agent-1", 1007,
+                                           generation=1)["action"], "handle_incident")
+
+    def test_39_repeated_source_does_not_change_decision(self):
+        state = new_shift()
+        ev = {"source": "ci/run-7", "digest": "aa11", "supports": "ship"}
+        self.assertTrue(se.decide_route(state, "agent-1", "d1", ev, 1001, generation=1)["changed"])
+        echo = dict(ev, supports="rollback")  # same source and digest, louder claim
+        for t in (1002, 1003, 1004):
+            out = se.decide_route(state, "agent-1", "d1", echo, t, generation=1)
+            self.assertEqual((out["changed"], out["reason"]), (False, "REPEATED_EVIDENCE"))
+        self.assertEqual(state["decisions"]["d1"]["choice"], "ship")
+        self.assertEqual(len(state["decisions"]["d1"]["changes"]), 1)
+
+    def test_40_new_evidence_changes_decision_and_records_the_lens(self):
+        state = new_shift()
+        se.decide_route(state, "agent-1", "d1", {"source": "ci/run-7", "digest": "aa11",
+                                                 "supports": "ship"}, 1001, generation=1)
+        out = se.decide_route(state, "agent-1", "d1",
+                              {"source": "ci/run-8", "digest": "bb22", "supports": "rollback",
+                               "lens": "doubting"}, 1002, generation=1)
+        self.assertEqual((out["changed"], out["choice"]), (True, "rollback"))
+        self.assertEqual(state["decisions"]["d1"]["changes"][-1]["lens"], "doubting")
+        same = se.decide_route(state, "agent-1", "d1", {"source": "ci/run-9", "digest": "cc33",
+                                                        "supports": "rollback", "lens": "x"},
+                               1003, generation=1)
+        self.assertEqual(same["reason"], "SAME_CONCLUSION")
+        self.assertEqual(len(state["decisions"]["d1"]["changes"]), 2)  # no-op lens not logged
+
+    def test_41_received_without_satisfaction_has_no_udv(self):
+        state = new_shift()
+        se.complete_item(state, "agent-1", "k", author="agent-1", reviewer="agent-2", now=1001,
+                         generation=1)
+        se.deliver(state, "agent-1", "k", recipient="person-1", recipient_kind="human",
+                   result_ref="r1", receipt={"received_by": "person-1"}, now=1002, generation=1)
+        status = se.udv_status(state, "k")
+        self.assertEqual((status["technical_verified"], status["delivered_to_recipient"],
+                          status["udv_percent"], status["pending"]),
+                         (True, True, 0, "SATISFACTION_UNKNOWN"))
+
+    def test_42_no_backlog_never_invents_an_item(self):
+        state = new_shift()
+        empty = se.normalize_backlog([{"connector": "c", "status": "empty", "items": []}])
+        before = se.snapshot(state)
+        pick = se.select_next(state, empty, "agent-1", 1001, generation=1)
+        self.assertEqual((pick["action"], pick["reason"]), ("wait", "NO_ELIGIBLE_ITEM"))
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(state, "agent-1", "made-up-need", empty, 1002, generation=1)
+        self.assertEqual(err.exception.code, "UNKNOWN_ITEM")
+        self.assertEqual(state, before)
+
+    def test_43_stop_or_revocation_beats_everything(self):
+        backlog = demo_backlog()
+        for revoke in (False, True):
+            state = se.open_shift(shift_id="s", principal="owner-1", scope="x", backlog=None,
+                                  capacity=2, budget=5, holder="agent-1",
+                                  supervisor_target=SUPERVISOR, now=1000, lease_secs=LEASE,
+                                  successor_policy={"pre_authorized": "agent-2"})
+            se.raise_incident(state, "agent-1", "inc-1", 1001, generation=1)
+            se.propose_handoff(state, "agent-1", "agent-2", 1002, generation=1)
+            se.stop_shift(state, "owner-1", 1003, revoke=revoke)
+            for call in (lambda: se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1004,
+                                          generation=1),
+                         lambda: se.resolve_incident(state, "agent-1", "inc-1", 1004,
+                                                     generation=1),
+                         lambda: se.decide_route(state, "agent-1", "d", {"source": "s",
+                                                 "digest": "d", "supports": "x"}, 1004,
+                                                 generation=1),
+                         lambda: se.renew_lease(state, "agent-1", 1004, generation=1)):
+                with self.assertRaises(se.ShiftError):
+                    call()
+            self.assertEqual(se.take_over(state, "agent-2", 5000)["reason"], "SHIFT_NOT_ACTIVE")
+            self.assertEqual(se.arm_successor(state, "owner-1", "agent-3", 1, 1005)["reason"],
+                             "SHIFT_NOT_ACTIVE")
+            with self.assertRaises(se.ShiftError):
+                se.accept_handoff(state, {"kind": "handoff_ack", "generation": 1,
+                                          "from": "agent-2", "cursor_seq": 0, "in_flight": [],
+                                          "gates": []}, 1006)
+            self.assertEqual(state["holder"], "agent-1")
+            self.assertFalse(se.authorize_send(state, "agent-1", SUPERVISOR, 1006)["allowed"])
 
 
 class ContractEdges(unittest.TestCase):
@@ -401,20 +788,20 @@ class ContractEdges(unittest.TestCase):
         backlog = demo_backlog()
         state = new_shift(backlog="list://owner-1/tonight")
         with self.assertRaises(se.ShiftError) as err:
-            se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1001)
+            se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1001, generation=state["generation"])
         self.assertEqual(err.exception.code, "BACKLOG_GIVEN")
-        se.mark_backlog_exhausted(state, "agent-1", 1002)
-        _, adopted = se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1003)
+        se.mark_backlog_exhausted(state, "agent-1", 1002, generation=state["generation"])
+        _, adopted = se.adopt(state, "agent-1", "fix-login-timeout", backlog, 1003, generation=state["generation"])
         self.assertTrue(adopted)
 
     def test_budget_and_capacity_stop_new_work(self):
         backlog = demo_backlog()
         state = new_shift(budget=0)
-        self.assertEqual(se.select_next(state, backlog, "agent-1", 1001)["reason"],
+        self.assertEqual(se.select_next(state, backlog, "agent-1", 1001, generation=state["generation"])["reason"],
                          "BUDGET_EXHAUSTED")
         state = new_shift(capacity=1)
         state["in_flight"].append("other")
-        self.assertEqual(se.select_next(state, backlog, "agent-1", 1001)["reason"],
+        self.assertEqual(se.select_next(state, backlog, "agent-1", 1001, generation=state["generation"])["reason"],
                          "CAPACITY_FULL")
 
     def test_only_principal_can_stop_or_revoke(self):
@@ -434,6 +821,22 @@ class ContractEdges(unittest.TestCase):
         state = new_shift()
         self.assertEqual(sorted(schema["required"]), sorted(state))
         self.assertEqual(sorted(example), sorted(state))
+        optional = {"backlog_exhausted"}
+        self.assertEqual(sorted(set(schema["properties"]) - optional), sorted(state))
+        armed = se.open_shift(shift_id="s", principal="p", scope="x", backlog=None, capacity=1,
+                              budget=1, holder="a", supervisor_target="t", now=0, lease_secs=1,
+                              successor_policy={"pre_authorized": "b"})
+        self.assertEqual(sorted(schema["properties"]["successor_policy"]["required"]),
+                         sorted(armed["successor_policy"]))
+        self.assertEqual(sorted(schema["properties"]["continuity"]["required"]),
+                         sorted(armed["continuity"]))
+        self.assertEqual(sorted(schema["properties"]["wakeup"]["required"]),
+                         sorted(set(state["wakeup"]) - {"transport", "bound_target"}))
+        # regenerating the example from the engine must give the committed file
+        regen = new_shift(now=1000)
+        regen["scope"] = example["scope"]
+        se.apply_tick(regen, "agent-1", "tick-1", 1001, generation=regen["generation"])
+        self.assertEqual(json.loads(json.dumps(regen)), example)
         self.assertEqual(schema["properties"]["schema"]["const"], se.SCHEMA)
         self.assertEqual(example["mantras"], list(se.DEFAULT_MANTRAS))
 

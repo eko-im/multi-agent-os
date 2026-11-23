@@ -33,7 +33,10 @@
     "continuity",
     "deliveries",
     "reopened",
-    "parked"
+    "parked",
+    "consumed_takeovers",
+    "incident",
+    "decisions"
   ],
   "properties": {
     "schema": {
@@ -244,10 +247,29 @@
         "object",
         "null"
       ],
-      "description": "set by the principal at intake",
+      "description": "armed by the principal for ONE generation; consumed by the takeover it allows; never names the current holder",
+      "required": [
+        "pre_authorized",
+        "armed_by",
+        "armed_generation",
+        "nonce"
+      ],
       "properties": {
         "pre_authorized": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
+        },
+        "armed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "armed_generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nonce": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -320,6 +342,36 @@
         "type": "object"
       },
       "description": "operations stopped by the blast-radius check"
+    },
+    "consumed_takeovers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "description": "nonces of policies already used; a replay with one is refused"
+    },
+    "incident": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "open incident; preempts backlog; never moves the cursor",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "opened_at": {
+          "type": "number"
+        },
+        "cursor_at_open": {
+          "type": "object"
+        }
+      }
+    },
+    "decisions": {
+      "type": "object",
+      "description": "decision key -> {choice, seen (source#digest), changes [{from,to,evidence,lens,at}]}; a repeated source#digest never changes the choice"
     }
   }
 }

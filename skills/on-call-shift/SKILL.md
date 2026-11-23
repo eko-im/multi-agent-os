@@ -17,7 +17,7 @@ description: |
 allowed-tools: "Read Write Edit Bash Grep Glob"
 compatibility: "Portable Agent Skills core. Host-neutral: every runtime maps timer, wakeup, tracker connectors and identity through an adapter that declares its capabilities; a missing capability fails closed or reports DEGRADED. No vendor runtime is required."
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   scope: AAIF cross-vendor
   family: orchestration-convergence
   cross_link_slug: on-call-shift
@@ -75,6 +75,10 @@ announced plan"**. An explicit list is stored verbatim and never merged with the
    the exact supervisor. Otherwise record `DEGRADED` with the reason and the recovery route.
    Reuse the host's existing timer or heartbeat; never install a second one and never use a
    timer to launch sessions or agents, or to get around caps.
+   **Wakeup limits.** The existing timer only observes: it records a tick. It wakes nobody,
+   notifies nobody and resumes nothing. A wakeup exists only when the host proves one to the
+   exact supervisor. This skill never claims 24/7 or "always on" coverage; between real
+   wakeups or human turns, the shift is unobserved and says so.
 3. **Work.** Run the given backlog through `ooda-loop` (one decision per item). For each item
    keep: objective/DoD, owner, recipient, deadline, next step, evidence, and an independent
    reviewer when the change is material. Use 5 Whys and Ishikawa to separate competing causes
@@ -84,7 +88,37 @@ announced plan"**. An explicit list is stored verbatim and never merged with the
    outcome, merge the same intent into one work item, check owners and in-flight state, then
    adopt **one** eligible item or wait with a reason, a deadline, a maximum cost and an
    escalation path. Never invent goals, never adopt another organization's work without a
-   mandate, and never spin model turns to look busy.
+   mandate, and never spin model turns to look busy. With no backlog, look in the authorized
+   trackers; never invent a need or an approval. `adopt` re-checks gate, owner, in-flight,
+   budget and capacity before it changes anything; `select_next` is advice only.
+
+   **Decision point (before assuming any work).** Answer, briefly: what is fact; what
+   evidence is missing; what rival explanation fits; what else it touches; who has authority
+   to accept. Then ask the short lens questions:
+
+   | Lens | Question |
+   |---|---|
+   | Doubting (Tomé) | What observation or counter-proof would change the verdict? |
+   | Critical | Does the conclusion follow from the data? |
+   | Suspicious | Right source, version, identity and authorization, or an echo? |
+   | Systemic | Which other projects, dependencies and people would feel it? |
+   | Adaptive | What changed that justifies changing route? |
+   | Determined | Which next reversible step still fits the mandate, and where to stop? |
+   | Strategic | Which eligible item removes most of an impediment to the user's delivery? |
+   | Vulcan logic | Separate premises, consequence, alternative and unknown; satisfaction and preference stay the recipient's. |
+
+   Add a lens only on a concrete indicator: personal data, cost, data-loss risk, a cross-org
+   effect, or availability. A simple task gets no meeting and no scoring. Record a lens only
+   when it changed an action or prevented an error (`decide_route` stores it only on a change).
+   Change route only on new evidence: the same `source#digest` seen again never changes a
+   decision (`REPEATED_EVIDENCE`). An incident preempts backlog work (`raise_incident`) and
+   keeps the cursor and in-flight work as they were. Ready and received without the
+   recipient's satisfaction is still not UDV.
+
+   **Precedence.** Nothing here overrides revocation of authority, the budget, host limits or
+   a stop by the principal: after `stop_shift` every mutator, takeover, arming and relief is
+   refused. Works of fiction that inspired the shift idea are analogies, never a source of
+   authorization.
 5. **Signal.** Keep the four signals apart (see `references/shift-contract.md`): a tick is not a
    notification, a notification is not a wakeup, a wakeup is not a resume. Before any outbound
    signal, check the lease and the exact target. Record the strongest signal the host receipt
@@ -106,12 +140,25 @@ announced plan"**. An explicit list is stored verbatim and never merged with the
    successor whose ACK echoes the cursor, the in-flight items and the open gates. A heartbeat is
    not an ACK and silence is not relief: on timeout the outgoing holder keeps the shift. Only
    the principal may stop or revoke without relief; the stop record lists what was left in
-   flight. If the holder dies (its lease lapses) and the principal pre-authorized a successor
-   at intake, that successor alone takes over once, with a new generation (fencing token);
-   cursor, in-flight items and gates stay as they were, and the old holder is refused if it
+   flight. If the holder dies (its lease lapses) and the principal armed a successor for the
+   current generation, that successor alone takes over once, with no ACK from the dead holder
+   and a new generation (fencing token). The arming is consumed: one authorization, one
+   succession. A second expiry needs a new arming by the principal in the new generation, else
+   DEGRADED. The holder can never be its own successor, a replayed takeover or ACK has no
+   effect, and a policy armed in an older generation does not apply. Cursor, events, in-flight
+   items, gates and UDV records stay as they were, and the old holder is refused if it
    returns. Without a pre-authorized successor or a real route the shift is `DEGRADED` and
    claims no uninterrupted service. Plan for concurrency, budget exhaustion, a suspended host, an empty queue, safe
    shutdown and a generation change by persisting state before every transition.
+
+**Fencing.** Every mutator takes `generation=` and refuses a missing or stale one
+(`GENERATION_REQUIRED`, `STALE_GENERATION`) as well as an invalid lease. A handoff ACK must
+echo the generation and match the LIVE cursor, in-flight work and gates; if work moved after
+the proposal, the ACK is refused (`PROPOSAL_STALE_REACK`) and nothing in flight is dropped.
+An event ACK counts only from that event's recipient. A wakeup counts as `SUPPORTED` only when
+its bound target is the exact supervisor. A late receipt (`record_receipt`) is recorded
+without sending again; a different result or recipient resets technical verification and
+satisfaction to unknown.
 
 ## Reporting rules
 - "100%" needs named criteria and proof from the recipient side. What cannot be proven stays
@@ -155,6 +202,26 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 21. Holder dies with a pre-authorized successor → one takeover, new generation, old holder refused.
 22. Holder dies without a successor → DEGRADED, no takeover.
 23. Predecessor cannot ACK its own relief.
+24. Successor policy consumed by the takeover; second expiry without re-arming → refused, DEGRADED.
+25. Policy armed in an older generation does not apply after relief.
+26. Replayed takeover or handoff ACK → refused, no second effect.
+27. Holder as its own successor → refused at intake, arming and takeover.
+28. Only the principal, in the current generation, can arm a successor.
+29. Takeover without the dead holder's ACK keeps cursor, events, work, gates and UDV; stale owner fenced.
+30. `adopt` re-checks gate, owner, in-flight, budget and capacity before mutating.
+31. Every mutator refuses a missing or stale generation and an invalid lease, with no change.
+32. A gate changes only by its own decider.
+33. A stale handoff ACK is refused; in-flight work is kept; a fresh ACK relieves.
+34. A late receipt is recorded without resending.
+35. A changed result after acceptance resets UDV.
+36. An event ACK must come from its recipient.
+37. A wakeup bound to another target is DEGRADED.
+38. An incident preempts backlog; the cursor stays the same.
+39. A repeated source does not change a decision.
+40. New evidence changes it, and the lens is recorded only then.
+41. Received without satisfaction has no UDV.
+42. No backlog never invents an item.
+43. Stop or revocation beats everything.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
@@ -179,4 +246,5 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
+| 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 43 numbered scenarios. |
 | 0.1.0 | 2026-11-23 | Genesis via `agentic-tool-forge`; name by `anima` (`on-call-shift`, runner-up `shift-handoff` rejected as covering only the end of a shift). Reference engine plus 23 acceptance scenarios (13 shift + UDV, blast radius, holder loss), stdlib only. |

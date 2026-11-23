@@ -21,14 +21,15 @@ good state.
 | `wakeup` | `SUPPORTED` or `DEGRADED`, with `reason` and `recovery`; `always_on_claim` is always `false` |
 | `mantras`, `mantras_source` | explicit list verbatim, else the two defaults with `source=default` |
 | `generation` | fencing token; +1 on every relief or takeover; an older token is refused |
-| `successor_policy`, `continuity` | pre-authorized successor from intake; `continuity.mode` is `DEGRADED` without one, `uninterrupted_claim` is always `false` |
+| `successor_policy`, `continuity`, `consumed_takeovers` | successor armed by the principal for one generation (`armed_generation`, `nonce`), consumed by its takeover; `continuity.mode` is `DEGRADED` without one, `uninterrupted_claim` is always `false` |
 | `deliveries` | per item: `technical_verified`, `delivered_to_recipient`, `satisfaction` (`confirmed`, `refused`, `unknown`), `attempts`, `result_ref`, `reservations`, `reopened_as` |
 | `reopened`, `parked` | reopened intents linked to the original result; operations parked by blast radius |
 | `budget`, `capacity` | adoption stops when spent reaches the limit or in-flight reaches capacity |
 
 ## 2. Lease
 
-- Only the lease holder may send, adopt, complete or propose a handoff.
+- Only the lease holder may mutate state, and every mutator also requires the current
+  `generation` (fencing token); a missing or older one is refused before any change.
 - Renewal requires a valid lease; an expired lease cannot be renewed by its old holder. A new
   holder comes only through relief or a fresh shift opened by the principal.
 - Concurrency: two writers compete on the lease, not on the work. The loser reads state and
@@ -67,7 +68,9 @@ heartbeat is not an ACK.
 
 1. The holder proposes relief to an identified successor. State becomes `HANDOFF_PENDING` and
    records the cursor seq, the in-flight keys and the open gates.
-2. The successor ACKs with `kind=handoff_ack` and echoes all three
+2. The successor ACKs with `kind=handoff_ack`, the generation, and echoes all three; the
+   ACK must also match the LIVE state at acceptance, else it is refused
+   (`PROPOSAL_STALE_REACK`), the proposal is refreshed and the successor ACKs again
    (`../templates/handoff-ack.schema.json`). Any mismatch refuses relief and names the field.
 3. On a correct ACK the lease moves to the successor; there is never a moment with two
    holders. In-flight work and gates stay as they were.
@@ -101,8 +104,13 @@ recovery owner; the shift keeps running.
 ## 8. Holder loss
 
 Takeover needs the holder's lease to have lapsed and the claimant to be the successor the
-principal pre-authorized at intake. It happens once: the generation goes up, the lease moves,
-cursor, in-flight items and gates are kept. The old holder, back with the old generation, is
+principal armed for the current generation (at intake, or later with `arm_successor`, which
+only the principal may call and only with the current generation). The claimant is never the
+current holder. Takeover happens once per arming: the policy is consumed (its nonce goes to
+`consumed_takeovers`), the generation goes up, the lease moves, and cursor, events, in-flight
+items, gates and UDV records are kept. A replay with a used nonce is refused. A policy armed in
+an older generation (for example before a voluntary relief) does not apply. A second expiry
+without a new arming leaves the shift `DEGRADED`. The old holder, back with the old generation, is
 refused. With no pre-authorized successor, `continuity` is `DEGRADED`
 (`NO_PREAUTHORIZED_SUCCESSOR`) and nobody takes over; voluntary relief still needs the exact
 successor's ACK, never the predecessor's word alone.

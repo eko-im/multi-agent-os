@@ -6,6 +6,7 @@
     "spent": 0
   },
   "capacity": 2,
+  "consumed_takeovers": [],
   "continuity": {
     "mode": "DEGRADED",
     "reason": "NO_PREAUTHORIZED_SUCCESSOR",
@@ -15,6 +16,7 @@
     "last_event_id": "tick-1",
     "seq": 1
   },
+  "decisions": {},
   "deliveries": {},
   "effects": [
     {
@@ -30,6 +32,7 @@
   "handoff": null,
   "holder": "agent-1",
   "in_flight": [],
+  "incident": null,
   "lease": {
     "expires_at": 1600,
     "holder": "agent-1",

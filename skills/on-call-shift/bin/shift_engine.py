@@ -73,8 +73,13 @@ def open_shift(*, shift_id, principal, scope, backlog, capacity, budget, holder,
         "generation": 1,
         # Successor the PRINCIPAL pre-authorized to take over if the holder dies. The
         # outgoing holder cannot set this for itself mid-shift; it comes in at intake.
-        "successor_policy": dict(successor_policy) if successor_policy else None,
+        # One authorization, one succession: the policy is bound to the generation it was
+        # armed in and consumed by the takeover it allows.
+        "successor_policy": _bind_policy(successor_policy, holder, principal, 1),
         "continuity": _continuity(successor_policy),
+        "consumed_takeovers": [],
+        "incident": None,
+        "decisions": {},
         "deliveries": {},
         "reopened": {},
         "parked": [],
@@ -87,7 +92,7 @@ def open_shift(*, shift_id, principal, scope, backlog, capacity, budget, holder,
         "pending_events": {},
         "handoff": None,
         "status": ACTIVE,
-        "wakeup": classify_wakeup(capabilities or {}),
+        "wakeup": classify_wakeup(capabilities or {}, supervisor_target),
         "log": [{"at": now, "event": "shift_opened", "holder": holder}],
     }
     return state
@@ -129,21 +134,26 @@ def lease_valid(state, actor, now, generation=None):
             and now < lease["expires_at"])
 
 
-def renew_lease(state, actor, now):
-    if not lease_valid(state, actor, now):
-        raise ShiftError("LEASE_INVALID", f"{actor} cannot renew")
-    state["lease"]["expires_at"] = now + state["lease"]["lease_secs"]
-    return state
-
-
-def _require_holder(state, actor, now):
+def _require_holder(state, actor, now, generation):
+    """Every mutator calls this: the caller must hold the lease AND show the current
+    generation (fencing token). A missing token is refused, never assumed current."""
+    if generation is None:
+        raise ShiftError("GENERATION_REQUIRED", actor)
+    if generation != state["generation"]:
+        raise ShiftError("STALE_GENERATION", f"{generation} != {state['generation']}")
     if not lease_valid(state, actor, now):
         raise ShiftError("LEASE_INVALID", f"{actor} does not hold a valid lease")
 
 
+def renew_lease(state, actor, now, *, generation):
+    _require_holder(state, actor, now, generation)
+    state["lease"]["expires_at"] = now + state["lease"]["lease_secs"]
+    return state
+
+
 # --------------------------------------------------------------------------- signals
 
-def classify_wakeup(capabilities):
+def classify_wakeup(capabilities, supervisor_target=None):
     """Declare what the runtime really offers. Absent capability = DEGRADED, never 'always on'.
 
     `capabilities` comes from the host adapter (see ooda-loop references/runtime-adapters.md):
@@ -151,10 +161,11 @@ def classify_wakeup(capabilities):
     """
     transport = capabilities.get("wakeup_transport")
     target = capabilities.get("bound_target")
-    if transport and target:
+    if transport and target and target == supervisor_target:
         return {"mode": "SUPPORTED", "transport": transport, "bound_target": target,
                 "reason": None, "recovery": None, "always_on_claim": False}
-    reason = "NO_BOUND_WAKEUP_TRANSPORT" if not transport else "NO_BOUND_TARGET"
+    reason = ("NO_BOUND_WAKEUP_TRANSPORT" if not transport else
+              "NO_BOUND_TARGET" if not target else "BOUND_TARGET_MISMATCH")
     return {"mode": "DEGRADED", "transport": transport, "bound_target": target,
             "reason": reason,
             "recovery": "bind a host wakeup transport to the exact supervisor, or poll on the "
@@ -162,8 +173,9 @@ def classify_wakeup(capabilities):
             "always_on_claim": False}
 
 
-def apply_tick(state, event_id, now):
+def apply_tick(state, actor, event_id, now, *, generation):
     """A tick is evidence the clock ran. It notifies nobody. A replayed id has no effect."""
+    _require_holder(state, actor, now, generation)
     if event_id in state["processed_events"]:
         return state, None
     state["processed_events"].append(event_id)
@@ -185,7 +197,7 @@ def authorize_send(state, actor, target, now, generation=None):
     return {"allowed": True, "reason": None}
 
 
-def record_signal(state, kind, event_id, receipt, now):
+def record_signal(state, actor, kind, event_id, receipt, now, *, generation):
     """Record a signal the HOST reports it exercised. The kind must be proven by the receipt.
 
     - notification: receipt.delivered_to == supervisor_target
@@ -193,6 +205,7 @@ def record_signal(state, kind, event_id, receipt, now):
     - resume: receipt.consumed_by == holder AND receipt.effects == 1
     Anything weaker is recorded as the weaker kind that the receipt does prove.
     """
+    _require_holder(state, actor, now, generation)
     if kind not in SIGNALS:
         raise ShiftError("UNKNOWN_SIGNAL", kind)
     proven = "tick"
@@ -212,17 +225,20 @@ def record_signal(state, kind, event_id, receipt, now):
 
 # --------------------------------------------------------------------------- events and ACK
 
-def open_event(state, actor, event_id, now):
-    _require_holder(state, actor, now)
+def open_event(state, actor, event_id, now, *, recipient, generation):
+    _require_holder(state, actor, now, generation)
+    if not recipient or recipient == actor:
+        raise ShiftError("BAD_EVENT_RECIPIENT", str(recipient))
     if event_id in state["pending_events"]:
         return state
-    state["pending_events"][event_id] = {"opened_at": now, "acked": False}
+    state["pending_events"][event_id] = {"opened_at": now, "acked": False,
+                                         "recipient": recipient}
     return state
 
 
-def conclude_event(state, actor, event_id, ack, now):
+def conclude_event(state, actor, event_id, ack, now, *, generation):
     """An event is concluded only with an ACK from its recipient. No ACK = still pending."""
-    _require_holder(state, actor, now)
+    _require_holder(state, actor, now, generation)
     event = state["pending_events"].get(event_id)
     if event is None:
         raise ShiftError("UNKNOWN_EVENT", event_id)
@@ -230,6 +246,8 @@ def conclude_event(state, actor, event_id, ack, now):
         return {"concluded": False, "reason": "NO_ACK"}
     if ack.get("kind") == "heartbeat":
         return {"concluded": False, "reason": "HEARTBEAT_IS_NOT_ACK"}
+    if ack.get("from") != event.get("recipient"):
+        return {"concluded": False, "reason": "ACK_NOT_FROM_RECIPIENT"}
     event["acked"] = True
     del state["pending_events"][event_id]
     state["log"].append({"at": now, "event": "event_concluded", "id": event_id})
@@ -281,9 +299,23 @@ def normalize_backlog(connector_results):
             "queue_empty": every_connector_empty and not merged}
 
 
-def select_next(state, backlog, actor, now):
+def _ineligible(state, item, actor):
+    """Why an item may not be adopted by `actor` now, or None. Shared by select and adopt."""
+    if item["in_flight_by"] and item["in_flight_by"] != actor:
+        return "IN_FLIGHT_BY_OTHER"
+    if item["assignee"] and item["assignee"] != actor:
+        return "OWNED_BY_OTHER"
+    gate = state["gates"].get(item["intent_key"])
+    if item["gate"] or (gate and gate.get("state") != "granted"):
+        return "HUMAN_GATE"
+    return None
+
+
+def select_next(state, backlog, actor, now, *, generation):
     """Pick ONE eligible item, or return a reasoned wait. Never invents work."""
-    _require_holder(state, actor, now)
+    _require_holder(state, actor, now, generation)
+    if state.get("incident"):
+        return {"action": "handle_incident", "incident": state["incident"]["id"]}
     if state["budget"]["spent"] >= state["budget"]["limit"]:
         return {"action": "wait", "reason": "BUDGET_EXHAUSTED"}
     if len(state["in_flight"]) >= state["capacity"]:
@@ -293,16 +325,14 @@ def select_next(state, backlog, actor, now):
     for key, item in backlog["items"].items():
         if key in state["adopted"]:
             continue
-        if item["in_flight_by"] and item["in_flight_by"] != actor:
-            skipped.append({"intent_key": key, "why": "IN_FLIGHT_BY_OTHER",
-                            "offer": "remove impediment; do not take authorship"})
+        why = _ineligible(state, item, actor)
+        if why == "HUMAN_GATE":
+            skipped.append({"intent_key": key, "why": why,
+                            "gate": item["gate"] or state["gates"].get(key)})
             continue
-        if item["assignee"] and item["assignee"] != actor:
-            skipped.append({"intent_key": key, "why": "OWNED_BY_OTHER",
+        if why:
+            skipped.append({"intent_key": key, "why": why,
                             "offer": "remove impediment; do not take authorship"})
-            continue
-        if item["gate"]:
-            skipped.append({"intent_key": key, "why": "HUMAN_GATE", "gate": item["gate"]})
             continue
         candidates.append(item)
     if candidates:
@@ -316,9 +346,10 @@ def select_next(state, backlog, actor, now):
     return {"action": "wait", "reason": "NO_ELIGIBLE_ITEM", "skipped": skipped}
 
 
-def adopt(state, actor, intent_key, backlog, now):
-    """Adopt once. Re-adopting the same intent key is a no-op, so a replay adds nothing."""
-    _require_holder(state, actor, now)
+def adopt(state, actor, intent_key, backlog, now, *, generation):
+    """Adopt once. Re-adopting the same intent key is a no-op, so a replay adds nothing.
+    Every limit is checked again here, before any mutation: select_next is advice only."""
+    _require_holder(state, actor, now, generation)
     if state["backlog"] and not state.get("backlog_exhausted"):
         raise ShiftError("BACKLOG_GIVEN", "adopt only when no backlog was given or it is done")
     if intent_key in state["adopted"]:
@@ -326,30 +357,44 @@ def adopt(state, actor, intent_key, backlog, now):
     item = backlog["items"].get(intent_key)
     if item is None:
         raise ShiftError("UNKNOWN_ITEM", intent_key)
-    if item["in_flight_by"] and item["in_flight_by"] != actor:
-        raise ShiftError("IN_FLIGHT_BY_OTHER", intent_key)
+    why = _ineligible(state, item, actor)
+    if why:
+        raise ShiftError(why, intent_key)
+    if state.get("incident"):
+        raise ShiftError("INCIDENT_ACTIVE", intent_key)
+    if state["budget"]["spent"] >= state["budget"]["limit"]:
+        raise ShiftError("BUDGET_EXHAUSTED", intent_key)
+    if len(state["in_flight"]) >= state["capacity"]:
+        raise ShiftError("CAPACITY_FULL", intent_key)
     state["adopted"][intent_key] = {"refs": list(item["refs"]), "at": now}
     state["in_flight"].append(intent_key)
     state["budget"]["spent"] += 1
     return state, True
 
 
-def mark_backlog_exhausted(state, actor, now):
-    _require_holder(state, actor, now)
+def mark_backlog_exhausted(state, actor, now, *, generation):
+    _require_holder(state, actor, now, generation)
     state["backlog_exhausted"] = True
     return state
 
 
 # --------------------------------------------------------------------------- gates, review
 
-def set_gate(state, intent_key, gate):
-    """gate: {"kind": "approval"|"veto", "by": "<role>", "deadline": epoch, "state": ...}."""
-    state["gates"][intent_key] = dict(gate)
+def set_gate(state, actor, intent_key, gate, now, *, generation):
+    """gate: {"kind": "approval"|"veto", "by": "<decider>", "deadline": epoch, "state": ...}.
+
+    The holder records gates. Once a gate exists, changing it needs `decided_by` equal to the
+    gate's own decider, so a veto is never flipped by anyone else."""
+    _require_holder(state, actor, now, generation)
+    current = state["gates"].get(intent_key)
+    if current and gate.get("decided_by") != current.get("by"):
+        raise ShiftError("GATE_DECIDER_MISMATCH", intent_key)
+    state["gates"][intent_key] = dict(gate, by=current.get("by") if current else gate.get("by"))
     return state
 
 
-def complete_item(state, actor, intent_key, *, author, reviewer, now):
-    _require_holder(state, actor, now)
+def complete_item(state, actor, intent_key, *, author, reviewer, now, generation):
+    _require_holder(state, actor, now, generation)
     gate = state["gates"].get(intent_key)
     if gate and gate.get("state") != "granted":
         return {"completed": False,
@@ -367,14 +412,17 @@ def complete_item(state, actor, intent_key, *, author, reviewer, now):
 
 # --------------------------------------------------------------------------- handoff, stop
 
-def propose_handoff(state, actor, successor, now):
-    _require_holder(state, actor, now)
+def _handoff_view(state):
+    return {"cursor_seq": state["cursor"]["seq"], "in_flight": sorted(state["in_flight"]),
+            "gates": sorted(state["gates"]), "generation": state["generation"]}
+
+
+def propose_handoff(state, actor, successor, now, *, generation):
+    _require_holder(state, actor, now, generation)
     if not successor or successor == actor:
         raise ShiftError("NO_SUCCESSOR", str(successor))
-    state["handoff"] = {"from": actor, "to": successor, "proposed_at": now,
-                        "cursor_seq": state["cursor"]["seq"],
-                        "in_flight": sorted(state["in_flight"]),
-                        "gates": sorted(state["gates"])}
+    state["handoff"] = dict(_handoff_view(state), **{"from": actor, "to": successor,
+                                                     "proposed_at": now})
     state["status"] = HANDOFF_PENDING
     return state
 
@@ -388,6 +436,14 @@ def accept_handoff(state, ack, now):
         return {"relieved": False, "reason": "NOT_A_HANDOFF_ACK"}
     if ack.get("from") != handoff["to"]:
         return {"relieved": False, "reason": "ACK_FROM_WRONG_PARTY"}
+    live = _handoff_view(state)
+    if any(live[k] != handoff[k] for k in live):
+        # Work moved after the proposal: the old ACK no longer covers it. Refresh the
+        # proposal to the live state; the successor must ACK again. Nothing is dropped.
+        handoff.update(live)
+        return {"relieved": False, "reason": "PROPOSAL_STALE_REACK", "expect": live}
+    if ack.get("generation") != handoff["generation"]:
+        return {"relieved": False, "reason": "ACK_MISMATCH_GENERATION"}
     for field in ("cursor_seq", "in_flight", "gates"):
         echoed = ack.get(field)
         if field != "cursor_seq":
@@ -402,6 +458,8 @@ def accept_handoff(state, ack, now):
     state["log"].append({"at": now, "event": "relieved", "from": handoff["from"],
                          "to": handoff["to"]})
     state["handoff"] = None
+    # A policy armed in the previous generation no longer applies to the new holder.
+    state["continuity"] = _continuity(_live_policy(state))
     return {"relieved": True, "reason": None}
 
 
@@ -440,18 +498,25 @@ def _delivery(state, intent_key):
         "attempts": 0, "result_ref": None, "reservations": None, "reopened_as": None})
 
 
-def deliver(state, actor, intent_key, *, recipient, recipient_kind, result_ref, receipt, now):
+def deliver(state, actor, intent_key, *, recipient, recipient_kind, result_ref, receipt, now,
+            generation):
     """Hand the result to its recipient once. Receipt proves receipt, not satisfaction.
 
     receipt: {"received_by": <recipient> | None}. An absent recipient leaves the delivery
-    pending; the same result is never sent again (no resend loop).
+    pending; the same result is never sent again (no resend loop). Evidence is bound to the
+    (result, recipient) pair: a different result or recipient resets it.
     """
-    _require_holder(state, actor, now)
+    _require_holder(state, actor, now, generation)
     if recipient_kind not in ("human", "agent"):
         raise ShiftError("BAD_RECIPIENT_KIND", str(recipient_kind))
     record = _delivery(state, intent_key)
     if record["attempts"] and record["result_ref"] == result_ref:
-        return {"sent": False, "reason": "NO_RESEND_SAME_RESULT"}
+        if record["recipient"] == recipient:
+            return {"sent": False, "reason": "NO_RESEND_SAME_RESULT"}
+    if record["attempts"] and (record["result_ref"], record["recipient"]) != (result_ref, recipient):
+        # The accepted evidence was for another result or another person: it no longer applies.
+        record.update(technical_verified=False, delivered_to_recipient=False,
+                      satisfaction="unknown", reservations=None)
     record.update(recipient=recipient, recipient_kind=recipient_kind, result_ref=result_ref)
     record["attempts"] += 1
     record["delivered_to_recipient"] = (receipt or {}).get("received_by") == recipient
@@ -459,19 +524,35 @@ def deliver(state, actor, intent_key, *, recipient, recipient_kind, result_ref, 
             "reason": None if record["delivered_to_recipient"] else "RECIPIENT_ABSENT_PENDING"}
 
 
-def record_feedback(state, actor, intent_key, feedback, now):
+def record_receipt(state, actor, intent_key, receipt, now, *, generation):
+    """A late receipt for the result already sent. Records it; sends nothing again."""
+    _require_holder(state, actor, now, generation)
+    record = state["deliveries"].get(intent_key)
+    if not record or not record["attempts"]:
+        return {"recorded": False, "reason": "NOTHING_SENT"}
+    if (receipt or {}).get("result_ref") not in (None, record["result_ref"]):
+        return {"recorded": False, "reason": "RECEIPT_FOR_OTHER_RESULT"}
+    if (receipt or {}).get("received_by") != record["recipient"]:
+        return {"recorded": False, "reason": "NOT_THE_RECIPIENT"}
+    record["delivered_to_recipient"] = True
+    return {"recorded": True, "reason": None, "attempts": record["attempts"]}
+
+
+def record_feedback(state, actor, intent_key, feedback, now, *, generation):
     """feedback: {"from", "kind": accept|accept_with_reservation|reject, "on_behalf_of"?, "note"?}.
 
     Only the recipient answers, and an agent recipient answers only for its own role, never for
     a person. A qualified acceptance is not unequivocal satisfaction. A rejection reopens the
-    intent, linked to the original result.
+    intent, linked to the original result. Feedback naming another result is refused.
     """
-    _require_holder(state, actor, now)
+    _require_holder(state, actor, now, generation)
     record = state["deliveries"].get(intent_key)
     if not record or not record["delivered_to_recipient"]:
         return {"recorded": False, "reason": "NOT_DELIVERED"}
     if feedback.get("from") != record["recipient"]:
         return {"recorded": False, "reason": "NOT_THE_RECIPIENT"}
+    if feedback.get("result_ref") not in (None, record["result_ref"]):
+        return {"recorded": False, "reason": "FEEDBACK_FOR_OTHER_RESULT"}
     on_behalf = feedback.get("on_behalf_of")
     if record["recipient_kind"] == "agent" and on_behalf and on_behalf != feedback["from"]:
         return {"recorded": False, "reason": "AGENT_CANNOT_ACCEPT_FOR_A_PERSON"}
@@ -523,10 +604,10 @@ BLAST_FIELDS = ("data", "people", "projects", "accounts", "dependencies", "rever
                 "worst_case", "detection", "recovery_owner", "crosses_authority", "in_scope")
 
 
-def assess_effect(state, actor, operation_id, blast, now):
+def assess_effect(state, actor, operation_id, blast, now, *, generation):
     """Run before every effect. Local, reversible and in scope proceeds; anything that crosses
     an authority limit parks THAT operation only and leaves the rest of the shift running."""
-    _require_holder(state, actor, now)
+    _require_holder(state, actor, now, generation)
     missing = [f for f in BLAST_FIELDS if f not in blast]
     if missing:
         return {"decision": "refuse", "reason": "INCOMPLETE_BLAST_RADIUS", "missing": missing}
@@ -539,7 +620,69 @@ def assess_effect(state, actor, operation_id, blast, now):
     return {"decision": "park", "reason": reason}
 
 
+# --------------------------------------------------------------------------- incident, route
+
+def raise_incident(state, actor, incident_id, now, *, generation):
+    """An incident preempts backlog work. It never moves the cursor or drops in-flight work."""
+    _require_holder(state, actor, now, generation)
+    if state.get("incident"):
+        return {"raised": False, "reason": "INCIDENT_ALREADY_OPEN"}
+    state["incident"] = {"id": incident_id, "opened_at": now,
+                         "cursor_at_open": dict(state["cursor"])}
+    return {"raised": True, "reason": None}
+
+
+def resolve_incident(state, actor, incident_id, now, *, generation):
+    _require_holder(state, actor, now, generation)
+    incident = state.get("incident")
+    if not incident or incident["id"] != incident_id:
+        return {"resolved": False, "reason": "UNKNOWN_INCIDENT"}
+    state["incident"] = None
+    state["log"].append({"at": now, "event": "incident_resolved", "id": incident_id})
+    return {"resolved": True, "reason": None}
+
+
+def decide_route(state, actor, decision_key, evidence, now, *, generation):
+    """Change a decision only on NEW evidence. evidence: {"source", "digest", "supports",
+    "lens"?}. The same (source, digest) seen again is an echo and changes nothing. The lens is
+    recorded only when it changed the route."""
+    _require_holder(state, actor, now, generation)
+    record = state["decisions"].setdefault(decision_key, {"choice": None, "seen": [],
+                                                          "changes": []})
+    fingerprint = f"{evidence.get('source')}#{evidence.get('digest')}"
+    if not evidence.get("source") or not evidence.get("digest"):
+        return {"changed": False, "reason": "EVIDENCE_WITHOUT_SOURCE", "choice": record["choice"]}
+    if fingerprint in record["seen"]:
+        return {"changed": False, "reason": "REPEATED_EVIDENCE", "choice": record["choice"]}
+    record["seen"].append(fingerprint)
+    if evidence.get("supports") == record["choice"]:
+        return {"changed": False, "reason": "SAME_CONCLUSION", "choice": record["choice"]}
+    record["changes"].append({"from": record["choice"], "to": evidence.get("supports"),
+                              "evidence": fingerprint, "lens": evidence.get("lens"), "at": now})
+    record["choice"] = evidence.get("supports")
+    return {"changed": True, "reason": None, "choice": record["choice"]}
+
+
 # --------------------------------------------------------------------------- holder loss
+
+def _bind_policy(policy, holder, principal, generation):
+    """Normalize a successor policy and bind it to one generation. Self-succession is refused."""
+    if not policy or not policy.get("pre_authorized"):
+        return None
+    if policy["pre_authorized"] == holder:
+        raise ShiftError("SELF_SUCCESSION", holder)
+    return {"pre_authorized": policy["pre_authorized"], "armed_by": principal,
+            "armed_generation": generation,
+            "nonce": policy.get("nonce") or f"g{generation}:{policy['pre_authorized']}"}
+
+
+def _live_policy(state):
+    """The policy counts only in the generation it was armed in."""
+    policy = state.get("successor_policy")
+    if policy and policy.get("armed_generation") == state["generation"]:
+        return policy
+    return None
+
 
 def _continuity(successor_policy):
     if successor_policy and successor_policy.get("pre_authorized"):
@@ -548,32 +691,65 @@ def _continuity(successor_policy):
             "uninterrupted_claim": False}
 
 
-def take_over(state, claimant, now):
-    """The holder's lease lapsed (holder presumed dead). Only the successor the principal
-    pre-authorized may take over, once, with a new generation; cursor, in-flight work and
-    gates stay as they were. Without one the shift is DEGRADED and nobody takes over."""
+def arm_successor(state, by, successor, generation, now, nonce=None):
+    """Arm a new successor. Only the principal may do it, only for the current generation,
+    and never naming the current holder."""
+    if by != state["principal"]:
+        return {"armed": False, "reason": "NOT_AUTHORIZED_TO_ARM"}
+    if generation != state["generation"]:
+        return {"armed": False, "reason": "STALE_GENERATION"}
+    if state["status"] not in (ACTIVE, HANDOFF_PENDING):
+        return {"armed": False, "reason": "SHIFT_NOT_ACTIVE"}
+    if not successor or successor == state["holder"]:
+        return {"armed": False, "reason": "SELF_SUCCESSION"}
+    policy = _bind_policy({"pre_authorized": successor, "nonce": nonce}, state["holder"],
+                          by, state["generation"])
+    if policy["nonce"] in state["consumed_takeovers"]:
+        return {"armed": False, "reason": "NONCE_ALREADY_USED"}
+    state["successor_policy"] = policy
+    state["continuity"] = _continuity(policy)
+    state["log"].append({"at": now, "event": "successor_armed", "successor": successor,
+                         "generation": state["generation"]})
+    return {"armed": True, "reason": None}
+
+
+def take_over(state, claimant, now, nonce=None):
+    """The holder's lease lapsed (holder presumed dead, no ACK). Only the successor the
+    principal armed for the CURRENT generation may take over, exactly once: the policy is
+    consumed, the generation goes up, cursor, events, in-flight work, gates and UDV records stay
+    as they were. A second expiry needs a new arming; without one the shift is DEGRADED."""
     if state["status"] not in (ACTIVE, HANDOFF_PENDING):
         return {"taken_over": False, "reason": "SHIFT_NOT_ACTIVE"}
     if now < state["lease"]["expires_at"]:
         return {"taken_over": False, "reason": "HOLDER_LEASE_STILL_VALID"}
-    policy = state.get("successor_policy") or {}
-    if not policy.get("pre_authorized"):
+    if claimant == state["holder"]:
+        return {"taken_over": False, "reason": "SELF_SUCCESSION"}
+    policy = _live_policy(state)
+    if nonce is not None and nonce in state["consumed_takeovers"]:
+        return {"taken_over": False, "reason": "REPLAY"}
+    if not policy:
         state["continuity"] = _continuity(None)
         state["log"].append({"at": now, "event": "holder_lost_degraded",
                              "last_holder": state["holder"]})
         return {"taken_over": False, "reason": "NO_PREAUTHORIZED_SUCCESSOR"}
     if claimant != policy["pre_authorized"]:
         return {"taken_over": False, "reason": "NOT_THE_PREAUTHORIZED_SUCCESSOR"}
+    if nonce is not None and nonce != policy["nonce"]:
+        return {"taken_over": False, "reason": "NONCE_MISMATCH"}
     previous = state["holder"]
+    state["consumed_takeovers"].append(policy["nonce"])
+    state["successor_policy"] = None  # one authorization, one succession
     state["generation"] += 1
     state["holder"] = claimant
     state["lease"] = {"holder": claimant, "expires_at": now + state["lease"]["lease_secs"],
                       "lease_secs": state["lease"]["lease_secs"]}
     state["status"] = ACTIVE
     state["handoff"] = None
+    state["continuity"] = _continuity(None)  # nobody armed for the new generation yet
     state["log"].append({"at": now, "event": "taken_over", "from": previous, "to": claimant,
-                         "generation": state["generation"]})
-    return {"taken_over": True, "reason": None, "generation": state["generation"]}
+                         "generation": state["generation"], "nonce": policy["nonce"]})
+    return {"taken_over": True, "reason": None, "generation": state["generation"],
+            "nonce": policy["nonce"]}
 
 
 def snapshot(state):
