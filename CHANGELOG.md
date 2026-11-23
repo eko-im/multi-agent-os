@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `on-call-shift` skill v0.1.0
+
+- New skill `skills/on-call-shift/`: holds an on-call shift with one holder, a persisted lease and cursor, the principal's mantras (defaults when none are given), and relief only on a successor ACK that echoes cursor, in-flight work and gates. When no backlog was given or it is done, it reads every authorized tracker, merges the same intent across trackers and pull requests, keeps RACI/DARCI roles `unknown` when unnamed, and adopts one eligible item or waits with a reason. Tick, notification, wakeup and resume stay distinct; without a bound wakeup transport the shift reports `DEGRADED` and never claims continuous coverage. A result counts as done (UDV) only when the intended recipient received it and is satisfied; blast radius is checked before each effect; a dead holder is replaced only by a pre-authorized successor with a new fencing generation.
+- Reference engine `bin/shift_engine.py` (stdlib, no network, no model) and 23 acceptance scenarios in `tests/`, run by `.github/workflows/on-call-shift-tests.yml`. Composes `ooda-loop`, `work-drain`, `work-compass` and `spec-backlog-ticket-reconciler`.
+
 ### Changed — git-cycle-sentinel A4: signing optional
 
 - `git-cycle-sentinel` 0.1.1 → 0.1.2: criterion A4 is now "signing optional" (operator decision D2, 2026-11-21). Try to sign where `commit.gpgsign=true`; on signer failure commit unsigned and continue. Only a remote `required_signatures` ruleset enforces. `--no-verify` stays forbidden.

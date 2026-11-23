@@ -1,0 +1,63 @@
+{
+  "_note": "Sanitized fixture. Every id, name and connector is fictional.",
+  "connectors": [
+    {
+      "connector": "jira-like",
+      "kind": "issue-tracker",
+      "identity": "agent-1",
+      "scope": "project TRK-A",
+      "status": "ok",
+      "observed_at": 1000,
+      "items": [
+        {"ref": "TRK-A-1", "intent_key": "fix-login-timeout", "links": ["TRK-B-7", "repo/x#12"], "gut": 60,
+         "raci": {"driver": "agent-1", "approver": "owner-1"}},
+        {"ref": "TRK-A-2", "intent_key": "rotate-report-cron", "in_flight_by": "agent-9", "gut": 90},
+        {"ref": "TRK-A-3", "intent_key": "publish-pricing-page", "gate": {"kind": "approval", "by": "owner-1"}, "gut": 80}
+      ]
+    },
+    {
+      "connector": "linear-like",
+      "kind": "issue-tracker",
+      "identity": "agent-1",
+      "scope": "team B",
+      "status": "ok",
+      "observed_at": 1001,
+      "items": [
+        {"ref": "TRK-B-7", "intent_key": "fix-login-timeout", "links": ["TRK-A-1"], "gut": 50,
+         "raci": {"responsible": "agent-1"}}
+      ]
+    },
+    {
+      "connector": "forge-issues",
+      "kind": "issue-tracker",
+      "identity": "agent-1",
+      "scope": "repo/x",
+      "status": "ok",
+      "observed_at": 1002,
+      "items": [
+        {"ref": "repo/x#12", "intent_key": "fix-login-timeout", "links": ["repo/x!13"], "gut": 40}
+      ]
+    },
+    {
+      "connector": "forge-pull-requests",
+      "kind": "code-review",
+      "identity": "agent-1",
+      "scope": "repo/x",
+      "status": "ok",
+      "observed_at": 1003,
+      "items": [
+        {"ref": "repo/x!13", "intent_key": "fix-login-timeout", "links": ["repo/x#12"], "gut": 40}
+      ]
+    },
+    {
+      "connector": "tracker-c",
+      "kind": "issue-tracker",
+      "identity": "agent-1",
+      "scope": "team C",
+      "status": "unavailable",
+      "observed_at": 1004,
+      "error": "connector timeout",
+      "items": []
+    }
+  ]
+}

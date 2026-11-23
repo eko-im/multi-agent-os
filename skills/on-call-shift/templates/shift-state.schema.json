@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "on-call-shift/state@1",
+  "title": "on-call-shift persisted state",
+  "description": "One document per shift, written atomically before and after every transition. Field rules: references/shift-contract.md.",
+  "type": "object",
+  "required": [
+    "schema",
+    "shift_id",
+    "principal",
+    "scope",
+    "backlog",
+    "capacity",
+    "budget",
+    "mantras",
+    "mantras_source",
+    "holder",
+    "supervisor_target",
+    "lease",
+    "cursor",
+    "processed_events",
+    "effects",
+    "adopted",
+    "in_flight",
+    "gates",
+    "pending_events",
+    "handoff",
+    "status",
+    "wakeup",
+    "log",
+    "generation",
+    "successor_policy",
+    "continuity",
+    "deliveries",
+    "reopened",
+    "parked"
+  ],
+  "properties": {
+    "schema": {
+      "const": "on-call-shift/state@1"
+    },
+    "shift_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "backlog": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "explicit work list reference; null = none given"
+    },
+    "backlog_exhausted": {
+      "type": "boolean"
+    },
+    "capacity": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "limit",
+        "spent"
+      ],
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "spent": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "mantras": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "mantras_source": {
+      "enum": [
+        "explicit",
+        "default"
+      ]
+    },
+    "holder": {
+      "type": "string",
+      "minLength": 1
+    },
+    "supervisor_target": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lease": {
+      "type": "object",
+      "required": [
+        "holder",
+        "expires_at",
+        "lease_secs"
+      ],
+      "properties": {
+        "holder": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "number"
+        },
+        "lease_secs": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "cursor": {
+      "type": "object",
+      "required": [
+        "seq",
+        "last_event_id"
+      ],
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_event_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "processed_events": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "adopted": {
+      "type": "object"
+    },
+    "in_flight": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "gates": {
+      "type": "object"
+    },
+    "pending_events": {
+      "type": "object"
+    },
+    "handoff": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ACTIVE",
+        "HANDOFF_PENDING",
+        "STOPPED",
+        "REVOKED"
+      ]
+    },
+    "wakeup": {
+      "type": "object",
+      "required": [
+        "mode",
+        "reason",
+        "recovery",
+        "always_on_claim"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "SUPPORTED",
+            "DEGRADED"
+          ]
+        },
+        "transport": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bound_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recovery": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "always_on_claim": {
+          "const": false
+        }
+      }
+    },
+    "log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "fencing token; +1 on every relief or takeover; a write with an older value is refused"
+    },
+    "successor_policy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "set by the principal at intake",
+      "properties": {
+        "pre_authorized": {
+          "type": "string"
+        }
+      }
+    },
+    "continuity": {
+      "type": "object",
+      "required": [
+        "mode",
+        "reason",
+        "uninterrupted_claim"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "SUPPORTED",
+            "DEGRADED"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uninterrupted_claim": {
+          "const": false
+        }
+      }
+    },
+    "deliveries": {
+      "type": "object",
+      "description": "per intent key: technical_verified, delivered_to_recipient, satisfaction (confirmed|refused|unknown), recipient, recipient_kind, attempts, result_ref, reservations, reopened_as",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "technical_verified",
+          "delivered_to_recipient",
+          "satisfaction"
+        ],
+        "properties": {
+          "technical_verified": {
+            "type": "boolean"
+          },
+          "delivered_to_recipient": {
+            "type": "boolean"
+          },
+          "satisfaction": {
+            "enum": [
+              "confirmed",
+              "refused",
+              "unknown"
+            ]
+          },
+          "recipient_kind": {
+            "enum": [
+              "human",
+              "agent",
+              null
+            ]
+          }
+        }
+      }
+    },
+    "reopened": {
+      "type": "object",
+      "description": "reopened intent key -> {reopens, result_ref, note, at}"
+    },
+    "parked": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "operations stopped by the blast-radius check"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "adopted": {},
+  "backlog": null,
+  "budget": {
+    "limit": 5,
+    "spent": 0
+  },
+  "capacity": 2,
+  "continuity": {
+    "mode": "DEGRADED",
+    "reason": "NO_PREAUTHORIZED_SUCCESSOR",
+    "uninterrupted_claim": false
+  },
+  "cursor": {
+    "last_event_id": "tick-1",
+    "seq": 1
+  },
+  "deliveries": {},
+  "effects": [
+    {
+      "at": 1001,
+      "event_id": "tick-1",
+      "execution": "NOT_REQUESTED",
+      "notification": "NOT_SENT_BY_TIMER",
+      "signal": "tick"
+    }
+  ],
+  "gates": {},
+  "generation": 1,
+  "handoff": null,
+  "holder": "agent-1",
+  "in_flight": [],
+  "lease": {
+    "expires_at": 1600,
+    "holder": "agent-1",
+    "lease_secs": 600
+  },
+  "log": [
+    {
+      "at": 1000,
+      "event": "shift_opened",
+      "holder": "agent-1"
+    }
+  ],
+  "mantras": [
+    "change the decision when the evidence changes",
+    "a verifiable increment beats an announced plan"
+  ],
+  "mantras_source": "default",
+  "parked": [],
+  "pending_events": {},
+  "principal": "owner-1",
+  "processed_events": [
+    "tick-1"
+  ],
+  "reopened": {},
+  "schema": "on-call-shift/state@1",
+  "scope": "repo/x + team B",
+  "shift_id": "shift-1",
+  "status": "ACTIVE",
+  "successor_policy": null,
+  "supervisor_target": "supervisor://shift-desk-1",
+  "wakeup": {
+    "always_on_claim": false,
+    "bound_target": null,
+    "mode": "DEGRADED",
+    "reason": "NO_BOUND_WAKEUP_TRANSPORT",
+    "recovery": "bind a host wakeup transport to the exact supervisor, or poll on the next human or scheduled turn; report the gap, do not claim coverage",
+    "transport": null
+  }
+}
