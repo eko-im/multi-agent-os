@@ -286,6 +286,11 @@ def normalize_backlog(connector_results):
             for field in ("assignee", "in_flight_by", "gate"):
                 if item.get(field) and not target[field]:
                     target[field] = item[field]
+                elif (field != "gate" and item.get(field) and target[field]
+                      and item[field] != target[field]):
+                    # Two sources disagree on who owns it: keep both, adopt nothing.
+                    target.setdefault("conflicts", []).append(
+                        {"field": field, "values": sorted({target[field], item[field]})})
             target["gut"] = max(target["gut"], int(item.get("gut") or 0))
             for role in ("driver", "responsible", "approver", "consulted", "informed"):
                 value = (item.get("raci") or {}).get(role)
@@ -305,8 +310,11 @@ def _ineligible(state, item, actor):
         return "IN_FLIGHT_BY_OTHER"
     if item["assignee"] and item["assignee"] != actor:
         return "OWNED_BY_OTHER"
-    gate = state["gates"].get(item["intent_key"])
-    if item["gate"] or (gate and gate.get("state") != "granted"):
+    if item.get("conflicts"):
+        return "OWNERSHIP_CONFLICT"
+    recorded = state["gates"].get(item["intent_key"])
+    gate = recorded if recorded else item["gate"]  # the decider's recorded gate wins
+    if gate and gate.get("state") != "granted":
         return "HUMAN_GATE"
     return None
 
@@ -563,6 +571,10 @@ def record_feedback(state, actor, intent_key, feedback, now, *, generation):
         record["satisfaction"] = "unknown"
         record["reservations"] = feedback.get("note") or "unspecified"
     elif kind == "reject":
+        if record["satisfaction"] == "refused" and record["reopened_as"]:
+            # Same rejection of the same delivered result, replayed: no second reopening.
+            return {"recorded": False, "reason": "DUPLICATE_REJECTION",
+                    "reopened_as": record["reopened_as"]}
         record["satisfaction"] = "refused"
         reopened = f"{intent_key}#reopen-{len(state['reopened']) + 1}"
         state["reopened"][reopened] = {"reopens": intent_key,

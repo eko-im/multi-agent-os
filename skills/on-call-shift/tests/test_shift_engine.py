@@ -782,6 +782,67 @@ class DecisionLenses(unittest.TestCase):
             self.assertFalse(se.authorize_send(state, "agent-1", SUPERVISOR, 1006)["allowed"])
 
 
+class FinalWaveThreads(unittest.TestCase):
+    """Regression guards for the last review wave on PR #605."""
+
+    def test_44_granted_gate_allows_adoption_pending_still_blocks(self):
+        def backlog(gate):
+            return se.normalize_backlog([{"connector": "c", "status": "ok", "items": [
+                {"ref": "R-1", "intent_key": "k", "gate": gate}]}])
+        state = new_shift()
+        with self.assertRaises(se.ShiftError) as err:
+            se.adopt(state, "agent-1", "k", backlog({"kind": "approval", "by": "owner-1",
+                                                     "state": "pending"}), 1001, generation=1)
+        self.assertEqual(err.exception.code, "HUMAN_GATE")
+        _, ok = se.adopt(state, "agent-1", "k", backlog({"kind": "approval", "by": "owner-1",
+                                                         "state": "granted"}), 1002, generation=1)
+        self.assertTrue(ok)
+        # connector still shows pending, but the decider granted it through set_gate
+        state = new_shift()
+        pending = backlog({"kind": "approval", "by": "owner-1", "state": "pending"})
+        se.set_gate(state, "agent-1", "k", {"kind": "approval", "by": "owner-1",
+                                            "state": "pending"}, 1001, generation=1)
+        se.set_gate(state, "agent-1", "k", {"kind": "approval", "state": "granted",
+                                            "decided_by": "owner-1"}, 1002, generation=1)
+        self.assertEqual(se.select_next(state, pending, "agent-1", 1003,
+                                        generation=1)["action"], "adopt")
+        _, ok = se.adopt(state, "agent-1", "k", pending, 1004, generation=1)
+        self.assertTrue(ok)
+
+    def test_45_conflicting_owners_make_item_ineligible_in_any_order(self):
+        a = {"connector": "a", "status": "ok",
+             "items": [{"ref": "A-1", "intent_key": "k", "in_flight_by": "agent-1"}]}
+        b = {"connector": "b", "status": "ok",
+             "items": [{"ref": "B-1", "intent_key": "k", "in_flight_by": "agent-9"}]}
+        for order in ([a, b], [b, a]):
+            backlog = se.normalize_backlog(order)
+            self.assertEqual(backlog["items"]["k"]["conflicts"],
+                             [{"field": "in_flight_by", "values": ["agent-1", "agent-9"]}])
+            state = new_shift()
+            before = se.snapshot(state)
+            pick = se.select_next(state, backlog, "agent-1", 1001, generation=1)
+            self.assertEqual(pick["action"], "wait")
+            with self.assertRaises(se.ShiftError) as err:
+                se.adopt(state, "agent-1", "k", backlog, 1002, generation=1)
+            self.assertIn(err.exception.code, ("OWNERSHIP_CONFLICT", "IN_FLIGHT_BY_OTHER"))
+            self.assertEqual(state, before)
+
+    def test_46_replayed_rejection_reopens_once(self):
+        state = new_shift(capacity=2)
+        se.complete_item(state, "agent-1", "k", author="agent-1", reviewer="agent-2", now=1001,
+                         generation=1)
+        se.deliver(state, "agent-1", "k", recipient="person-1", recipient_kind="human",
+                   result_ref="r1", receipt={"received_by": "person-1"}, now=1002, generation=1)
+        reject = {"from": "person-1", "kind": "reject", "note": "still broken"}
+        self.assertTrue(se.record_feedback(state, "agent-1", "k", reject, 1003,
+                                           generation=1)["recorded"])
+        for t in (1004, 1005):
+            out = se.record_feedback(state, "agent-1", "k", reject, t, generation=1)
+            self.assertEqual(out["reason"], "DUPLICATE_REJECTION")
+        self.assertEqual(len(state["reopened"]), 1)
+        self.assertEqual(state["in_flight"], ["k#reopen-1"])
+
+
 class ContractEdges(unittest.TestCase):
 
     def test_backlog_given_blocks_adoption_until_exhausted(self):

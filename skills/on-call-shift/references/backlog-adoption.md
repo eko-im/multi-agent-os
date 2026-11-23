@@ -29,7 +29,10 @@ waits on them with a reason instead of treating the queue as done.
 Give each item an `intent_key` (the work it stands for). Items with the same key, and the
 references they link (an issue and the pull request that closes it, the same task mirrored in
 two trackers), merge into **one** work item with all references kept. An issue and its pull
-request are never two deliveries. Reuse the cross-tracker key pattern of
+request are never two deliveries. When two sources name different owners (`assignee` or `in_flight_by`), both
+claims are kept in `conflicts` and the item is not adoptable until they are reconciled. A
+gate blocks until its effective state is `granted`; the decider's recorded gate wins over the
+connector's copy. Reuse the cross-tracker key pattern of
 `spec-backlog-ticket-reconciler`.
 
 ## 3. Ownership and RACI/DARCI

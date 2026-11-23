@@ -222,6 +222,9 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 41. Received without satisfaction has no UDV.
 42. No backlog never invents an item.
 43. Stop or revocation beats everything.
+44. A granted gate allows adoption; a pending one still blocks; the decider's recorded gate wins.
+45. Two sources naming different owners make the item ineligible, in any order.
+46. A replayed rejection of the same result reopens the intent only once.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
@@ -246,5 +249,5 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
-| 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 43 numbered scenarios. |
+| 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 46 numbered scenarios. |
 | 0.1.0 | 2026-11-23 | Genesis via `agentic-tool-forge`; name by `anima` (`on-call-shift`, runner-up `shift-handoff` rejected as covering only the end of a shift). Reference engine plus 23 acceptance scenarios (13 shift + UDV, blast radius, holder loss), stdlib only. |
