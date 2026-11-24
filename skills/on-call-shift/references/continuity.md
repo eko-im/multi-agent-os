@@ -108,3 +108,7 @@ own. Active dependents block retirement; retirement never edits dependents.
 - **Blast radius before `deliver` is the host's duty.** `deliver` records a send the host
   reports; it does not itself require `assess_effect`. A host must call `assess_effect` before
   any effect and only then deliver.
+- **A6: a child's `save_seq` is not externally anchored.** `save_seq` lives in the child's own
+  checkpoint file, so a child that lies can force any value. The `recover_child` check for
+  `STALE_CHECKPOINT_IN_FLIGHT` covers a regression by reload, not a malicious child. Without an
+  authority external to the child there is no local fix; the host must anchor it (known limit A6/R1).
