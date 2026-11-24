@@ -47,6 +47,65 @@ def cards(d):
     shown, _, _ = sc.plan([sc.normalize(x) for x in d["decisions"]])
     return shown
 
+def long_decision(i, urgency="media"):
+    """Real-world sized card: label + rationale + pointer overflow 80 columns and wrap."""
+    d = decision(i, urgency, True)
+    d["title"] = f"Escopo do HOLD da regra de revisão número {i}"
+    d["options"][0]["label"] = "Manter para todo push/PR"
+    d["options"][0]["evidence"] = "auto-self-harness.md:153"
+    d["options"][1]["label"] = "Escopar só a main"
+    d["recommended"] = "Manter para todo push/PR"
+    d["rationale"] = "protege efeito externo"
+    d["cost_of_delay"] = "push fora de main espera revisor"
+    return d
+
+
+class CompactCapTest(unittest.TestCase):
+    """The 15-line cap is hard: measured after real wrapping, never only warned."""
+
+    def _lines(self, out):
+        return [l for l in out.splitlines() if l.strip()]
+
+    def test_three_and_four_long_cards_never_exceed_the_cap(self):
+        for n in (3, 4):
+            d = doc(*(long_decision(i, "alta" if i == 1 else "media") for i in range(1, n + 1)))
+            out = sc.render_text(d, now=NOW, session=SESSION, layout="compact")
+            self.assertLessEqual(len(self._lines(out)), sc.BODY_MAX, out)
+            self.assertTrue(all(sc.cols(l) <= 80 for l in out.splitlines()))
+            self.assertNotIn("…", out)
+
+    def test_overflow_moves_lowest_priority_card_to_next_digest(self):
+        d = doc(long_decision(1, "alta"), long_decision(2), long_decision(3, "baixa"),
+                long_decision(4, "baixa"))
+        out, shown = sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")
+        self.assertIn("⏭", out)                           # this input must overflow
+        self.assertLessEqual(len(self._lines(out)), sc.BODY_MAX, out)
+        self.assertTrue(all(sc.cols(l) <= 80 for l in out.splitlines()))
+        line = next(l for l in out.splitlines() if l.startswith("Responda:"))
+        n = len(shown)
+        self.assertTrue(out.splitlines()[1].startswith(f"{n} + 0 estac."))
+        self.assertIn(f" {n}:", line)
+        self.assertNotIn(f" {n + 1}:", line)              # moved card is not answerable now
+        moved = [c for c in (long_decision(i) for i in range(1, 5))
+                 if c["id"] not in {s["id"] for s in shown}]
+        self.assertTrue(moved)
+        over = next(l for l in out.splitlines() if l.startswith("⏭"))
+        for c in moved:
+            self.assertEqual(over.count(f" {c['id']}"), 1)  # identified once, by its short id
+            self.assertNotIn(c["title"], out)                # not rendered as a card
+        self.assertIn("1 · ⏫ ALTA", out)                  # urgent card always stays a card
+        # a text answer naming the moved card is not executed
+        res = sc.parse_text(shown, f"{CODE} {n + 1}:A", CODE)
+        self.assertNotIn("decided", [it["status"] for it in res.get("items", [])])
+
+    def test_single_card_over_cap_is_an_error_not_a_cut(self):
+        d = long_decision(1, "alta")
+        d["title"] = " ".join(["palavra"] * 60)
+        d["rationale"] = " ".join(["motivo"] * 60)
+        with self.assertRaises(ValueError):
+            sc.render_text(doc(d), now=NOW, session=SESSION, layout="compact")
+
+
 
 class RenderTest(unittest.TestCase):
     def setUp(self):

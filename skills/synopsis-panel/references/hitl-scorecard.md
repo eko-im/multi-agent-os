@@ -51,9 +51,13 @@ L2 starts with the letter, `A ✅`, not with `✅`: `sinal-check` reads a body l
 starts with `✅` (after indentation) as a misplaced header line and refuses the reply.
 
 The six fixed lines (header, count, `Responda:`, hint, footer) leave 9 of the 15 body
-lines of the attention contract for cards. Cards keep 5 lines while the body fits in 15;
-otherwise they drop to 3 lines from the lowest-priority card up: L1, L2 and an L3 with
-the other options, `⌛`, the legend and the differing origin.
+lines of the attention contract for cards. The cap is **hard** and is measured after
+real wrapping: cards keep 5 lines while the body fits in 15; otherwise they drop to 3
+lines from the lowest-priority card up (L1, L2 and an L3 with the other options, `⌛`,
+`⏱` and the differing origin). If every card at 3 lines still does not fit, the
+lowest-priority card moves to the `⏭ próximo digest` line by its short `id`, until it
+fits; it is not answerable now, and a text answer naming it is not executed. A single
+card that does not fit on its own is an error (`render` exit 2): shorten it at the source.
 
 Nothing is cut with `…`. A field that does not fit its line wraps, and the lint warns so
 it is shortened **at the source**: `title` (L1), label + `rationale` + pointer (L2),
@@ -133,7 +137,7 @@ origin.
 ## 7. Attention contract
 
 The `🔴 PRECISA DE VOCÊ` line summarizes the ask and the scorecard is the last block.
-With at most 3 compact cards, the body stays within 15 lines and passes `sinal-check`.
+The compact body never passes 15 lines (§1): cards degrade, then overflow to `⏭`.
 
 ## 8. Lint
 

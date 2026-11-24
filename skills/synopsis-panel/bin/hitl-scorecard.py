@@ -400,32 +400,58 @@ def header_lines(shown, parked, nxt, code, now) -> list[str]:
 
 def render_text(doc: dict, *, now: int, session: str | None, layout: str = "full",
                 harness: str | None = None, repo: str | None = None) -> str:
+    return render_with_cards(doc, now=now, session=session, layout=layout,
+                             harness=harness, repo=repo)[0]
+
+
+def render_with_cards(doc: dict, *, now: int, session: str | None, layout: str = "full",
+                      harness: str | None = None, repo: str | None = None) -> tuple[str, list[dict]]:
+    """Text plus the cards it actually made answerable (after the compact fit). The
+    answer manifest is built from these cards, never re-planned at parse time."""
     shown, parked, nxt = plan(load_cards(doc))
     code = fuse._digest_code(now, session)
     foot = {"harness": harness or _s(doc.get("harness")), "repo": repo or _s(doc.get("repo")),
             "session": session[-8:] if session else ""}
-    head = header_lines(shown, parked, nxt, code, now)
-    tail = []
-    for c in parked:
-        act = f"{c['title']}: {c['options'][0]['label']}" if c["rec"] else c["ask"]
-        tail += wrap(f"⏸ {min(c['parked'] + 1, 2)}/2 estacionada (informativa): {act}"
-                     f" · {c['cost_of_delay'] or '?'}", "", "  ")
-    if nxt:
-        tail.append(fuse._overflow_line([{"sev": URG_TO_SEV[c["urgency"]], "id": c["title"]} for c in nxt]))
-    tail += wrap(f"harness: {foot['harness'] or '?'} · repo: {foot['repo'] or '?'} · "
-                 f"sessão: {foot['session'] or '?'}", "", "  ")
-    nums = [i if code else "•" for i in range(1, len(shown) + 1)]
+
+    def frame(shown, nxt):
+        head = header_lines(shown, parked, nxt, code, now)
+        tail = []
+        for c in parked:
+            act = f"{c['title']}: {c['options'][0]['label']}" if c["rec"] else c["ask"]
+            tail += wrap(f"⏸ {min(c['parked'] + 1, 2)}/2 estacionada (informativa): {act}"
+                         f" · {c['cost_of_delay'] or '?'}", "", "  ")
+        if nxt:
+            tail.append(fuse._overflow_line([{"sev": URG_TO_SEV[c["urgency"]], "id": c["id"] or c["title"]}
+                                             for c in nxt]))
+        tail += wrap(f"harness: {foot['harness'] or '?'} · repo: {foot['repo'] or '?'} · "
+                     f"sessão: {foot['session'] or '?'}", "", "  ")
+        return head, tail
+
+    nums = lambda shown: [i if code else "•" for i in range(1, len(shown) + 1)]
     if layout == "full":
-        body = [card_lines(c, k) for c, k in zip(shown, nums)]
-    else:
-        # spec §8.1: 5-line cards while the body fits the attention contract (15 lines);
-        # otherwise the lowest-priority card drops to 3 lines first, then the next one up.
-        body = [compact_lines(c, k, foot) for c, k in zip(shown, nums)]
+        head, tail = frame(shown, nxt)
+        body = [card_lines(c, k) for c, k in zip(shown, nums(shown))]
+        return "\n".join(head + [l for card in body for l in card] + tail) + "\n", shown
+    # spec §8.1: 5-line cards while the WRAPPED output fits the attention contract (15
+    # lines); otherwise the lowest-priority card drops to 3 lines first, then the next one
+    # up. If all-3-line still does not fit, the lowest-priority card moves to the
+    # `⏭ próximo digest` line (spec §4 item 3), until it fits. A single card that still does
+    # not fit is an error: shorten it at the source (never cut, never exceed the cap).
+    while True:
+        head, tail = frame(shown, nxt)
+        ks = nums(shown)
+        body = [compact_lines(c, k, foot) for c, k in zip(shown, ks)]
         for j in reversed(range(len(shown))):
             if len(head) + len(tail) + sum(map(len, body)) <= BODY_MAX:
                 break
-            body[j] = compact_lines(shown[j], nums[j], foot, short=True)
-    return "\n".join(head + [l for card in body for l in card] + tail) + "\n"
+            body[j] = compact_lines(shown[j], ks[j], foot, short=True)
+        if len(head) + len(tail) + sum(map(len, body)) <= BODY_MAX:
+            return "\n".join(head + [l for card in body for l in card] + tail) + "\n", shown
+        if len(shown) <= 1:
+            raise ValueError(f"render-compact: um card sozinho passa de {BODY_MAX} linhas; "
+                             "encurte title/rationale/cost_of_delay/rótulos na fonte")
+        nxt = [shown[-1]] + list(nxt)
+        shown = shown[:-1]
 
 
 def ansi(text: str) -> str:
@@ -935,12 +961,16 @@ def main(argv=None) -> int:
                 sys.stdout.write(ask_omp(doc, now=now, session=session))
         elif a.cmd == "parse":
             doc = load_doc(a.decisions)
-            shown, _, _ = plan(load_cards(doc))
             raw = a.answer if a.answer is not None else _read(a.input or "-")
             if a.source == "text":
+                # A text answer refers to the cards the text digest made answerable; the
+                # compact fit may have moved some to ⏭, and those are not answerable now.
+                _, shown = render_with_cards(doc, now=now, session=session, layout="compact",
+                                             harness=a.harness, repo=a.repo)
                 resolved = dict((int(k), v.upper()) for k, v in (r.split("=", 1) for r in a.resolved))
                 res = parse_text(shown, raw, a.code, a.closed, resolved)
             else:
+                shown, _, _ = plan(load_cards(doc))
                 data = json.loads(raw)
                 res = (parse_claude if a.source == "claude" else parse_omp)(shown, data, a.code)
             sys.stdout.write(json.dumps(res, ensure_ascii=False, indent=2) + "\n")
