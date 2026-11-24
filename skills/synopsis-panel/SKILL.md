@@ -103,24 +103,26 @@ entrega os cards da sessão invocadora prontos para `AskUserQuestion`, só para 
 
 ## Scorecard + painel (`bin/hitl-scorecard.py`)
 
-Extensão do mesmo motor para o digest de **decisões** (spec `hitl-digest` §8, v2.7.0);
+Extensão do mesmo motor para o digest de **decisões** (spec `hitl-digest` §8, v2.7.0;
+contrato canônico neste plugin: [`references/hitl-scorecard.md`](references/hitl-scorecard.md));
 o ponto de entrada continua `/hitl-digest`. Reusa o construtor de opções `_card_options`
 (recomendada primeiro, só com ponteiro de evidência) e a linha `⏭`; não duplica render
 nem ledger. Entrada: JSON `hitl-scorecard/v1` (`decisions[]` com `id`, `title`,
 `origin{harness,repo,session}`, `context`, `ask`, `urgency` alta|media|baixa, `owner_only`,
-`reversible`, `cost_of_delay`, `time_to_decide`, `multi`, `unblocks`,
-`options[{label,effect,confidence,evidence}]` com **2 a 4 opções reais**, `recommended`,
-`rationale`, obrigatório quando há recomendação) ou linhas `NEEDS-OPERATOR:` de N sessões.
+`cost_of_delay`, `time_to_decide`, `multi`, `unblocks`,
+`options[{label,effect,reversible,confidence,evidence}]` com **2 a 4 opções reais**, `recommended`,
+`rationale`, obrigatório quando há recomendação; `reversible` no card é legado e vale como
+default de cada opção) ou linhas `NEEDS-OPERATOR:` de N sessões.
 Uma decisão com 1 opção não é decisão: `render`/`ask` recusam (exit 2), o `lint` dá erro e
 o `aggregate` a lista em `rejected`. Nenhuma opção é inventada.
 
 | Subcomando | Faz |
 |---|---|
-| `render --format text\|ansi\|markdown --layout full\|compact` | cards BLUF (origem `harness · repo · sessão`, BLUF ✅ com ponteiro, ↩️/🚪, ⌛, ⏱). `compact` (vai na resposta): até 5 linhas por card, L1 `n · urgência · 👤 — título`, L2 `A ✅ <ação> — porque <rationale> (<conf> · <ponteiro>)`, L3 demais opções, L4 `⌛ custo · ↩️/🚪`, L5 origem só quando difere do rodapé. Se o corpo passar de 15 linhas, os cards caem para 3 linhas a partir do de menor prioridade (L3 = opções · ⌛ · porta · origem). Nada é cortado com `…` |
+| `render --format text\|ansi\|markdown --layout full\|compact` | cards BLUF (origem `harness · repo · sessão`, BLUF ✅ com ponteiro, ↩️/🚪 por opção, ⌛, ⏱). `compact` (vai na resposta): até 5 linhas por card, L1 `n · urgência · 👤 — título`, L2 `A ✅ <ação> <↩️\|🚪> — porque <rationale> (<conf> · <ponteiro>)`, L3 demais opções com sua porta (`B Apagar 🚪`), L4 `⌛ custo · legenda das portas`, L5 origem só quando difere do rodapé. Se o corpo passar de 15 linhas, os cards caem para 3 linhas a partir do de menor prioridade (L3 = opções · ⌛ · legenda · origem). Nada é cortado com `…` |
 | `ask --target claude\|omp` | payload `AskUserQuestion` (1–4 perguntas, 2–4 opções, header ≤12) ou um `<form>` HTML para o `ask` do OMP: nada `checked`/`selected`, caixa `confirm` desmarcada |
 | `parse --source text\|claude\|omp` | resposta → decisões + linha `fechado`; gramática e rejeições da spec §3; timeout, `afkTimeoutMs`, cancelamento, texto livre e formulário sem `confirm` = **pendente** |
-| `aggregate` | dedupe por (`origin.repo`, pergunta normalizada); a sessão só substitui o repo quando ele falta. Mesmo ask em 2 repos = 2 cards; em 2 sessões do mesmo repo = 1 card `(+N sessões)`. Ordem ⏫+👤 → ⏫ → 👤 → maduro → urgência → `unblocks`; ≤3 cards (4º só ⏫/👤), ≤3 `⏸`, resto `⏭` |
-| `lint` | **erro**: 80 colunas, 2–4 opções reais, recomendação válida, `rationale` com recomendação, origem, `-` fora de ⏫/👤, limites do AskUserQuestion, nenhum preselect, corpo compacto ≤15 linhas. **aviso**: `title`, `rationale`+ponteiro, `cost_of_delay` ou `effect` acima do orçamento da linha (encurte na fonte) |
+| `aggregate` | dedupe por (`origin.repo`, `id`) quando a decisão tem `id`; no legado (linha `NEEDS-OPERATOR` sem `id`), por (`origin.repo`, pergunta normalizada). A sessão só substitui o repo quando ele falta. Dois `id` com a mesma pergunta no mesmo repo = 2 cards; mesmo `id` em 2 sessões do mesmo repo = 1 card `(+N sessões)`. Ordem ⏫+👤 → ⏫ → 👤 → maduro → urgência → `unblocks`; ≤3 cards (4º só ⏫/👤), ≤3 `⏸`, resto `⏭` |
+| `lint` | **erro**: 80 colunas, 2–4 opções reais, recomendação válida, `rationale` com recomendação, recomendada 🚪 sem confiança `alta`, origem, `-` fora de ⏫/👤, limites do AskUserQuestion, nenhum preselect, corpo compacto ≤15 linhas. **aviso**: opção sem `reversible` ou `effect`; `title`, `rationale`+ponteiro, `cost_of_delay` ou `effect` acima do orçamento da linha (encurte na fonte) |
 
 O código `K<YYMMDD>-<HHMM>-<s8>` é **UTC** + os 8 últimos caracteres da sessão **raiz**
 (`--session`, `CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`); sem raiz não há digest

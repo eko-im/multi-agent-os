@@ -304,7 +304,8 @@ com `ask_user_question.questions`. Se a pergunta expirar sem resposta, no próxi
 ## Modo scorecard + painel (decisões de N sessões)
 
 Para decisões que chegam como `NEEDS-OPERATOR:` ou JSON `hitl-scorecard/v1` (não do
-ledger), o mesmo skill traz `bin/hitl-scorecard.py` (spec `hitl-digest` §8). Ele reusa o
+ledger), o mesmo skill traz `bin/hitl-scorecard.py` (contrato canônico no plugin:
+`skills/synopsis-panel/references/hitl-scorecard.md`; resumo em `hitl-digest` §8). Ele reusa o
 construtor de opções do motor acima; a regra de uma só superfície de resposta (§0) vale igual.
 
 ```bash

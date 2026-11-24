@@ -49,6 +49,9 @@ URG_ALIAS = {"alta": "alta", "high": "alta", "urgente": "alta", "\u23eb": "alta"
 URG_TO_SEV = {"alta": "URGENTE", "media": "ALTA", "baixa": "NORMAL"}  # engine severity names
 OWNER = "\U0001f464 SÓ VOCÊ"
 DOOR = {True: "\u21a9\ufe0f REVERSÍVEL", False: "\U0001f6aa SEM VOLTA"}
+DOOR_GLYPH = {True: "\u21a9\ufe0f", False: "\U0001f6aa"}
+DOOR_UNKNOWN = "? REVERSÍVEL NÃO INFORMADO"
+HIGH_CONF = {"alta", "high"}
 REC = " (recomendado)"
 NO_REC = "sem recomendação: falta ponteiro de evidência"
 CODE_RE = re.compile(r"K\d{6}-\d{4}-[0-9A-Za-z]{8}", re.I)
@@ -142,22 +145,24 @@ def normalize(d: dict) -> dict:
         order = rec + [i for i in range(len(opts)) if i not in rec]
     else:
         order = list(range(len(opts)))
+    rev = d.get("reversible")      # legacy card-level door: default of every option
     shown = []
     for k, i in enumerate(order):
         o = opts[i]
+        orev = o.get("reversible")
+        orev = orev if isinstance(orev, bool) else (rev if isinstance(rev, bool) else None)
         shown.append({"letter": LETTERS[k] if k < len(LETTERS) else "?", "label": _s(o.get("label")),
                       "effect": _s(o.get("effect")), "confidence": _s(o.get("confidence")),
-                      "evidence": _s(o.get("evidence")), "recommended": i in rec})
+                      "evidence": _s(o.get("evidence")), "recommended": i in rec, "reversible": orev})
     origin = d.get("origin") if isinstance(d.get("origin"), dict) else {}
     origins = [o for o in (d.get("origins") or []) if isinstance(o, dict)] or [origin]
-    rev = d.get("reversible")
     return {"id": _s(d.get("id")), "title": _s(d.get("title")),
             "origin": {k: _s(origin.get(k)) for k in ("harness", "repo", "session")},
             "extra_origins": max(len(origins) - 1, 0),
             "context": _s(d.get("context")), "ask": _s(d.get("ask")),
             "urgency": URG_ALIAS.get(_s(d.get("urgency")).casefold(), "media"),
             "owner_only": bool(d.get("owner_only")),
-            "reversible": rev if isinstance(rev, bool) else None,
+            "doors": [o["reversible"] for o in shown],
             "cost_of_delay": _s(d.get("cost_of_delay")), "time_to_decide": _s(d.get("time_to_decide")),
             "multi": multi, "rationale": _s(d.get("rationale")),
             "unblocks": int(d.get("unblocks") or 0), "parked": int(d.get("parked") or 0),
@@ -248,9 +253,21 @@ def _title_line(c: dict, n) -> str:
     return f"{n} · {icon} {word}" + (f" · {OWNER}" if c["owner_only"] else "") + f" — {c['title']}"
 
 
+def _glyph(o: dict) -> str:
+    return DOOR_GLYPH.get(o["reversible"], "?")
+
+
+def _doors(c: dict) -> str:
+    """Legend of the doors present on the card's options, glyph + CAPS word (spec §8.2);
+    the per-option glyph sits beside each option."""
+    words = [DOOR[False]] if False in c["doors"] else []
+    words += [DOOR[True]] if True in c["doors"] else []
+    words += [DOOR_UNKNOWN] if None in c["doors"] else []
+    return " · ".join(words)
+
+
 def _badges(c: dict) -> str:
-    door = DOOR.get(c["reversible"], "? REVERSÍVEL NÃO INFORMADO")
-    bits = [door, f"\u231b sem resposta: {c['cost_of_delay'] or '?'}"]
+    bits = [f"\u231b sem resposta: {c['cost_of_delay'] or '?'}"]
     if c["time_to_decide"]:
         bits.append(f"\u23f1 {c['time_to_decide']}")
     if c["multi"]:
@@ -277,7 +294,9 @@ def card_lines(c: dict, n) -> list[str]:
     out += wrap(f"contexto: {c['context']}", IND, IND + "  ")
     for o in c["options"]:
         mark = "\u2705 " if o["recommended"] else "   "
-        body = o["label"] + (f" → {o['effect']}" if o["effect"] else "") + (f" · {_ptr(o)}" if _ptr(o) else "")
+        door = DOOR.get(o["reversible"], DOOR_UNKNOWN)
+        body = o["label"] + (f" → {o['effect']}" if o["effect"] else "") + f" · {door}" \
+            + (f" · {_ptr(o)}" if _ptr(o) else "")
         out += wrap(body, f"{IND}{o['letter']} {mark}", " " * 9)
     out += wrap(_badges(c), IND, IND + "  ")
     return out
@@ -308,15 +327,14 @@ def _rec_line(c: dict) -> str:
     rec = [o for o in c["options"] if o["recommended"]]
     if not rec:
         return NO_REC
-    head = " + ".join(f"{o['letter']} \u2705 {o['label']}" for o in rec)
+    head = " + ".join(f"{o['letter']} \u2705 {o['label']} {_glyph(o)}" for o in rec)
     why = f" — porque {c['rationale']}" if c["rationale"] else ""
     ptrs = "; ".join(_ptr(o) for o in rec if _ptr(o))
     return head + why + (f" ({ptrs})" if ptrs else "")
 
 
 def _risk(c: dict) -> str:
-    return f"\u231b {c['cost_of_delay'] or '?'} · {DOOR.get(c['reversible'], '? REVERSÍVEL NÃO INFORMADO')}" \
-        + (" · \u2611 VÁRIAS" if c["multi"] else "")
+    return f"\u231b {c['cost_of_delay'] or '?'} · {_doors(c)}" + (" · \u2611 VÁRIAS" if c["multi"] else "")
 
 
 def origin_delta(c: dict, foot: dict) -> str:
@@ -335,7 +353,7 @@ def compact_lines(c: dict, n, foot: dict, short: bool = False) -> list[str]:
     rationale + pointer · L3 the other options · L4 ⌛ cost · ↩️/🚪 · L5 origin (only when it
     differs from the footer). `short` = 3 lines: L3 carries options, ⌛, door and origin."""
     rest = [o for o in c["options"] if not o["recommended"]] if c["rec"] else c["options"]
-    opts = [f"{o['letter']} {o['label']}" for o in rest]
+    opts = [f"{o['letter']} {o['label']} {_glyph(o)}" for o in rest]
     delta = origin_delta(c, foot)
     out = wrap(_title_line(c, n), "", IND) + wrap(_rec_line(c), IND, IND + "  ")
     if short:
@@ -412,15 +430,16 @@ def ansi(text: str) -> str:
 # ---------------------------------------------------------------- ask (panel)
 def _question(c: dict) -> str:
     ask = c["ask"].rstrip(" ?") + "?"
-    door = {True: "reversível", False: "sem volta"}.get(c["reversible"], "reversibilidade ?")
-    return (f"{ask} Contexto: {c['context']} Origem: {_origin(c)}. {door}; "
-            f"sem resposta: {c['cost_of_delay'] or '?'}.")
+    return (f"{ask} Contexto: {c['context']} Origem: {_origin(c)}. "
+            f"Sem resposta: {c['cost_of_delay'] or '?'}.")
 
 
 def auq_question(c: dict, n: int) -> dict:
     raw = []
     for o in c["options"]:
+        door = {True: "Reversível.", False: "Sem volta."}.get(o["reversible"], "Reversibilidade não informada.")
         desc = o["effect"] + ("." if o["effect"] and o["effect"][-1] not in ".!?" else "")
+        desc = f"{desc} {door}".strip()
         single_rec = o["recommended"] and not c["multi"]
         if not single_rec and _ptr(o):
             desc = f"{desc} Evidência: {_ptr(o)}.".strip()
@@ -471,7 +490,7 @@ def ask_omp(doc: dict, *, now: int, session: str | None) -> str:
                 f"<p>{'Marque uma ou mais' if c['multi'] else 'Escolha uma'} (vazio = pendente):</p>"]
         for o in c["options"]:
             label = ("✅ " if o["recommended"] else "") + f"{o['letter']} — {o['label']}" + (REC if o["recommended"] else "")
-            detail = " · ".join(x for x in (o["effect"], _ptr(o)) if x)
+            detail = " · ".join(x for x in (o["effect"], DOOR.get(o["reversible"], DOOR_UNKNOWN), _ptr(o)) if x)
             out.append(f'<label><input type="{kind}" name="d{i}" value="{o["letter"]}"> {e(label)}'
                        + (f" <small>{e(detail)}</small>" if detail else "") + "</label><br>")
         out.append("</fieldset>")
@@ -647,12 +666,17 @@ def needs_line_to_decision(line: str, default_origin: dict) -> dict | None:
 
 
 def _key(d: dict) -> tuple[str, str]:
-    """Dedupe key (spec §8.6): (repo, normalized ask). The same ask in two repos is two
-    decisions; the same ask from two sessions of one repo merges (+N sessões). The session
-    stands in for the repo only when the repo is unknown."""
+    """Dedupe key (spec §8.6): (repo, id) when the decision carries an explicit id;
+    otherwise (repo, normalized ask), the legacy path for bare NEEDS-OPERATOR lines. Two
+    distinct ids with the same ask in one repo stay two decisions; the same ask in two repos
+    is two decisions; the same ask from two sessions of one repo merges (+N sessões). The
+    session stands in for the repo only when the repo is unknown."""
     o = d.get("origin") if isinstance(d.get("origin"), dict) else {}
     where = _s(o.get("repo")).casefold() or f"session:{_s(o.get('session'))}"
-    return where, re.sub(r"[^\w]+", " ", _s(d.get("ask") or d.get("title")).casefold()).strip()
+    ident = _s(d.get("id")).strip()
+    if ident:
+        return where, f"id:{ident.casefold()}"
+    return where, "ask:" + re.sub(r"[^\w]+", " ", _s(d.get("ask") or d.get("title")).casefold()).strip()
 
 
 def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
@@ -777,16 +801,28 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
         refs = rec if isinstance(rec, list) else ([] if rec in (None, "", False) else [rec])
         if not d.get("multi") and len(refs) > 1:
             errs.append(f"{tag}: escolha única com mais de uma recomendação")
+        card_rev = d.get("reversible")
         for r in refs:
             j = _option_index(r, opts)
             if j is None:
                 errs.append(f"{tag}: recommended '{r}' não é uma opção")
-            elif not _s(opts[j].get("evidence")):
+                continue
+            if not _s(opts[j].get("evidence")):
                 warns.append(f"{tag}: recomendação sem ponteiro de evidência → card sem ✅")
+            orev = opts[j].get("reversible", card_rev)
+            if orev is False and _s(opts[j].get("confidence")).casefold() not in HIGH_CONF:
+                errs.append(f"{tag}: recomendada '{_s(opts[j].get('label'))}' é 🚪 SEM VOLTA com confiança "
+                            f"'{_s(opts[j].get('confidence')) or '?'}': exija confiança alta ou "
+                            "deixe o card sem recomendação")
         if refs and not _s(d.get("rationale")):
             errs.append(f"{tag}: recomendação sem rationale (A ✅ … — porque <rationale>)")
-        if not isinstance(d.get("reversible"), bool):
-            warns.append(f"{tag}: reversible não informado (↩️/🚪)")
+        unknown = [_s(o.get("label")) for o in opts
+                   if not isinstance(o.get("reversible", card_rev), bool)]
+        if unknown:
+            warns.append(f"{tag}: reversible não informado (↩️/🚪) em: {', '.join(unknown)}")
+        for o in opts:
+            if not _s(o.get("effect")):
+                warns.append(f"{tag}: opção '{_s(o.get('label'))}' sem effect (o que acontece se escolhida)")
     if errs:
         return errs, warns
     warns += budget_warnings(doc, session)

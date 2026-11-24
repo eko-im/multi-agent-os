@@ -108,9 +108,26 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("…", out)
         card = lines[4:-1]
         self.assertEqual(len(card), 4)                    # origin = footer ⇒ no L5
-        self.assertTrue(card[1].startswith("    A ✅ Manter — porque é o mais barato (média · spec.md:1)"))
-        self.assertEqual(card[2], "    B Mudar")
+        self.assertTrue(card[1].startswith("    A ✅ Manter ↩️ — porque é o mais barato (média · spec.md:1)"))
+        self.assertEqual(card[2], "    B Mudar ↩️")
         self.assertEqual(card[3], "    ⌛ o item fica parado · ↩️ REVERSÍVEL")
+
+    def test_door_is_per_option_with_card_level_default(self):
+        d = decision(1, "alta", True)
+        d.pop("reversible")
+        d["options"][1]["reversible"] = False           # B is a one-way door
+        d["options"][0]["reversible"] = True
+        out = sc.render_text(doc(d), now=NOW, session=SESSION, layout="compact")
+        self.assertIn("A ✅ Manter ↩️ —", out)
+        self.assertIn("    B Mudar 🚪", out)
+        self.assertIn("🚪 SEM VOLTA · ↩️ REVERSÍVEL", out)  # legend of the doors present
+        full = sc.render_text(doc(d), now=NOW, session=SESSION, layout="full")
+        self.assertIn("efeito Mudar · 🚪 SEM VOLTA", full)
+        legacy = decision(2)                             # only the card says reversible
+        legacy["reversible"] = False
+        self.assertEqual([o["reversible"] for o in sc.normalize(legacy)["options"]], [False, False])
+        auq = sc.ask_claude(doc(d), now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        self.assertIn("Sem volta.", auq["options"][1]["description"])
 
     def test_compact_origin_shown_only_when_it_differs_from_footer(self):
         d = doc(decision(1), decision(2))
@@ -349,6 +366,18 @@ class AggregateLintTest(unittest.TestCase):
         self.assertEqual(len(res["queue"]["cards"]), 2)
         self.assertEqual({d["origin"]["repo"] for d in res["decisions"]}, {"org/a", "org/b"})
 
+    def test_distinct_ids_same_ask_same_repo_are_two_cards(self):
+        base = decision(1, "alta", True)
+        a = dict(copy.deepcopy(base), id="D-A")
+        b = dict(copy.deepcopy(base), id="D-B")
+        same = dict(copy.deepcopy(base), id="D-A")
+        b["origin"] = dict(a["origin"])
+        same["origin"] = dict(a["origin"], session="zzzzzzzz9999")
+        res = sc.aggregate([("x.json", json.dumps({"decisions": [a, b, same]}))],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["deduped"], 1)               # same id, same repo → merged
+        self.assertEqual(len(res["queue"]["cards"]), 2)   # distinct ids → two cards
+
     def test_lint_clean_and_dirty(self):
         good = doc(decision(1, "alta", True), decision(2))
         self.assertEqual(sc.lint_doc(good, now=NOW, session=SESSION)[0], [])
@@ -370,6 +399,26 @@ class AggregateLintTest(unittest.TestCase):
         long["decisions"][0]["cost_of_delay"] = "x " * 45
         _, warns = sc.lint_doc(long, now=NOW, session=SESSION)
         self.assertTrue(any("cost_of_delay passa do orçamento" in w for w in warns))
+
+    def test_lint_refuses_one_way_recommendation_without_high_confidence(self):
+        d = decision(1, "alta", True)                    # recommended Manter, confidence média
+        d["options"][0]["reversible"] = False
+        errs, _ = sc.lint_doc(doc(d), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA com confiança 'média'" in e for e in errs))
+        legacy = decision(2)                             # card-level door is the default
+        legacy["reversible"] = False
+        errs, _ = sc.lint_doc(doc(legacy), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA" in e for e in errs))
+        strong = copy.deepcopy(d)
+        strong["options"][0]["confidence"] = "alta"
+        self.assertEqual(sc.lint_doc(doc(strong), now=NOW, session=SESSION)[0], [])
+        none = copy.deepcopy(d)
+        none["recommended"] = None
+        none.pop("rationale")
+        self.assertEqual(sc.lint_doc(doc(none), now=NOW, session=SESSION)[0], [])
+        one_way_alt = decision(3)                        # 🚪 on a NON-recommended option is fine
+        one_way_alt["options"][1]["reversible"] = False
+        self.assertEqual(sc.lint_doc(doc(one_way_alt), now=NOW, session=SESSION)[0], [])
 
     def test_lint_text_flags_width_and_dash_offer(self):
         errs = sc.lint_text("x" * 81 + f"\nResponda: {CODE} 1:-\n")
