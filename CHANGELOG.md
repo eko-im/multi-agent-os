@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `context-budget`: measure the always-loaded context, source by source
+
+- **NEW `bin/context-budget`** (read-only, idempotent, `--json`): ranks each source of the context
+  Claude Code loads before the first reply — rules, CLAUDE.md chain, MEMORY.md, skill/agent
+  listings, deferred MCP tool names, MCP server instructions, hook injections — in bytes and
+  estimated tokens (`bytes/4`, labelled estimate). Two modes: `transcript` (measured from the
+  session `.jsonl` attachments before the first assistant record) and `disk` (files measured,
+  listings estimated, MCP/hooks `not_measured`). Hook stdout/stderr is never counted or printed;
+  only injected text (`content`, including newline-joined lists, or `additionalContext` of `async_hook_response`).
+  Disk mode counts user and project `.claude/rules/` (cwd and ancestors, nested dirs) and
+  merges `enabledPlugins` user < project < local; secret-looking keys (incl. suffixed names
+  like `*_PASSPHRASE`, `AUTHORIZATION`) are redacted.
+  Plugin installs are picked by scope (local > project > user, project/local only when
+  `projectPath` is cwd or an ancestor), and `.claude-plugin/plugin.json` component paths are
+  honored (custom `skills` add to `skills/`; custom `commands`/`agents` replace the defaults;
+  paths escaping the plugin root are ignored and counted).
+  Malformed non-string, non-null install scopes are skipped and counted; glob discovery treats
+  home, project and plugin directory names literally, including wildcard metacharacters.
+  Skill/agent/command listings also scan project-scope `.claude/{skills,agents,commands}`
+  (cwd and ancestors), deduped by realpath.
+  Agent/command estimates reuse the canonical entry classifier, excluding ALL-CAPS documents
+  and skill-owned sub-documents while retaining genuine nested commands.
+  Source labels abbreviate home only at a complete path boundary; original machine paths and byte counts stay unchanged.
+- **NEW `commands/context-budget.md`** thin wrapper; **NEW `bin/tests/context-budget.test.sh`**
+  (82 assertions, fake `$HOME`, read-only check); temporary-directory allocation fails closed before fixture setup.
+- Why: baseline for the context-reduction plan. Reuse check: `auto-shard` (CLAUDE.md >40KB only),
+  `memory-curator-sweep.sh` (index cap only) and `claude-code-concierge` measure no per-source
+  budget, so this is a new tool; it does not touch the `claude-concierge` work in flight.
+
+
 ### Added — `on-call-shift` skill v0.2.0
 
 - New skill `skills/on-call-shift/`: holds an on-call shift with one holder, a persisted lease and cursor, the principal's mantras (defaults when none are given), and relief only on a successor ACK that echoes cursor, in-flight work and gates. When no backlog was given or it is done, it reads every authorized tracker, merges the same intent across trackers and pull requests, keeps RACI/DARCI roles `unknown` when unnamed, and adopts one eligible item or waits with a reason. Tick, notification, wakeup and resume stay distinct; without a bound wakeup transport the shift reports `DEGRADED` and never claims continuous coverage. A result counts as done (UDV) only when the intended recipient received it and is satisfied; blast radius is checked before each effect; a dead holder is replaced only by a successor the principal armed for the current generation; the arming is consumed by that one takeover, so a second expiry without re-arming is DEGRADED, and replay and self-succession are refused. The existing timer only observes; the skill never claims 24/7 coverage. Every mutator requires the current lease and generation; `adopt` re-checks gate, owner, budget and capacity; a handoff ACK must match the live state. Decision-point lens questions, incident preemption keeping the cursor, and route changes only on new evidence; stop or revocation overrides everything. Owner conflicts across sources block adoption; a granted gate unblocks it; a replayed rejection reopens once. Continuity: autosave per transition, handoff derived from the snapshot, preflight/postflight, readable diagnosis, a separate logic-only watchdog (no installed watchdog, no live wakeup), and a conflict resolver that never decides by majority or arbitrates a human authorization. The holder never grants a human gate; every connector gate survives the merge; deliveries dedupe over all sent results. Own team: admission by scope, risk, budget and seats; drain before retire; idempotent retirement; other owners' members untouched. Own tools are admitted through the same roster with a recorded reuse/configure/extend/create/none decision; requests to create or delete shared resources are parked. Child-checkpoint recovery: after a child's save fails, `recover_child` validates the new checkpoint (hash, same child, generation, cause), persists the parent first and reopens admission once; human gates and other freezes stay. A child failure never overwrites an earlier parent freeze; a checkpoint older than the failed save (generation and cursor) is refused. A monotonic save counter refuses an older checkpoint with the same generation and cursor (changes without a tick).
