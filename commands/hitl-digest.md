@@ -298,6 +298,28 @@ O agente imprime o `preamble` como texto e, se o payload não for nulo, chama `A
 com `ask_user_question.questions`. Se a pergunta expirar sem resposta, no próximo digest passe
 `--consumer human-deferred` para usar o texto em vez de abrir a ferramenta novamente (§0).
 
+## Modo scorecard + painel (decisões de N sessões)
+
+Para decisões que chegam como `NEEDS-OPERATOR:` ou JSON `hitl-scorecard/v1` (não do
+ledger), o mesmo skill traz `bin/hitl-scorecard.py` (spec `hitl-digest` §8). Ele reusa o
+construtor de opções do motor acima; a regra de uma só superfície de resposta (§0) vale igual.
+
+```bash
+SC="$(dirname "$FUSE")/hitl-scorecard.py"
+python3 "$SC" aggregate s1.log s2.json > queue.json          # N sessões → fila
+python3 "$SC" render queue.json --layout compact              # resposta (≤15 linhas)
+python3 "$SC" render queue.json --layout full > card.txt      # detalhe em arquivo
+python3 "$SC" ask queue.json --target claude                  # payload AskUserQuestion
+python3 "$SC" ask queue.json --target omp > form.html         # <form> do ask do OMP
+python3 "$SC" parse queue.json --source text --code "$CODE" --answer "$CODE 1:A 2:-"
+python3 "$SC" lint queue.json                                 # regras da spec
+```
+
+Nada vem pré-selecionado em nenhuma superfície. O `ask` do OMP envia os valores atuais
+no timeout, então o formulário não marca nada e exige a caixa `confirm`. Timeout,
+`afkTimeoutMs` do AskUserQuestion, cancelamento, texto livre e formulário sem `confirm`
+são **pendentes**: o card volta no próximo digest.
+
 ## Examples
 
 ```text
@@ -309,6 +331,7 @@ com `ask_user_question.questions`. Se a pergunta expirar sem resposta, no próxi
 /hitl-digest --with-pendencies --scope repo    # pendências do repo + os HITL anexados
 /hitl-digest --format json                     # envelope JSON p/ outro agente consumir
 /hitl-digest --format ask-user-question        # cards prontos p/ a ferramenta AskUserQuestion
+/hitl-digest scorecard                         # cards BLUF + painel (hitl-scorecard.py)
 ```
 
 ## Fronteiras (o que este command NÃO faz)

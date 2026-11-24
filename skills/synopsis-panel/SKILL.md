@@ -13,14 +13,14 @@ description: |
   precisa de mim num só lugar", "árvore de pendências com os gates humanos marcados",
   "synopsis panel", "unified pendencies + HITL view". Read-only; o script nunca decide
   nem muta — só funde e desenha.
-prompt_version: "0.2.0"
+prompt_version: "0.3.0"
 type: skill
 spec: AAIF / agentskills.io
 applicable_hosts: [Claude Code, Cursor, GitHub Copilot, Aider, any AAIF-compliant agent]
 allowed-tools: [Bash, Read]
 cycles_completed: 0
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
   scope: AAIF cross-vendor
   family: work-landscape
   cross_link_slug: synopsis-panel
@@ -32,6 +32,12 @@ triggers:
   - unified pendencies and hitl view
   - arvore de pendencias com gates humanos
   - o que esta pendente e o que precisa de mim
+  - hitl scorecard
+  - preciso decidir
+  - decisões pendentes
+  - scorecard de decisões
+  - AskUserQuestion scorecard
+  - pending operator decisions
 ---
 
 # synopsis-panel
@@ -94,6 +100,30 @@ entrega os cards da sessão invocadora prontos para `AskUserQuestion`, só para 
 `human-live` num harness que tem a ferramenta. `human-deferred` recebe o `tree` de sempre e
 `machine` o `json` de sempre. Contrato, fontes das opções e regra de recomendação:
 [`hitl-digest`](../../commands/hitl-digest.md) §Modo AskUserQuestion. Testes: [`test_synopsis_hitl_auq.py`](../../tests/test_synopsis_hitl_auq.py).
+
+## Scorecard + painel (`bin/hitl-scorecard.py`)
+
+Extensão do mesmo motor para o digest de **decisões** (spec `hitl-digest` §8, v2.7.0);
+o ponto de entrada continua `/hitl-digest`. Reusa o construtor de opções `_card_options`
+(recomendada primeiro, só com ponteiro de evidência) e a linha `⏭`; não duplica render
+nem ledger. Entrada: JSON `hitl-scorecard/v1` (`decisions[]` com `id`, `title`,
+`origin{harness,repo,session}`, `context`, `ask`, `urgency` alta|media|baixa, `owner_only`,
+`reversible`, `cost_of_delay`, `time_to_decide`, `multi`, `unblocks`,
+`options[{label,effect,confidence,evidence}]`, `recommended`, `because`) ou linhas
+`NEEDS-OPERATOR:` de N sessões.
+
+| Subcomando | Faz |
+|---|---|
+| `render --format text\|ansi\|markdown --layout full\|compact` | cards BLUF (origem `harness · repo · sessão`, BLUF ✅ com ponteiro, ↩️/🚪, ⌛, ⏱); `compact` = 3 linhas/card, cabe no Contrato de Atenção |
+| `ask --target claude\|omp` | payload `AskUserQuestion` (1–4 perguntas, 2–4 opções, header ≤12) ou um `<form>` HTML para o `ask` do OMP: nada `checked`/`selected`, caixa `confirm` desmarcada |
+| `parse --source text\|claude\|omp` | resposta → decisões + linha `fechado`; gramática e rejeições da spec §3; timeout, `afkTimeoutMs`, cancelamento, texto livre e formulário sem `confirm` = **pendente** |
+| `aggregate` | dedupe por pergunta, ordem ⏫+👤 → ⏫ → 👤 → maduro → urgência → `unblocks`; ≤3 cards (4º só ⏫/👤), ≤3 `⏸`, resto `⏭` |
+| `lint` | 80 colunas, 2–4 opções, recomendação válida, origem, `-` fora de ⏫/👤, limites do AskUserQuestion, nenhum preselect, corpo compacto ≤15 linhas |
+
+O código `K<YYMMDD>-<HHMM>-<s8>` é **UTC** + os 8 últimos caracteres da sessão **raiz**
+(`--session`, `CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`); sem raiz não há digest
+numerado. Testes: [`tests/test_hitl_scorecard.py`](tests/test_hitl_scorecard.py)
+(`python3 -m unittest test_hitl_scorecard`, a partir de `tests/`).
 
 ## Parte cognitiva (o que o agente decide antes de rodar o script)
 A skill é **híbrida**: antes do script determinístico, o agente interpreta —
@@ -274,6 +304,7 @@ fusões falso-positivas (E5). Dormente-por-design caso contrário.
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
+| 0.3.0 | 2026-11-24 | **Scorecard + painel do digest de decisões** (`bin/hitl-scorecard.py`, spec `hitl-digest` §8 v2.7.0). Extensão, não skill nova: reusa `_card_options` e `_overflow_line` do motor; `/hitl-digest` continua o ponto de entrada. Subcomandos `render` (BLUF, full/compact, text/ansi/markdown, `NO_COLOR`), `ask` (AskUserQuestion ou `<form>` do `ask` OMP, sem preselect, com caixa `confirm`), `parse` (texto, resultado AskUserQuestion, valores OMP; timeout/`afkTimeoutMs`/cancel/texto livre = pendente), `aggregate` (`NEEDS-OPERATOR` de N sessões, dedupe, ordem, cap) e `lint`. Código do digest em UTC (spec §2). 28 testes `unittest`. |
 | 0.2.0 | 2026-10-27 | **`--this-session-only`** — o alias de `--scope session` para a fatia do ledger HITL (ticket eko-backlog#231). Nova flag no motor: só os itens cuja proveniência (coluna `Sessão`) nomeia esta conversa, **em qualquer modo** (inclusive no painel geral, onde o resto do ledger continua inteiro). Como o alias só **restringe**, ele **contradiz** `--scope all` — as duas juntas saem com erro de uso (exit 2), nunca resolvidas em silêncio (resolver em favor da ampliação entregaria um ledger inteiro a quem pediu "só esta conversa"). `--scope session` passa a ter o mesmo efeito no painel geral (antes só no digest puro), para que o alias seja um alias de verdade e não uma segunda grafia de outra coisa. **Zero nunca é mudo**: a fatia vazia de uma fila cheia diz "0 de N ledger items are this conversation's" e por quê — "0 mostrados" não pode ser lido como "0 existem" (a mesma linha agora entra também no preâmbulo do `ask-user-question`, para que a linha da spec "nenhuma decisão pendente" nunca fique sozinha ao lado de um ledger cheio). Testes: `skills/synopsis-panel/tests/test_hitl_session_scope.py` (alias, contradição, o caso "0 de N"). |
 | 0.1.0 | 2026-10-21 | Bootstrap — a camada fina de **fusão + render** que faltava: funde a N-Tree de pendências (`work-compass --json`) + o ledger HITL (`punch-list.md`) num só modelo e renderiza tree/mermaid/HTML (humano) + JSON (agente). Net-new = só o modelo de fusão (anexa HITL à pendência por token de Link/ID; HITL órfão vira ramo próprio, nunca descartado) + os 4 renderers + self-heal. Reimplementa zero: agregação/Eisenhower ← work-compass (SSOT), ledger ← hitl-punch-list (SSOT), visual ← hitl-digest house-style. Nomeada via `anima` (`synopsis-panel`; rejeitado `confluence-panel` por colisão trademark Atlassian, `ntree-hitl-panel` por gloss-independence fraca). Forjada via pipeline MAOS (o DDR rodou EXPAND→FILTER→HARMONIZE). **forged-not-yet-dogfooded** (bounded: thin layer + PR, sem dogfood/merge). |
 
