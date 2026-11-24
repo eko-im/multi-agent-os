@@ -13,7 +13,7 @@ description: PR governance unificado [C07+C12] — workflow de PRs e revisão
 ```
 MANDATORY: Worktree -> Code -> LOCAL REVIEW -> Push -> PR -> Bot Review -> Merge -> Cleanup
 FORBIDDEN: Merge to main/master without review | git checkout in main repo
-SCOPE: main/master; other branches: review optional (pr-review-protocol §0)
+SCOPE: All agents, all sessions, all repos. Review/PR mandatory only for main/master; other branches: review optional.
 ```
 
 ## Complete Lifecycle (12 steps)
