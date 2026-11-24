@@ -492,6 +492,17 @@ class ParsePanelTest(unittest.TestCase):
         res = sc.parse_omp(self.cards, {"values": {"d1": "A", "confirm": "sim"}, "timedOut": True}, CODE)
         self.assertEqual({i["status"] for i in res["items"]}, {"expired"})
 
+    def test_panel_parsers_apply_closed_and_resolved_guards(self):
+        claude = {"answers": {self.qs[0]["question"]: self.qs[0]["options"][0]["label"]}}
+        omp = {"d1": "A", "confirm": "sim"}
+        for fn, data in ((sc.parse_claude, claude), (sc.parse_omp, omp)):
+            self.assertEqual(fn(self.cards, data, CODE, closed=[CODE.lower()])["status"], "rejected")
+            res = fn(self.cards, data, CODE, resolved={1: "B"})
+            self.assertEqual((res["items"][0]["status"], res["items"][0]["note"]), ("rejected", "já resolvido: B"))
+            res = fn(self.cards, {"answers": {}} if fn is sc.parse_claude else {"confirm": "sim"}, CODE,
+                     resolved={1: "B"})
+            self.assertEqual((res["items"][0]["status"], res["items"][0]["letters"]), ("decided", ["B"]))
+
 
 class AggregateLintTest(unittest.TestCase):
     def test_needs_operator_lines_dedupe_and_order(self):

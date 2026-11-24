@@ -104,6 +104,10 @@ never consent, and the card returns in the next digest:
 - free text or "Other" (the agent reads it but executes nothing);
 - an OMP form sent without its `confirm` box, or with an empty field.
 
+The replay guards are the same on every surface: `parse --closed <code>` rejects a closed
+digest whole, and `--resolved n=X` keeps a card's recorded choice and rejects a new pick
+for it, for text, `AskUserQuestion` and OMP answers alike.
+
 ## 5. Single or multiple choice
 
 - Single choice (radio) is the default: use it whenever the options exclude each other.

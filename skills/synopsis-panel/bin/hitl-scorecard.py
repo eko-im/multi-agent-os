@@ -623,7 +623,23 @@ def _split_multi(answer: str, labels: list[str]) -> list[int] | None:
     return picks or None
 
 
-def parse_claude(cards, result: dict, code: str | None) -> dict:
+def _guard(cards, items: list[dict], code: str | None, closed=(), resolved=None) -> dict:
+    """Replay guards shared by the panel parsers, the same as for a text answer: a closed
+    digest is rejected whole; a card already resolved keeps its recorded choice, and a
+    new pick for it is rejected (never re-executed, never overridden)."""
+    resolved = resolved or {}
+    if code and code.upper() in {_s(x).upper() for x in closed}:
+        return {"status": "rejected", "reason": f"{code} já está fechado"}
+    for k, c in enumerate(cards):
+        n = k + 1
+        if n in resolved:
+            items[k] = (_item(n, c, "rejected", note=f"já resolvido: {resolved[n]}")
+                        if items[k]["status"] == "decided"
+                        else _item(n, c, "decided", resolved[n].split("+"), "resolvido antes"))
+    return {"status": "ok", "code": code, "items": items, "fechado": _fechado(code, items)}
+
+
+def parse_claude(cards, result: dict, code: str | None, closed=(), resolved=None) -> dict:
     """AskUserQuestion result (Claude Code 2.1.331 schema): answers keyed by question
     text; `afkTimeoutMs` = the dialog auto-resolved while the person was away ⇒ expired."""
     afk = result.get("afkTimeoutMs")
@@ -647,10 +663,10 @@ def parse_claude(cards, result: dict, code: str | None) -> dict:
                 items.append(_item(i, c, "pending", note="texto livre (Other): nada executado; o agente lê e pergunta de novo"))
             else:
                 items.append(_item(i, c, "decided", [LETTERS[k] for k in idx]))
-    return {"status": "ok", "code": code, "items": items, "fechado": _fechado(code, items)}
+    return _guard(cards, items, code, closed, resolved)
 
 
-def parse_omp(cards, data: dict, code: str | None) -> dict:
+def parse_omp(cards, data: dict, code: str | None, closed=(), resolved=None) -> dict:
     vals = data
     for key in ("values", "answers", "fields", "form", "data", "result"):
         if isinstance(vals, dict) and isinstance(vals.get(key), dict):
@@ -677,7 +693,7 @@ def parse_omp(cards, data: dict, code: str | None) -> dict:
             items.append(_item(i, c, "decided", letters))
         else:
             items.append(_item(i, c, "pending", note="valor inválido; volta no próximo digest"))
-    return {"status": "ok", "code": code, "items": items, "fechado": _fechado(code, items)}
+    return _guard(cards, items, code, closed, resolved)
 
 
 # ---------------------------------------------------------------- aggregate
@@ -1002,7 +1018,9 @@ def main(argv=None) -> int:
             else:
                 shown, _, _ = plan(load_cards(doc))
                 data = json.loads(raw)
-                res = (parse_claude if a.source == "claude" else parse_omp)(shown, data, a.code)
+                resolved = dict((int(k), v.upper()) for k, v in (r.split("=", 1) for r in a.resolved))
+                res = (parse_claude if a.source == "claude" else parse_omp)(shown, data, a.code,
+                                                                            a.closed, resolved)
             sys.stdout.write(json.dumps(res, ensure_ascii=False, indent=2) + "\n")
             return 0 if res["status"] == "ok" else 1
         elif a.cmd == "aggregate":
