@@ -333,8 +333,18 @@ def _rec_line(c: dict) -> str:
     return head + why + (f" ({ptrs})" if ptrs else "")
 
 
-def _risk(c: dict) -> str:
-    return f"\u231b {c['cost_of_delay'] or '?'} · {_doors(c)}" + (" · \u2611 VÁRIAS" if c["multi"] else "")
+def _risk(c: dict, short: bool = False) -> str:
+    """L4: ⌛ cost · ⏱ time to decide · door legend. The 3-line card drops the legend: each
+    option already carries its own ↩️/🚪 glyph, and a two-door legend there read as if the
+    card were both one-way and reversible."""
+    bits = [f"\u231b {c['cost_of_delay'] or '?'}"]
+    if c["time_to_decide"]:
+        bits.append(f"\u23f1 {c['time_to_decide']}")
+    if not short:
+        bits.append(_doors(c))
+    if c["multi"]:
+        bits.append("\u2611 VÁRIAS")
+    return " · ".join(b for b in bits if b)
 
 
 def origin_delta(c: dict, foot: dict) -> str:
@@ -357,7 +367,7 @@ def compact_lines(c: dict, n, foot: dict, short: bool = False) -> list[str]:
     delta = origin_delta(c, foot)
     out = wrap(_title_line(c, n), "", IND) + wrap(_rec_line(c), IND, IND + "  ")
     if short:
-        return out + pack(opts + [_risk(c)] + ([delta] if delta else []))
+        return out + pack(opts + [_risk(c, short=True)] + ([delta] if delta else []))
     out += pack(opts) + pack([_risk(c)])
     return out + (pack([delta]) if delta else [])
 
@@ -378,7 +388,9 @@ def header_lines(shown, parked, nxt, code, now) -> list[str]:
         "══ 🟠 HITL DIGEST · sem código (sessão raiz desconhecida) ══"
     lines = [head, f"{len(shown)} + {len(parked)} estac." + (f" + {len(nxt)} próximo digest" if nxt else "")]
     if code and shown:
-        toks = " ".join(f"{i}:{'+'.join(c['rec']) or 'A'}" for i, c in enumerate(shown, 1))
+        # A card without a recommendation offers no letter: `?` is not an answer token the
+        # parser accepts, so a pasted Responda line cannot decide it by copy (spec §8.4).
+        toks = " ".join(f"{i}:{'+'.join(c['rec']) or '?'}" for i, c in enumerate(shown, 1))
         lines.append(f"Responda: {code} {toks}")
         lines.append(_hint([str(i) for i, c in enumerate(shown, 1) if needs_letter(c)], len(shown)))
     elif shown:

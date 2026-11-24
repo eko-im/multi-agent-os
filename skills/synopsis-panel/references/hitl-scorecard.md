@@ -179,23 +179,24 @@ pointer (3). Compact layout, as rendered; the `🔴` line goes above it:
 ```
 ══ 🟠 HITL DIGEST · K261124-2135-exemplo1 (18:35 -03) ══
 3 + 0 estac.
-Responda: K261124-2135-exemplo1 1:A 2:A 3:A
+Responda: K261124-2135-exemplo1 1:A 2:A 3:?
 (1, 2 e 3 exigem letra · omitido = pendente)
 1 · ⏫ ALTA · 👤 SÓ VOCÊ — Janela do deploy exemplo
     A ✅ Amanhã 9h ↩️ — porque o runbook pede janela (alta · exemplo:runbook:12)
     B Agora ↩️
-    ⌛ o release segue parado · ↩️ REVERSÍVEL
+    ⌛ o release segue parado · ⏱ 2 min · ↩️ REVERSÍVEL
 2 · 🔼 MÉDIA · 👤 SÓ VOCÊ — Destino da tabela legado_v1
     A ✅ Arquivar ↩️ — porque guarda os dados (média · exemplo:inventario:3)
-    B Apagar 🚪 · ⌛ custo de disco segue · 🚪 SEM VOLTA · ↩️ REVERSÍVEL
+    B Apagar 🚪 · ⌛ custo de disco segue · ⏱ 3 min
 3 · 🔽 BAIXA — Regra nova de lint
     sem recomendação: falta ponteiro de evidência
-    A Adotar ↩️ · B Manter ↩️ · ⌛ só atrito · ↩️ REVERSÍVEL · org/exemplo-lib
+    A Adotar ↩️ · B Manter ↩️ · ⌛ só atrito · ⏱ 2 min · org/exemplo-lib
 harness: OMP · repo: org/exemplo · sessão: exemplo1
 ```
 
 Card 3 has no recommendation, so `-` is not accepted there either: the hint asks for a
-letter on all three. Card 2 recommends the reversible option; recommending `Apagar`
+letter on all three, and its answer token is `3:?` — not a letter, so pasting the
+`Responda:` line as-is cannot decide it. Card 2 recommends the reversible option; recommending `Apagar`
 (🚪, confidence `baixa`) would be a lint error.
 
 ## Sources (non-normative)

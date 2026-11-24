@@ -81,6 +81,20 @@ class RenderTest(unittest.TestCase):
         self.assertIn(sc.NO_REC, out)
         self.assertNotIn("✅", out)
         self.assertIn("(1 exige letra · omitido = pendente)", out)
+        # no letter is suggested for a card the agent could not recommend
+        self.assertIn(f"Responda: {CODE} 1:?", out)
+        self.assertNotIn(f"Responda: {CODE} 1:A", out)
+
+    def test_pasting_the_answer_line_cannot_decide_a_no_rec_card(self):
+        d = doc(decision(1, "alta", True), decision(2, evidence=""))
+        out = sc.render_text(d, now=NOW, session=SESSION)
+        line = next(l for l in out.splitlines() if l.startswith("Responda:"))
+        self.assertIn(" 2:?", line)
+        res = sc.parse_text(sc.load_cards(d), line.split(":", 1)[1].strip(), CODE)
+        self.assertEqual(res["status"], "ok")
+        item2 = res["items"][1]
+        self.assertEqual(item2["status"], "pending")
+        self.assertNotIn("decided", [it["status"] for it in res["items"][1:]])
 
     def test_no_root_session_means_no_numbered_digest(self):
         out = sc.render_text(self.doc, now=NOW, session=None)
@@ -110,7 +124,7 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(len(card), 4)                    # origin = footer ⇒ no L5
         self.assertTrue(card[1].startswith("    A ✅ Manter ↩️ — porque é o mais barato (média · spec.md:1)"))
         self.assertEqual(card[2], "    B Mudar ↩️")
-        self.assertEqual(card[3], "    ⌛ o item fica parado · ↩️ REVERSÍVEL")
+        self.assertEqual(card[3], "    ⌛ o item fica parado · ⏱ 2 min · ↩️ REVERSÍVEL")
 
     def test_door_is_per_option_with_card_level_default(self):
         d = decision(1, "alta", True)
