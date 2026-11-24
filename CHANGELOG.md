@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed — on-call-shift R1–R3 follow-ups
+### Fixed — on-call-shift recovery follow-ups
 
-- `recover_child` now refuses `STALE_CHECKPOINT_IN_FLIGHT` when the failed in-flight item is neither still in flight in the checkpoint nor recorded as completed in the log (R2). Tests Q1c, Q1g and test_88 added (suite 91 → 95); test_88 proves no false STALE on a legitimate completion.
-- R1 (a child forging its own `save_seq`) is documented as known limit A6 in `skills/on-call-shift/references/continuity.md`: no local fix without an authority external to the child.
+- `recover_child` now refuses `STALE_CHECKPOINT_IN_FLIGHT` when an item that was in flight at a failed child save is no longer in flight in the new checkpoint and is not recorded as completed in its log. The failed in-flight sets of the same pending entry are unioned, so a reload to an older revision followed by another failed save cannot erase the item. A checkpoint with non-string `in_flight` or logged ids is refused as `CHECKPOINT_UNREADABLE` instead of raising `TypeError`.
+- Tests: `test_85` (counter rolled back by reload), `test_86` (missing `save_seq`), `test_87` (two failures at one cursor), `test_88` (legitimate completion is not refused), `test_89` (second failed save after reload) and `test_90` (malformed ids); suite 91 → 97.
+- Documented in `skills/on-call-shift/references/continuity.md`: the child controls its own checkpoint file (`save_seq`, `in_flight`, `log`), so the check does not cover a completion, gate, delivery or budget reverted by a reload, nor a child that forges its own file. The recovery gate `changelog-required` is not applicable to these paths, so it did not validate this entry.
 
 ### Added — `on-call-shift` skill v0.2.0
 

@@ -132,7 +132,11 @@ def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
         if (attempt["generation"], attempt["cursor_seq"], attempt["save_seq"]) >= (
                 pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"],
                 pending["failed_at"].get("save_seq", 0)):
-            pending["failed_at"] = attempt  # floor = newest state that failed to save
+            # floor = newest state that failed to save; the in-flight set is the UNION of
+            # every failure of this pending, so a later failed save after a reload to an
+            # older revision cannot erase an item that was in flight at an earlier failure.
+            pending["failed_at"] = dict(attempt, in_flight=sorted(
+                set(attempt["in_flight"]) | set(pending["failed_at"].get("in_flight", []))))
         parent["children"][child_id]["pending"] = pending
         # Never overwrite an earlier freeze (POSTFLIGHT, PREFLIGHT_INCONSISTENT, ...):
         # that reason stays, so a child recovery cannot lift it.
@@ -183,9 +187,14 @@ def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, no
     # The counter lives in the child's own file, so a child that reloads an older revision
     # can push it back above the floor. Independent of the counter: every item that was in
     # flight when the save failed must still be in flight, or be recorded as completed.
-    concluded = {e.get("id") for e in doc.get("log") or []
-                 if isinstance(e, dict) and e.get("event") == "item_completed"}
-    kept = set(doc.get("in_flight") or [])
+    log, flight = doc.get("log") or [], doc.get("in_flight") or []
+    if not isinstance(log, list) or not isinstance(flight, list):
+        return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
+    done = [e.get("id") for e in log
+            if isinstance(e, dict) and e.get("event") == "item_completed"]
+    if not all(isinstance(k, str) for k in flight + done):
+        return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
+    concluded, kept = set(done), set(flight)
     if any(k not in kept and k not in concluded for k in floor.get("in_flight", [])):
         return {"recovered": False, "reason": "STALE_CHECKPOINT_IN_FLIGHT"}
     if cause != pending["cause"]:

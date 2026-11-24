@@ -685,6 +685,53 @@ class ChildRecovery(unittest.TestCase):
         self.assertEqual((out["recovered"], out["reason"]), (True, None))
         self.assertIsNone(parent["children"]["child-a"]["pending"])
 
+    def test_89_second_failed_save_after_a_reload_keeps_the_lost_item_in_the_floor(self):
+        # Review 06 (A1): good save with no item, adopt k1, failed save (floor holds k1), the
+        # child reloads the old revision (counter back to a tie), a NEW failed save replaces
+        # the floor, then a good save. The floor must keep k1 (union of failures), so the
+        # checkpoint that lacks k1 is refused with STALE_CHECKPOINT_IN_FLIGHT.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)  # good save, no item, save_seq 1
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)  # seq 2
+        reloaded, _ = co.load_checked(path)  # the child restarts from the old revision
+        self.assertEqual(reloaded["in_flight"], [])
+        co.checkpoint_child(parent, "child-a", reloaded, path, writer=failing_writer)  # tie
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]
+        self.assertEqual(floor["in_flight"], ["k1"])  # union: the first failure's item stays
+        sha = co.autosave(reloaded, path)["sha256"]  # good save, still without k1
+        self.assertEqual(json.loads(read(path))["in_flight"], [])
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_IN_FLIGHT"))
+        self.assertEqual(parent, before)
+        self.assertFalse(parent["admission"]["open"])
+
+    def test_90_malformed_in_flight_or_log_id_is_refused_not_raised(self):
+        # Review 06 (A2): a hash-valid checkpoint with non-string ids must get a structured
+        # refusal, not a TypeError.
+        for field in ("in_flight", "log"):
+            parent, child = shift(), self.child()
+            path = os.path.join(self.d, "child-a-%s.json" % field)
+            se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+            co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+            floor = parent["children"]["child-a"]["pending"]["failed_at"]
+            bad = json.loads(json.dumps(child))
+            bad["save_seq"] = floor["save_seq"] + 1
+            if field == "in_flight":
+                bad["in_flight"] = [["k1"]]
+            else:
+                bad["log"] = [{"event": "item_completed", "id": ["k1"]}]
+            data = json.dumps(bad, indent=2, sort_keys=True).encode("utf-8")
+            co._atomic_write(path, data)
+            before = se.snapshot(parent)
+            out = self.recover(parent, "child-a", path, hashlib.sha256(data).hexdigest())
+            self.assertEqual((out["recovered"], out["reason"]),
+                             (False, "CHECKPOINT_UNREADABLE"), field)
+            self.assertEqual(parent, before)
+
 class OwnTeam(unittest.TestCase):
     """The holder's own team: admission, drain, idempotent retirement, other owners untouched."""
 
