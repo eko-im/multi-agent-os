@@ -1,0 +1,3 @@
+{"items": [
+ {"id": "t1", "kind": "HOTL", "state": "done", "evidence": "worker reported PR merged", "delegated": true, "remeasured": true, "remeasure": {"source": "gh pr view 123 --json state,mergeCommit", "ref": "merge sha 1a2b3c4", "at": "Tuesday", "result": "MERGED"}}
+]}

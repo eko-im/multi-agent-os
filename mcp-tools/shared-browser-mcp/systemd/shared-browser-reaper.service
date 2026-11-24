@@ -1,0 +1,8 @@
+[Unit]
+Description=shared-browser-mcp reaper: close tabs of dead or idle MCP clients
+
+[Service]
+Type=oneshot
+# Change SB_HOME with a drop-in (systemctl --user edit) if it is not ~/sb.
+Environment=SB_HOME=%h/sb
+ExecStart=/bin/sh -c 'exec "$SB_HOME/bin/shared-browser-reaper"'

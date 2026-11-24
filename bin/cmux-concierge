@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# cmux-concierge — unattended care for cmux-cloud VMs (diagnose -> heal ladder).
+#
+# Ladder, lightest first (each step: GUARD -> ACTION -> POST-CHECK, idempotent):
+#   L1 fix-resolv      /etc/resolv.conf -> systemd-resolved stub (backup + undo first)
+#   L2 restart-resolver systemctl restart systemd-resolved
+#   L3 restart-tunnel  local `cmux vpn down/up` (only if the system tunnel was already up)
+#   L4 reboot          `cmux vm restart <id>` (only with --allow-reboot, VM already running)
+#
+# Never: logs in, prints a token, resumes a paused VM, creates a VM, reserves pool
+# capacity. Those return NEEDS-HUMAN (exit 2).
+#
+# Exit codes: 0 healthy · 1 error/usage · 2 needs-human · 3 degraded (heal could fix)
+set -uo pipefail
+
+VERSION="0.1.0"
+SSH_HOST="${CMUX_CONCIERGE_SSH:-}"
+VM="${CMUX_CONCIERGE_VM:-}"
+CMUX="${CMUX_CONCIERGE_CMUX:-cmux}"
+# Test seams (documented in skills/cmux-concierge/SKILL.md §Tests). Defaults = real host.
+TRANSPORT="${CMUX_CONCIERGE_TRANSPORT:-auto}"   # auto (ssh, then cmux vm exec) | ssh | exec | local
+R_ROOT="${CMUX_CONCIERGE_ROOT:-}"               # path prefix on the remote side ("" = real /)
+R_SUDO="${CMUX_CONCIERGE_SUDO-sudo -n}"         # privilege wrapper on the remote side
+PROBE_FILE="${CMUX_CONCIERGE_PROBE_FILE:-}"     # read probe KEY=VALUE from a file (tests)
+REBOOT_WAIT="${CMUX_CONCIERGE_REBOOT_WAIT:-300}"
+
+DRY_RUN=0; MAX_LEVEL=3; ALLOW_REBOOT=0; JSON=0; BACKUP=""; CMD=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cmux-concierge check  --ssh <alias> [--vm <id|displayName>] [--json]
+  cmux-concierge heal   --ssh <alias> [--vm <id|displayName>] [--dry-run] [--max-level 1-4] [--allow-reboot]
+  cmux-concierge undo   --ssh <alias> --backup <remote-path> [--dry-run]
+  cmux-concierge --version | --help
+
+check   read-only diagnosis: tunnel, VM state, ssh, DNS, resolver, egress, harness logins.
+heal    climbs L1..L<max-level> (default 3); L4 reboot also needs --allow-reboot and --vm.
+undo    restores a resolv.conf backup written by heal L1.
+--dry-run prints each ACTION it would run and changes nothing.
+Env: CMUX_CONCIERGE_SSH, CMUX_CONCIERGE_VM. Exit: 0 healthy · 1 error · 2 needs-human · 3 degraded.
+EOF
+}
+
+die() { echo "cmux-concierge: $*" >&2; exit 1; }
+say() { [ "$JSON" = 1 ] || echo "$@"; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    check|heal|undo) CMD="$1" ;;
+    --ssh) SSH_HOST="${2:-}"; shift ;;
+    --vm) VM="${2:-}"; shift ;;
+    --dry-run|--check-only) DRY_RUN=1 ;;
+    --max-level) MAX_LEVEL="${2:-}"; shift ;;
+    --allow-reboot) ALLOW_REBOOT=1 ;;
+    --backup) BACKUP="${2:-}"; shift ;;
+    --json) JSON=1 ;;
+    --version) echo "cmux-concierge $VERSION"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 1 ;;
+  esac
+  shift
+done
+[ -n "$CMD" ] || { usage >&2; exit 1; }
+case "$MAX_LEVEL" in 1|2|3|4) ;; *) die "--max-level must be 1-4" ;; esac
+[ -n "$SSH_HOST" ] || [ -n "$VM" ] || [ "$TRANSPORT" = local ] || [ -n "$PROBE_FILE" ] \
+  || die "need --ssh <alias> and/or --vm <id>"
+
+# ---------- local side (Mac) ----------
+VM_ID=""; VM_STATUS="unknown"
+local_probe() {
+  if ! command -v "$CMUX" >/dev/null 2>&1; then
+    echo "CMUX_CLI=absent"; echo "TERMINAL_TUNNEL=unknown"; echo "SYSTEM_TUNNEL=unknown"; return
+  fi
+  echo "CMUX_CLI=ok"
+  local vs; vs="$("$CMUX" vpn status 2>&1)"
+  case "$vs" in *"Terminal tunnel: up"*) echo "TERMINAL_TUNNEL=up" ;; *) echo "TERMINAL_TUNNEL=down" ;; esac
+  case "$vs" in *$'\nTunnel: up'*|"Tunnel: up"*) echo "SYSTEM_TUNNEL=up" ;; *) echo "SYSTEM_TUNNEL=down" ;; esac
+  if [ -n "$VM" ]; then
+    "$CMUX" vm ls --json 2>/dev/null | python3 -c '
+import json, sys
+want = sys.argv[1]
+try:
+    vms = json.load(sys.stdin).get("vms", [])
+except Exception:
+    vms = []
+for v in vms:
+    if want in (v.get("id"), v.get("displayName"), v.get("slug")):
+        print("VM_ID=%s" % v.get("id", "")); print("VM_STATUS=%s" % v.get("status", "unknown")); break
+else:
+    print("VM_ID="); print("VM_STATUS=not-found")
+' "$VM"
+  fi
+}
+
+# ---------- remote side (VM): emitted as a script, run via ssh / cmux vm exec ----------
+remote_script() {  # $1 = probe | l1 | l2 | undo ; $2 = arg (backup path)
+  printf 'R=%q\nSUDO=%q\nMODE=%q\nARG=%q\n' "$R_ROOT" "$R_SUDO" "$1" "${2:-}"
+  cat <<'REMOTE'
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:$PATH"
+RC="$R/etc/resolv.conf"; STUB="$R/run/systemd/resolve/stub-resolv.conf"
+t() { if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi; }
+dns_ok() { t 6 getent hosts github.com >/dev/null 2>&1; }
+# K12: login probes classify output on THIS side and print one word, never the output.
+login() {  # name, then command
+  local n="$1"; shift
+  command -v "$1" >/dev/null 2>&1 || { echo "LOGIN_$n=absent"; return; }
+  local out rc; out="$(t 20 "$@" 2>&1)"; rc=$?
+  case "$out" in
+    *"Not logged in"*|*"not logged in"*|*"Not signed in"*|*"not signed in"*|*'"loggedIn": false'*|*"No identit"*|*"no identit"*|*xpired*)
+      echo "LOGIN_$n=not-logged-in" ;;
+    *'"loggedIn": true'*|*"Logged in"*|*"Signed in"*) echo "LOGIN_$n=logged-in" ;;
+    *) [ "$rc" = 0 ] && echo "LOGIN_$n=logged-in" || echo "LOGIN_$n=unknown" ;;
+  esac
+}
+probe() {
+  echo "REACH=ok"
+  if [ -L "$RC" ]; then echo "RESOLV_LINK=$(readlink "$RC")"; else echo "RESOLV_LINK=file"; fi
+  echo "RESOLV_NS=$(awk '/^nameserver/{print $2; exit}' "$RC" 2>/dev/null)"
+  [ -e "$STUB" ] && echo "STUB=present" || echo "STUB=absent"
+  dns_ok && echo "DNS=ok" || echo "DNS=fail"
+  echo "RESOLVED=$(systemctl is-active systemd-resolved 2>/dev/null || echo unknown)"
+  t 10 resolvectl query github.com >/dev/null 2>&1 && echo "RESOLVED_QUERY=ok" || echo "RESOLVED_QUERY=fail"
+  t 6 bash -c '</dev/tcp/1.1.1.1/443' 2>/dev/null && echo "EGRESS_443=ok" || echo "EGRESS_443=fail"
+  t 6 getent hosts coderouter.cmux.internal >/dev/null 2>&1 && echo "INTERNAL_DNS=ok" || echo "INTERNAL_DNS=fail"
+  $SUDO true >/dev/null 2>&1 && echo "SUDO=ok" || echo "SUDO=no"
+  login KIRO_CLI kiro-cli whoami
+  login CLAUDE claude auth status
+  login CODEX codex login status
+  login KIROCREW kirocrew kas whoami
+}
+case "$MODE" in
+  probe) probe ;;
+  l1)  # GUARD: DNS broken, stub exists, not already linked to the stub
+    if dns_ok; then echo "SKIP=dns-already-ok"; exit 0; fi
+    [ -e "$STUB" ] || { echo "SKIP=no-stub"; exit 0; }
+    if [ -L "$RC" ] && [ "$(readlink "$RC")" = "${STUB#$R}" ]; then echo "SKIP=already-stub"; exit 0; fi
+    BK="$RC.bak-cmux-concierge-$(date -u +%Y%m%dT%H%M%SZ)"
+    $SUDO cp -a "$RC" "$BK" || { echo "ERROR=backup-failed"; exit 1; }
+    [ -e "$BK" ] || [ -L "$BK" ] || { echo "ERROR=backup-missing"; exit 1; }
+    echo "BACKUP=$BK"
+    $SUDO ln -sfn "${STUB#$R}" "$RC" || { echo "ERROR=link-failed"; exit 1; }
+    dns_ok && echo "POST=dns-ok" || echo "POST=dns-fail" ;;
+  l2)
+    if dns_ok; then echo "SKIP=dns-already-ok"; exit 0; fi
+    $SUDO systemctl restart systemd-resolved || { echo "ERROR=restart-failed"; exit 1; }
+    sleep 2; dns_ok && echo "POST=dns-ok" || echo "POST=dns-fail" ;;
+  undo)
+    case "$ARG" in "$RC".bak-cmux-concierge-*) ;; *) echo "ERROR=not-a-concierge-backup"; exit 1 ;; esac
+    [ -e "$ARG" ] || { echo "ERROR=backup-not-found"; exit 1; }
+    $SUDO rm -f "$RC" && $SUDO cp -a "$ARG" "$RC" || { echo "ERROR=undo-failed"; exit 1; }
+    echo "POST=restored"; [ -L "$RC" ] && echo "RESOLV_LINK=$(readlink "$RC")" || echo "RESOLV_LINK=file" ;;
+esac
+REMOTE
+}
+
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
+remote() {  # mode [arg]; prints KEY=VALUE, returns 255 when unreachable
+  local s; s="$(remote_script "$@")"
+  case "$TRANSPORT" in
+    local) printf '%s\n' "$s" | bash -s; return ;;
+    ssh)   printf '%s\n' "$s" | ssh "${SSH_OPTS[@]}" "$SSH_HOST" 'bash -s'; return ;;
+    exec)  [ -n "$VM_ID" ] || return 255; "$CMUX" vm exec --timeout 120 "$VM_ID" -- bash -c "$s"; return ;;
+  esac
+  if [ -n "$SSH_HOST" ] && ssh "${SSH_OPTS[@]}" "$SSH_HOST" true >/dev/null 2>&1; then
+    printf '%s\n' "$s" | ssh "${SSH_OPTS[@]}" "$SSH_HOST" 'bash -s'; return
+  fi
+  if [ -n "$VM_ID" ]; then "$CMUX" vm exec --timeout 120 "$VM_ID" -- bash -c "$s"; return; fi
+  return 255
+}
+
+PROBE=""
+get() { printf '%s\n' "$PROBE" | awk -F= -v k="$1" '$1==k{sub(/^[^=]*=/,""); print; exit}'; }
+
+run_probe() {
+  if [ -n "$PROBE_FILE" ]; then PROBE="$(cat "$PROBE_FILE")"; VM_ID="$(get VM_ID)"; VM_STATUS="$(get VM_STATUS)"; return; fi
+  local lp rp; lp="$(local_probe)"
+  PROBE="$lp"; VM_ID="$(get VM_ID)"; VM_STATUS="$(get VM_STATUS)"; [ -n "$VM_STATUS" ] || VM_STATUS="unknown"
+  if [ "$VM_STATUS" = paused ]; then rp="REACH=skipped-paused"
+  else rp="$(remote probe 2>/dev/null)" || true; [ -n "$rp" ] || rp="REACH=down"; fi
+  PROBE="$lp"$'\n'"$rp"
+}
+
+# Findings -> the lowest rung that addresses them. Prints "LEVEL|finding" lines.
+findings() {
+  local reach; reach="$(get REACH)"
+  case "$VM_STATUS" in
+    paused) echo "HUMAN|vm-paused: resuming restarts billing (spend) — operator decides"; return ;;
+    not-found) echo "HUMAN|vm-not-found: --vm matches no machine in \`cmux vm ls\`"; return ;;
+  esac
+  [ "$(get CMUX_CLI)" = absent ] && echo "INFO|cmux-cli-absent: L3/L4 unavailable on this host"
+  if [ "$reach" != ok ]; then
+    if [ "$(get SYSTEM_TUNNEL)" = up ]; then echo "L3|vm-unreachable: ssh and cmux vm exec both failed"
+    else echo "HUMAN|vm-unreachable-tunnel-down: \`cmux vpn up\` may need macOS approval"; fi
+    return
+  fi
+  if [ "$(get DNS)" != ok ]; then
+    local nosudo=0; [ "$(get SUDO)" = no ] && nosudo=1
+    if [ "$(get STUB)" = present ] && [ "$(get RESOLV_LINK)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
+      if [ "$nosudo" = 1 ]; then echo "HUMAN|no-passwordless-sudo: L1 (relink resolv.conf) cannot act"
+      else echo "L1|dns-broken: resolv.conf -> $(get RESOLV_NS) bypasses the resolved stub"; fi
+    elif [ "$(get EGRESS_443)" = ok ]; then
+      if [ "$nosudo" = 1 ]; then echo "HUMAN|no-passwordless-sudo: L2 (restart resolver) cannot act"
+      else echo "L2|dns-broken: resolv.conf already on the stub; resolver itself failing"; fi
+    else
+      echo "L4|no-egress: tcp/443 to 1.1.1.1 fails and DNS fails"
+    fi
+  fi
+  [ "$(get INTERNAL_DNS)" = fail ] && echo "INFO|internal-dns-fail: *.cmux.internal needs the platform resolver (cmux ticket)"
+  local n v
+  for n in KIRO_CLI CLAUDE CODEX KIROCREW; do
+    v="$(get LOGIN_$n)"
+    case "$v" in not-logged-in|unknown) echo "HUMAN|login-$n=$v: sign-in is human-only (never automated)" ;; esac
+  done
+}
+
+report() {
+  local f; f="$(findings)"
+  if [ "$JSON" = 1 ]; then
+    { printf '%s\n' "$PROBE"; echo "---"; printf '%s\n' "$f"; } | python3 -c '
+import json, sys
+raw = sys.stdin.read().split("\n---\n")
+facts = dict(l.split("=", 1) for l in raw[0].splitlines() if "=" in l)
+finds = [dict(zip(("level", "finding"), l.split("|", 1))) for l in raw[1].splitlines() if "|" in l] if len(raw) > 1 else []
+print(json.dumps({"tool": "cmux-concierge", "facts": facts, "findings": finds}, indent=1))'
+  else
+    echo "== facts"; printf '%s\n' "$PROBE" | sed 's/^/  /'
+    echo "== findings"; [ -n "$f" ] && printf '%s\n' "$f" | sed 's/^/  /' || echo "  none"
+  fi
+  case $'\n'"$f" in *$'\n'L[1-4]'|'*) return 3 ;; esac
+  case $'\n'"$f" in *$'\n'"HUMAN|"*) return 2 ;; esac
+  return 0
+}
+
+needs() { local f; f="$(findings)"; case $'\n'"$f" in *$'\n'"$1|"*) return 0 ;; esac; return 1; }
+
+act() {  # level description command...
+  local lvl="$1" desc="$2"; shift 2
+  if [ "$DRY_RUN" = 1 ]; then say "[$lvl] DRY-RUN would: $desc"; return 0; fi
+  say "[$lvl] ACTION: $desc"; "$@"
+}
+
+l1() { local out; out="$(remote l1)"; local rc=$?; printf '%s\n' "$out" | sed 's/^/    /'; return $rc; }
+l2() { local out; out="$(remote l2)"; local rc=$?; printf '%s\n' "$out" | sed 's/^/    /'; return $rc; }
+l3() { "$CMUX" vpn down && "$CMUX" vpn up; }
+l4() {
+  "$CMUX" vm restart "$VM_ID" || return 1
+  local waited=0
+  while [ "$waited" -lt "$REBOOT_WAIT" ]; do
+    sleep 15; waited=$((waited + 15))
+    remote probe >/dev/null 2>&1 && { say "    back after ${waited}s"; return 0; }
+  done
+  say "    not back after ${REBOOT_WAIT}s"; return 1
+}
+
+heal() {
+  run_probe; report; local rc=$?
+  [ "$rc" = 3 ] || { say "== heal: nothing a rung can fix (exit $rc)"; return "$rc"; }
+  local lvl i=0 rebooted=0
+  # Second pass (1 2) runs only after a real L4 reboot: the platform can rewrite resolv.conf again.
+  for lvl in 1 2 3 4 1 2; do
+    i=$((i + 1))
+    [ "$i" -le 4 ] || [ "$rebooted" = 1 ] || break
+    [ "$lvl" -le "$MAX_LEVEL" ] || break
+    needs "L$lvl" || continue
+    case "$lvl" in
+      1) act L1 "backup /etc/resolv.conf, then link it to the systemd-resolved stub" l1 ;;
+      2) act L2 "restart systemd-resolved" l2 ;;
+      3) if [ "$(get SYSTEM_TUNNEL)" = up ]; then act L3 "cmux vpn down && cmux vpn up" l3
+         else say "[L3] SKIP: system tunnel was down; \`cmux vpn up\` may need macOS approval (human)"; fi ;;
+      4) if [ "$ALLOW_REBOOT" != 1 ]; then say "[L4] SKIP: reboot needs --allow-reboot"
+         elif [ -z "$VM_ID" ] || [ "$VM_STATUS" != running ]; then say "[L4] SKIP: needs --vm of a running machine (never resumes/creates)"
+         else act L4 "cmux vm restart $VM_ID (running processes may be lost)" l4; [ "$DRY_RUN" = 1 ] || rebooted=1; fi ;;
+    esac
+    [ "$DRY_RUN" = 1 ] && continue
+    say "== post-check after L$lvl"; run_probe
+    report >/dev/null; rc=$?
+    if [ "$rc" != 3 ]; then report; return $?; fi
+  done
+  [ "$DRY_RUN" = 1 ] && return 3
+  report; return $?
+}
+
+case "$CMD" in
+  check) run_probe; report; exit $? ;;
+  heal)  heal; exit $? ;;
+  undo)
+    [ -n "$BACKUP" ] || die "undo needs --backup <remote-path>"
+    if [ -n "$VM" ]; then PROBE="$(local_probe)"; VM_ID="$(get VM_ID)"; fi
+    if [ "$DRY_RUN" = 1 ]; then echo "[undo] DRY-RUN would restore $BACKUP over /etc/resolv.conf"; exit 0; fi
+    remote undo "$BACKUP"; exit $? ;;
+esac

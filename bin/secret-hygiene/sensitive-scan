@@ -1,0 +1,158 @@
+#!/usr/bin/python3
+"""sensitive-scan: find payment-card data and secrets in text, value-blind.
+
+Detects
+  pan       13-19 digits (spaces/hyphens allowed) whose brand prefix AND length
+            match a card brand, with a valid Luhn check. Masked numbers (**** 1234) are not reported.
+  cvv       3-4 digits right after a CVV/CVC/"código de segurança" keyword.
+  expiry    MM/YY or MM/YYYY right after a validade/expira/valid thru/exp
+            keyword, or within 40 chars of a PAN.
+  <rule>    any high-confidence gitleaks rule (config gitleaks-agent.toml).
+
+Input
+  sensitive-scan FILE|DIR...       text files (binary files skipped)
+  sensitive-scan --jsonl -         records {"src": "...", "text": "..."} on stdin
+
+Output: one line per finding `type<TAB>src<TAB>sha8` (src = path:line or the
+record's src). Never the value. Exit 0 none, 1 findings, 2 error.
+"""
+import argparse, hashlib, json, os, re, subprocess, sys, tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+GL_CFG = os.path.join(HERE, "gitleaks-agent.toml")
+GITLEAKS = next((p for p in ("/opt/homebrew/bin/gitleaks", "/usr/local/bin/gitleaks") if os.path.exists(p)), "gitleaks")
+
+PAN_RE = re.compile(r"(?<![\w])(?<!\d[.,/-])(?:\d[ -]?){12,18}\d(?![\w]|[.,/-]\d)")
+# (prefix regex, allowed lengths): a number is a card only if both match.
+BRANDS = [
+    (r"4", (13, 16, 19)),                                     # Visa (+ Elo 4011/4389/4514/4576)
+    (r"5[1-5]|2(?:22[1-9]|2[3-9]\d|[3-6]\d\d|7[01]\d|720)", (16,)),  # Mastercard
+    (r"3[47]", (15,)),                                        # Amex
+    (r"3(?:0[0-5]|[689])", (14, 16)),                         # Diners
+    (r"6011|65|64[4-9]", (16, 19)),                           # Discover
+    (r"636368|438935|504175|451416|636297|5067|4576|606282|3841", (16, 19)),  # Elo, Hipercard
+]
+BRANDS = [(re.compile("^(?:" + p + ")"), ls) for p, ls in BRANDS]
+
+
+def is_card(d):
+    return any(rx.match(d) and len(d) in ls for rx, ls in BRANDS)
+
+
+CVV_RE = re.compile(r"(?i)\b(?:cvv2?|cvc2?|cid|c[oó]d(?:igo)?\.?\s*(?:de\s*)?seguran[cç]a|security\s*code)\b\W{0,12}(\d{3,4})(?!\d)")
+EXP_KW = re.compile(r"(?i)\b(?:validade|v[aá]lido\s*at[eé]|expira(?:[cç][aã]o)?|exp(?:iry|iration)?\.?|valid\s*thru|vencimento\s*do\s*cart[aã]o)\b\W{0,12}((?:0[1-9]|1[0-2])\s*/\s*(?:\d{2}|20\d{2}))(?![\d/])")
+EXP_RE = re.compile(r"(?<!\d)((?:0[1-9]|1[0-2])\s*/\s*(?:\d{2}|20\d{2}))(?![\d/])")
+
+
+def h8(v):
+    return hashlib.sha256(v.encode()).hexdigest()[:8]
+
+
+def luhn(d):
+    s, alt = 0, False
+    for c in reversed(d):
+        n = int(c)
+        if alt:
+            n = n * 2 - 9 if n > 4 else n * 2
+        s += n
+        alt = not alt
+    return s % 10 == 0
+
+
+def card_findings(text):
+    out = []
+    pans = []
+    for m in PAN_RE.finditer(text):
+        d = re.sub(r"\D", "", m.group(0))
+        if is_card(d) and luhn(d) and len(set(d)) > 2:
+            out.append(("pan", d))
+            pans.append(m.span())
+    for m in CVV_RE.finditer(text):
+        out.append(("cvv", m.group(1)))
+    seen = set()
+    for m in EXP_KW.finditer(text):
+        out.append(("expiry", m.group(1)))
+        seen.add(m.span(1))
+    for a, b in pans:
+        for m in EXP_RE.finditer(text, max(0, a - 40), b + 40):
+            if m.span(1) not in seen:
+                out.append(("expiry", m.group(1)))
+    return out
+
+
+def gitleaks_lines(lines):
+    """lines: list of (src, text). Returns [(rule, src, secret)]."""
+    if not lines:
+        return []
+    fd, path = tempfile.mkstemp(prefix="ss-", suffix=".txt")
+    rep = path + ".json"
+    try:
+        with os.fdopen(fd, "w") as f:
+            for _, t in lines:
+                f.write(t.replace("\n", " ") + "\n")
+        os.chmod(path, 0o600)
+        subprocess.run([GITLEAKS, "dir", path, "--no-banner", "--log-level", "error", "--config", GL_CFG,
+                        "--report-format", "json", "--report-path", rep, "--exit-code", "0"], capture_output=True)
+        res = json.load(open(rep)) if os.path.exists(rep) and os.path.getsize(rep) else []
+        return [(r["RuleID"], lines[r["StartLine"] - 1][0], r.get("Secret", "")) for r in res
+                if 0 < r.get("StartLine", 0) <= len(lines)]
+    finally:
+        for p in (path, rep):
+            if os.path.exists(p):
+                os.unlink(p)
+
+
+def scan_records(recs):
+    """recs: iterable of (src, text). Returns [(type, src, sha8)]."""
+    recs = list(recs)
+    found = []
+    for src, text in recs:
+        for kind, val in card_findings(text):
+            found.append((kind, src, h8(val)))
+    for rule, src, sec in gitleaks_lines(recs):
+        found.append((rule, src, h8(sec)))
+    return found
+
+
+def file_records(paths):
+    for root in paths:
+        files = [root] if os.path.isfile(root) else [os.path.join(d, f) for d, ds, fs in os.walk(root)
+                                                    for f in fs if "__pycache__" not in d and ".git" not in d.split(os.sep)]
+        for p in files:
+            try:
+                raw = open(p, "rb").read()
+            except OSError:
+                continue
+            if b"\0" in raw[:4096]:
+                continue  # binary
+            for n, line in enumerate(raw.decode("utf-8", "replace").split("\n"), 1):
+                if line.strip():
+                    yield (f"{p}:{n}", line)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("paths", nargs="*")
+    ap.add_argument("--jsonl", help="'-' for stdin")
+    a = ap.parse_args()
+    recs = []
+    if a.jsonl:
+        src = sys.stdin if a.jsonl == "-" else open(a.jsonl)
+        for line in src:
+            if line.strip():
+                o = json.loads(line)
+                recs.append((str(o.get("src", "?")), str(o.get("text", ""))))
+    recs += list(file_records(a.paths))
+    found = scan_records(recs)
+    for kind, src, s in found:
+        print(f"{kind}\t{src}\tsha8={s}")
+    print(f"registros: {len(recs)} achados: {len(found)}", file=sys.stderr)
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:
+        print(f"ERRO: {type(e).__name__}", file=sys.stderr)
+        sys.exit(2)
