@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# shared-browser-mcp <harness> [identity]
+# MCP stdio server: one pinned tab per client on a shared CDP Chrome.
+# Meant to be launched by an MCP client over `ssh -T <host> <this> <harness>`.
+# Local settings (CDP port, policy, limits) live in $SB_HOME/env, never in git.
+set -euo pipefail
+
+harness="${1:-}"
+identity="${2:-default}"
+name_re='^[A-Za-z0-9_-]{1,32}$'
+if [[ ! "$harness" =~ $name_re || ! "$identity" =~ $name_re ]]; then
+  echo "usage: shared-browser-mcp <harness> [identity]   (letters, digits, - and _ only)" >&2
+  exit 2
+fi
+
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+SB_HOME="${SB_HOME:-$HOME/.shared-browser}"
+# shellcheck disable=SC1091
+[[ -f "$SB_HOME/env" ]] && . "$SB_HOME/env"
+# One Chrome profile per account: identity <name> picks SB_CDP_<name> (that
+# profile's loopback CDP port) and SB_ACCOUNT_<name> (the e-mail or login the
+# pages must show, or "none" for a profile with no login). Both are required:
+# no account set means no account check, so the wrapper refuses to start.
+id_var="${identity//-/_}"
+cdp_var="SB_CDP_${id_var}"
+acct_var="SB_ACCOUNT_${id_var}"
+SB_CDP="${!cdp_var:-}"
+SB_ACCOUNT="${!acct_var:-}"
+if [[ -z "$SB_CDP" || -z "$SB_ACCOUNT" ]]; then
+  echo "shared-browser-mcp: identity '$identity' needs $cdp_var and $acct_var in \$SB_HOME/env (account = e-mail/login, or none)" >&2
+  exit 2
+fi
+# Two identities with different accounts on one CDP port = one profile holding
+# two accounts, which is how a work task lands on a personal account.
+for v in $(compgen -v SB_CDP_); do
+  other="${v#SB_CDP_}"; other_acct="SB_ACCOUNT_${other}"
+  if [[ "$other" != "$id_var" && "${!v}" == "$SB_CDP" && "${!other_acct:-}" != "$SB_ACCOUNT" ]]; then
+    echo "shared-browser-mcp: CDP port $SB_CDP is set for identities '$identity' and '$other' with different accounts; use one Chrome profile per account" >&2
+    exit 2
+  fi
+done
+# >= 0.41.0: older --pin-tab does not return tab_locked and reads flags inside values (#2238).
+ab="${SB_AGENT_BROWSER:-agent-browser}"
+ver="$("$ab" --version 2>/dev/null | awk '{print $NF}')" || ver=""
+if [[ "$(printf '%s\n' 0.41.0 "$ver" | sort -V | head -n1)" != "0.41.0" ]]; then
+  echo "shared-browser-mcp: agent-browser '${ver:-not found}' is older than 0.41.0; set SB_AGENT_BROWSER" >&2
+  exit 2
+fi
+umask 077
+mkdir -p "$SB_HOME/leases" "$SB_HOME/locks"
+
+session="${harness}-${identity}-$$-$(date +%s)"
+# Lease liveness = this lock. It is held by the proxy for its whole life and
+# released by the kernel when the process dies, however it dies.
+exec 9>"$SB_HOME/locks/$session.lock"
+flock -n 9 || { echo "shared-browser-mcp: lock busy for $session" >&2; exit 1; }
+
+export SB_HOME SB_SESSION="$session" SB_HARNESS="$harness" SB_IDENTITY="$identity"
+export SB_CDP SB_ACCOUNT SB_POLICY SB_MAX_LEASES SB_MIN_MEM_MB SB_MAX_OUTPUT SB_AGENT_BROWSER SB_TOOLS SB_PIN_TAB
+exec node "$here/../lib/proxy.mjs"

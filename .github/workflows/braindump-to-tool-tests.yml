@@ -1,0 +1,36 @@
+name: braindump-to-tool tests
+
+# The SKILL.md cites 20 behavioral tests and 13 killed mutants as its proof. A claim that is
+# only run by hand is theater, so CI runs both. No `paths:` filter, matching lens-dispatch-tests:
+# the suite is stdlib + pytest and takes ~35s (mutants spawn 9 pytest subprocesses).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  braindump-to-tool:
+    name: guard behavior + mutation check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pytest (hash-pinned, shared with the synopsis-panel suite)
+        run: python -m pip install --require-hashes -r tests/synopsis-panel-requirements.txt
+      - name: Run suite (behavior + mutants)
+        run: python -m pytest skills/braindump-to-tool/tests -q
