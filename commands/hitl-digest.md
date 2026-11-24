@@ -33,8 +33,10 @@ operator-gated no próprio ledger (só o humano resolve; silêncio nunca é acei
 ## Usage
 
 ```text
-/hitl-digest [--scope current|session|repo|vault|all] [--session-id ID[,ID]]
-             [--format tree|mermaid|html|json]
+/hitl-digest [--scope current|session|repo|vault|all] [--this-session-only]
+             [--session-id ID[,ID]]
+             [--format tree|mermaid|html|json|ask-user-question]
+             [--consumer human-live|human-deferred|machine]
              [--with-pendencies] [--hitl-md PATH] [--title TEXT]
 ```
 
@@ -43,10 +45,12 @@ operator-gated no próprio ledger (só o humano resolve; silêncio nunca é acei
 | Param | Default | Effect |
 |-------|---------|--------|
 | `--scope` | `session` (só o digest) | **no digest puro**: `session` = só os HITLs desta conversa; `all` = o ledger inteiro, legados inclusive. Qualquer outro valor (`current`/`repo`/`vault`) é escopo de *pendência*, não de ledger — nunca amplia. **com `--with-pendencies`**: recorte do panorama repassado ao `work-compass` (comportamento antigo, intacto) |
+| `--this-session-only` | off | **alias de `--scope session`** para a fatia do ledger HITL: só os itens cuja proveniência (coluna `Sessão`) nomeia esta conversa — **em qualquer modo**, inclusive no painel geral com `--with-pendencies`, onde o resto do ledger continua inteiro. É a grafia do operador (`/maos:hitl-digest --this-session-only`). Só **restringe**, nunca amplia; por isso **contradiz** `--scope all` — as duas juntas são recusadas com erro de uso (exit 2), nunca resolvidas em silêncio |
 | `--session-id` | resolvido do ambiente | identidade da conversa que **invocou** o digest (aceita lista separada por vírgula; comparação **exata** — um id é opaco, `A` ≠ `a`). Ordem: `--session-id` → `MAOS_SELF_SESSION_ID` → `CLAUDE_CODE_SESSION_ID` → `CLAUDE_SESSION_ID` → headers nativos de `PI_SESSION_FILE` com ancestrais `parentSession` explícitos (ver contrato em `synopsis-panel`). **Sem identidade resolvida o digest não mostra nada e diz o motivo** — nunca mostra tudo, nunca afirma "não existem" |
-| `--format` | `tree` | `tree` (chat/terminal) · `mermaid` · `html` (página autônoma) · `json` (envelope p/ agente) |
+| `--format` | `tree` | `tree` (chat/terminal) · `mermaid` · `html` (página autônoma) · `json` (envelope p/ agente) · `ask-user-question` (payload p/ a ferramenta AskUserQuestion — ver §Modo AskUserQuestion) |
+| `--consumer` | `human-live` | só com `ask-user-question`: classe de consumidor do §7.0 (`human-live` · `human-deferred` · `machine`) — o agente decide |
 | `--with-pendencies` | off | inclui a N-Tree de pendências com os HITL anexados; **off = só o ramo HITL** (o digest puro) |
-| `--hitl-md PATH` | o vault normal (`~/eko-engram/hitl/punch-list.md`) | caminho do `punch-list.md` SSOT. O digest passa esse caminho **explicitamente** — a descoberta padrão do motor resolve `~/Projects/eko-engram`, que é **outro clone** com outro conteúdo. Para ler outro ledger, passe o path explícito (ou defina `HITL_LEDGER`). O digest sempre diz **qual arquivo leu** e **avisa** quando ele divergir da versão rastreada — leia o aviso antes de citar a fila |
+| `--hitl-md PATH` | vault ativo (`~/Projects/eko-engram/hitl/punch-list.md`) | caminho do `punch-list.md` SSOT. Override explícito vence `HITL_LEDGER`, que vence o default. Command e motor usam o mesmo vault ativo; ausência não busca outro clone ou backup. O digest nomeia a fonte e avisa quando ela está indisponível ou diverge da versão rastreada |
 | `--title TEXT` | *(pt-BR default)* | rótulo do digest |
 
 > **Por que o default é a sessão, e não o ledger inteiro.** O `punch-list.md` é UMA fila
@@ -67,17 +71,26 @@ operator-gated no próprio ledger (só o humano resolve; silêncio nunca é acei
 > no header do OMP; não usa cache de prompt nem procura conversas parecidas.
 > `--session-id` explícito continua sendo um override exato. Sem identidade
 > resolvida, o digest **falha fechado**: nada mostrado + motivo.
+>
+> **`--this-session-only` é o alias de `--scope session`** — a mesma fatia, em
+> qualquer modo. Ele só **restringe**, então nunca amplia: combinado com
+> `--scope all` (que amplia) as duas flags são **recusadas** com erro de uso
+> (exit 2), porque resolver a contradição em silêncio entregaria ao operador
+> um ledger inteiro quando ele pediu "só esta conversa".
+>
+> **Zero nunca é mudo.** Quando a fatia desta conversa sai vazia, o digest diz
+> **quantos** itens o ledger tem e **por que** nenhum é desta conversa
+> ("0 de 16 ledger items are this conversation's — the other 16 belong to other
+> conversations or carry no provenance"). "0 mostrados" nunca pode ser lido como
+> "0 existem"; e identidade não resolvida é dita como tal ("this is NOT an empty
+> queue"), nunca como fila vazia.
 
-**Decisão explícita do SSOT de runtime HITL:** A = `$HOME/eko-engram/hitl/punch-list.md`,
-o vault normal, preserva o WIP local por cutover aditivo autorizado; B =
-`$HOME/Projects/eko-engram` é outro clone Git, não um destino implícito para HITLs ativos.
-Produtores usam o mesmo `HITL_LEDGER` com `--file "$HITL_LEDGER"`; abertura direta
-informa `--session-id`, e novos eventos declaram `session_id=ID` por evento
-(no sync, `--session-id` só afirma igualdade, não atribui um dono ao lote).
-Código é publicado via worktree/PR Git; dados de A só são conciliados por CAS aditivo
-revisado pelo root/maintainer, nunca por pull ou espelhamento cego do WIP. Usar uma nota
-já publicada em B (decisão operacional do H-0054) não move o SSOT nem afirma que HOME
-foi atualizado. A descoberta B do painel geral é um caso separado, não uma migração.
+**SSOT de runtime HITL após a migração:** `$HOME/Projects/eko-engram/hitl/punch-list.md`.
+O caminho antigo `$HOME/eko-engram` não é fallback. A seleção muda o binding,
+não copia, concilia nem altera decisões. Produtores que usam `HITL_LEDGER`
+continuam passando `--file "$HITL_LEDGER"`; a autoria da sessão continua explícita.
+Fonte ausente mantém o painel disponível, mas a fila fica **não verificada**:
+o aviso não equivale a zero decisões, e `no_decisions` permanece falso.
 
 ## Parte cognitiva (o agente decide antes de rodar o script)
 A skill é **híbrida**: antes do script determinístico, o agente interpreta —
@@ -130,12 +143,10 @@ if [ -z "$FUSE" ]; then
 fi
 [ -n "$FUSE" ] || { echo "hitl-digest: synopsis-fuse.py não encontrado" >&2; exit 2; }
 
-# LEDGER do digest: o vault NORMAL, passado EXPLICITAMENTE. A descoberta padrão do
-# motor (find_hitl_md) resolve ~/Projects/eko-engram — OUTRO clone, com outro
-# conteúdo; o digest tem de ler o vault normal (~/eko-engram), que é onde o
-# ledger é mantido. Para ler outro ledger, o operador passa --hitl-md <path>
-# explícito (o parâmetro já existe) ou define HITL_LEDGER.
-LEDGER="${HITL_LEDGER:-$HOME/eko-engram/hitl/punch-list.md}"
+# LEDGER do digest: o vault ativo após a migração. Overrides explícitos
+# (--hitl-md PATH) vencem esta seleção; HITL_LEDGER continua tendo precedência
+# sobre o default. Ausência não autoriza ler outro clone ou backup.
+LEDGER="${HITL_LEDGER:-$HOME/Projects/eko-engram/hitl/punch-list.md}"
 
 # DIGEST PURO (default) — só os gates humanos, sem rodar o coletor de pendências.
 # O compass vazio ({} via stdin) curto-circuita a agregação: o digest HITL não
@@ -153,7 +164,14 @@ SESSION_ID="${HITL_SESSION_ID:-}"
 echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \
   ${SESSION_ID:+--session-id "$SESSION_ID"} --format tree
 
+# O ALIAS do operador: `--this-session-only` = `--scope session` na fatia do ledger
+# HITL. É a MESMA invocação do digest puro acima (o default já é a sessão) — aqui
+# a intenção fica explícita, e o alias também funciona no painel com pendências.
+echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \
+  --this-session-only --format tree
+
 # LEDGER INTEIRO (global, legados inclusive) — pedido explícito, nunca o default.
+# ( `--scope all` CONTRADIZ `--this-session-only`: as duas juntas saem com exit 2.)
 echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" --scope all --format tree
 
 # digest puro em página HTML autônoma (estilo hitl-digest, dark/light)
@@ -165,6 +183,11 @@ echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" --f
 # pendências a que os gates pertencem — NÃO o painel de sinopse completo.
 # Aqui --scope all é o recorte de PENDÊNCIAS (o work-compass), comportamento antigo e intacto.
 python3 "$FUSE" --hitl-md "$LEDGER" --scope all --include pending --pending-only --format tree
+
+# O MESMO painel, com a fatia do ledger HITL restrita a esta conversa. Aqui o alias
+# SUBSTITUI `--scope all`: o escopo de pendências do motor já é "all" por default, e as
+# duas flags se contradizem (uma restringe a fatia do ledger, a outra a amplia).
+python3 "$FUSE" --hitl-md "$LEDGER" --this-session-only --include pending --pending-only --format tree
 ```
 
 > **Por que o compass vazio no caminho puro** — medido na fonte: o `synopsis-fuse.py` sempre
@@ -178,7 +201,7 @@ python3 "$FUSE" --hitl-md "$LEDGER" --scope all --include pending --pending-only
 > quando ele divergir da versão rastreada:
 >
 > ```
-> > HITL ledger: `/Users/<you>/eko-engram/hitl/punch-list.md`
+> > HITL ledger: `/Users/<you>/Projects/eko-engram/hitl/punch-list.md`
 > >
 > > ⚠ ledger read from the WORKING TREE and it diverges from the tracked version:
 > >   MODIFIED relative to HEAD; the repo is 21 commit(s) BEHIND its upstream.
@@ -188,22 +211,104 @@ python3 "$FUSE" --hitl-md "$LEDGER" --scope all --include pending --pending-only
 > rendeu **16 abertos** — o mesmo total da versão rastreada, com três itens já fechados
 > aparecendo e três reais escondidos, um deles o mais grave da fila. **O total bater é o
 > que esconde o erro**, então o total nunca serve de prova de frescura. Se o aviso
-> aparecer, meça a versão rastreada antes de reportar:
->
-> ```bash
-> git -C ~/eko-engram show '@{upstream}:hitl/punch-list.md' > /tmp/ledger.md
-> echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md /tmp/ledger.md --format tree
-> ```
+> aparecer, reporte a divergência junto com o caminho lido. Ela não autoriza
+> substituir a fila ativa por uma cópia de outro clone, backup ou versão Git.
+
+## Passo 2 opcional: rotear com o `decision-engine`
+
+O digest acima continua igual e read-only. Quando o agente quiser saber, por item, quem
+age e qual a resposta recomendada, ele passa o JSON do digest para a skill
+[`decision-engine`](../skills/decision-engine/SKILL.md). Ela devolve `DIY`, `COMPUTE` ou
+`HITL` por item, com recomendação e alternativas, e não muta nada.
+
+```bash
+DE="$(dirname "$(dirname "$(dirname "$FUSE")")")/decision-engine/bin/decision_engine.py"
+# Mesmo recorte do digest: a mesma identidade (HITL_SESSION_ID) e o mesmo --scope
+# (SCOPE vazio = o default da sessão). O passo 2 nunca muda a fatia do ledger.
+echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \
+  ${SESSION_ID:+--session-id "$SESSION_ID"} ${SCOPE:+--scope "$SCOPE"} --format json \
+  | python3 "$DE" - --format tree --sort gut
+```
+
+O envelope do engine carrega o `source` do digest (`hitl_scope`,
+`hitl_scope_unresolved`, `hitl_ledger_total`): escopo não resolvido continua sendo dito
+como tal, nunca como fila vazia.
+O renderer e o engine devem vir da mesma árvore/revisão revisada; o
+[contrato dos itens JSON](../skills/synopsis-panel/SKILL.md#contrato-dos-itens-json)
+preserva os títulos do guard e as opções/evidências sem tratar recomendação como consentimento.
+
+Antes do passo 2, ligue `SESSION_ID` e `SCOPE` ao que o digest mostrado usou: o
+`--session-id` dele e o `--scope` dele (vazio = o default da sessão). Use
+`SCOPE=all` só quando o painel mostrado leu o ledger inteiro (`--scope all`, ou
+`--with-pendencies` sem `--this-session-only`); um painel restrito à sessão nunca é
+ampliado no passo 2. A saída `tree` mostra a base de cada recomendação
+(`evidence` ou `type-default`).
+
+Só os itens `HITL` sobem ao operador. `DIY` o agente resolve e registra; `COMPUTE`
+o agente classifica e recalcula. Sem o `decision-engine` instalado, pule este passo.
+
+## Modo AskUserQuestion (`--format ask-user-question`)
+
+Garantias do contrato:
+- Fila vazia com escopo resolvido → `"ask_user_question": null` + `"no_decisions": true` e a linha `nenhuma decisão pendente — não abra AskUserQuestion`; não abra a ferramenta. Escopo não resolvido mantém `no_decisions: false`, payload nulo e o motivo explícito.
+- `machine` recebe exatamente os bytes de `--format json` (mesma saída, sem newline final).
+- Cards `human-live` continuam limitados à sessão também com `--with-pendencies`; só `--scope all` explícito amplia. Os consumidores `machine`/`human-deferred` mantêm o escopo e a saída dos renderers existentes.
+- Proveniência do ledger viaja no envelope (`hitl_source`, `hitl_source_kind`, `hitl_source_dirty`, `hitl_source_behind`, `hitl_warning`) e no `preamble` (≤80 colunas, avisos e metadados longos quebrados sem perda). O escopo e sua resolução também acompanham o payload; identidade ausente não é fila vazia.
+- Rótulos de opção são únicos mesmo após corte (sufixo ` (2)`); uma opção estruturada solitária ganha `Manter pendente`.
+
+Quando o harness tem a ferramenta `AskUserQuestion` (Claude Code ou compatível) **e** o
+consumidor é `human-live` (`end-of-action-briefing-protocol` §7.0), o agente apresenta as
+decisões HITL pela ferramenta em vez das letras do digest em texto. Spec: `hitl-digest-spec`
+§0 (uma só superfície de resposta). O script não enxerga a ferramenta nem o leitor: quem
+classifica é o agente, que passa `--consumer`.
+
+| `--consumer` | Saída |
+|---|---|
+| `human-live` | envelope `hitl-digest/ask-user-question/v1`: `preamble` (linhas de texto) + `ask_user_question.questions` (pronto para a ferramenta) |
+| `human-deferred` | o digest em texto de sempre (`tree`), byte a byte |
+| `machine` | o envelope JSON de sempre (`json`); nunca um digest em texto |
+
+Regras do payload (cada uma vem do spec, nenhuma é nova):
+- 1 card = 1 pergunta; `header` = o id `H-NNNN` (≤12 colunas); `multiSelect: false`.
+- A pergunta respondível contém `Decidir` integral, inclusive valores e condições de autorização; só o título de registro no preâmbulo é resumido para caber em 80 colunas.
+- No máximo 3 cards; um 4º só quando há mais de 3 itens ⏫ (URGENTE). O resto vai para a linha
+  `⏭ próximo digest`, que não é respondível.
+- Opções, nesta ordem de fonte: (1) `options` estruturadas no item (`--hitl-json`); (2) as opções
+  que a própria linha do ledger lista (`opções: a, b, ou c`); (3) as disposições do TIPO do item
+  (credencial · gasto · irreversível · envio · negócio) + `Manter pendente`. Nunca inventadas por item.
+- `(recomendado)` só na opção estruturada com `recommended: true` **e** `evidence` textual não vazia após remover espaços (§3: sem ponteiro de evidência não há recomendação). Ela vem primeiro. Sem ela, o preâmbulo diz
+  `sem recomendação: falta ponteiro de evidência`.
+- O preâmbulo traz o cabeçalho com o código `K<YYMMDD>-<HHMM>-<s8>` (data e hora locais da máquina; sem id de sessão raiz, sem
+  código), a linha de contagem, uma linha `· … aberta no AskUserQuestion` por card (registro durável,
+  sem letras e sem `Responda:`), o `⏭` e `harness · repo · sessão`. Cada linha cabe em 80 colunas.
+- **Fatia vazia, ledger cheio ⇒ o preâmbulo diz o tamanho do ledger.** Quando a fatia desta
+  conversa não tem nenhum card, o preâmbulo acrescenta `0 of N ledger items are this
+  conversation's — the other N belong to other conversations or carry no provenance`
+  (`--scope all` mostra o ledger inteiro). A linha `nenhuma decisão pendente` (que é da spec)
+  continua lá — o que muda é que ela **nunca é lida sozinha**: "0 decisions" sem o total do
+  ledger é o "0 = não existe" que o DoD proíbe.
+- Determinístico: mesma entrada + `--now` + `--session-id` + mesmo fuso local ⇒ mesmo payload. Timestamps dos envelopes de máquina continuam em UTC.
+
+```bash
+echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \
+  --format ask-user-question --consumer human-live --repo "$(basename "$PWD")"
+```
+
+O agente imprime o `preamble` como texto e, se o payload não for nulo, chama `AskUserQuestion`
+com `ask_user_question.questions`. Se a pergunta expirar sem resposta, no próximo digest passe
+`--consumer human-deferred` para usar o texto em vez de abrir a ferramenta novamente (§0).
 
 ## Examples
 
 ```text
 /hitl-digest                                   # o digest puro (agulhas) DESTA CONVERSA, árvore no chat
+/hitl-digest --this-session-only               # o mesmo digest, com a intenção explícita (alias de --scope session)
 /hitl-digest --scope all                       # o ledger inteiro, legados inclusive (global, explícito)
 /hitl-digest --session-id 01a13c82-…          # identidade da conversa invocadora, explícita
 /hitl-digest --format html                     # página autônoma estilo hitl-digest
 /hitl-digest --with-pendencies --scope repo    # pendências do repo + os HITL anexados
 /hitl-digest --format json                     # envelope JSON p/ outro agente consumir
+/hitl-digest --format ask-user-question        # cards prontos p/ a ferramenta AskUserQuestion
 ```
 
 ## Fronteiras (o que este command NÃO faz)

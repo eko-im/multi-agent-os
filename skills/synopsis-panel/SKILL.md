@@ -13,14 +13,14 @@ description: |
   precisa de mim num só lugar", "árvore de pendências com os gates humanos marcados",
   "synopsis panel", "unified pendencies + HITL view". Read-only; o script nunca decide
   nem muta — só funde e desenha.
-prompt_version: "0.1.0"
+prompt_version: "0.2.0"
 type: skill
 spec: AAIF / agentskills.io
 applicable_hosts: [Claude Code, Cursor, GitHub Copilot, Aider, any AAIF-compliant agent]
 allowed-tools: [Bash, Read]
 cycles_completed: 0
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
   scope: AAIF cross-vendor
   family: work-landscape
   cross_link_slug: synopsis-panel
@@ -85,6 +85,16 @@ HITL       → ┌────────────────────�
 > **lê** o punch-list. A única lógica nova é a fusão (juntar um item HITL à pendência
 > certa por token de Link/ID) + os renderers.
 
+
+## Modo AskUserQuestion (hitl-digest)
+
+Resolva `FUSE` e `LEDGER` conforme [`hitl-digest`](../../commands/hitl-digest.md) §O que o command executa.
+Então `echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" --format ask-user-question --consumer human-live`
+entrega os cards da sessão invocadora prontos para `AskUserQuestion`, só para consumidor
+`human-live` num harness que tem a ferramenta. `human-deferred` recebe o `tree` de sempre e
+`machine` o `json` de sempre. Contrato, fontes das opções e regra de recomendação:
+[`hitl-digest`](../../commands/hitl-digest.md) §Modo AskUserQuestion. Testes: [`test_synopsis_hitl_auq.py`](../../tests/test_synopsis_hitl_auq.py).
+
 ## Parte cognitiva (o que o agente decide antes de rodar o script)
 A skill é **híbrida**: antes do script determinístico, o agente interpreta —
 1. **Escopo / world** — o pedido é do panorama todo, da sessão, do repo atual, do vault?
@@ -105,14 +115,14 @@ bin/synopsis-fuse.py --scope all --include pending --format tree
 
 # caminho barato: passe payloads já capturados (sem re-rodar coletores)
 work-compass-aggregate.py --json --sort eisenhower --pendency-scope repo --include pending > /tmp/wc.json
-bin/synopsis-fuse.py --compass-json /tmp/wc.json --hitl-md ~/eko-engram/hitl/punch-list.md --format html > painel.html
+bin/synopsis-fuse.py --compass-json /tmp/wc.json --hitl-md ~/Projects/eko-engram/hitl/punch-list.md --format html > painel.html
 
 # só o painel HITL (os gates humanos), em árvore.
 # O `--compass-json -` com `{}` no stdin NÃO é opcional aqui: sem ele o script invoca o
 # work-compass vivo e roda os coletores (minutos). O digest HITL não precisa da N-Tree.
-# O ledger é o vault NORMAL, passado explicitamente (o comando /hitl-digest faz o mesmo):
-# a descoberta padrão do motor resolve ~/Projects/eko-engram, que é OUTRO clone.
-echo '{}' | bin/synopsis-fuse.py --hitl-only --compass-json - --hitl-md ~/eko-engram/hitl/punch-list.md --format tree
+# O default é o vault ativo ~/Projects/eko-engram; HITL_LEDGER e --hitl-md
+# permitem escolher explicitamente outro arquivo, sem fallback para outras filas.
+echo '{}' | bin/synopsis-fuse.py --hitl-only --compass-json - --format tree
 
 # envelope JSON unificado para outro agente consumir
 bin/synopsis-fuse.py --format json
@@ -122,11 +132,12 @@ bin/synopsis-fuse.py --format json
 | Flag | Default | Significado |
 |---|---|---|
 | `--compass-json F\|-` | — (chama o motor) | payload `work-compass --json` pronto, ou `-` stdin; omitido ⇒ chama o motor vivo |
-| `--hitl-md F` | descobre (o comando `/hitl-digest` passa o **vault normal** `~/eko-engram/hitl/punch-list.md` explicitamente) | caminho do `punch-list.md` SSOT. A descoberta resolve a cópia do **working tree** — certo para quem está editando o ledger de propósito. Por isso todo render **diz qual arquivo leu** e **avisa** quando ele está modificado contra o `HEAD` ou o repo está atrás do upstream (ver abaixo) |
-| `--hitl-json F\|-` | — | array HITL já parseado (pula o parse do md); vazio/ausente = sem ledger (válido) |
+| `--hitl-md F` | `HITL_LEDGER` ou `~/Projects/eko-engram/hitl/punch-list.md` | caminho do `punch-list.md` SSOT, igual ao default de `/hitl-digest`. CLI explícito vence ambiente. Lê o **working tree**, nomeia a fonte e avisa sobre divergência ou indisponibilidade; ausência não busca outro clone ou backup |
+| `--hitl-json F\|-` | — | array HITL já parseado (pula o parse do md); arquivo/stdin vazio é uma fonte disponível e vazia; arquivo JSON ausente continua sendo erro |
 | `--format` | `tree` | `tree` · `mermaid` · `html` · `json` |
 | `--scope` | `all` (pendências) · `session` (ledger HITL, em `--hitl-only`) | `current\|session\|repo\|vault\|all`. Escopo de **pendência** (repassado ao work-compass) e, em `--hitl-only`, escopo do **ledger HITL**: sem `--scope` o digest mostra só os itens desta conversa; `--scope all` traz o ledger inteiro, legados inclusive; qualquer outro valor **nunca** amplia |
 | `--session-id ID[,ID]` | resolvido do ambiente | identidade da conversa que invocou o render (comparação **exata** — um id é opaco, `A` ≠ `a`). Ordem: `--session-id` → `MAOS_SELF_SESSION_ID` → `CLAUDE_CODE_SESSION_ID` → `CLAUDE_SESSION_ID` → headers nativos de `PI_SESSION_FILE` com ancestrais `parentSession` explícitos. `PI_SESSION_ID` é deliberadamente ignorado: é por *processo*. Overrides não expandem para ancestrais. Sem identidade resolvida o escopo de sessão **falha fechado** (nada mostrado + motivo) |
+| `--this-session-only` | off | **alias de `--scope session`** na fatia do ledger HITL: só os itens cuja proveniência nomeia esta conversa, **em qualquer modo** (inclusive no painel geral, onde o resto do ledger fica inteiro). Só restringe — nunca amplia — por isso **contradiz** `--scope all`: as duas juntas saem com erro de uso (exit 2), nunca resolvidas em silêncio |
 | `--include` | `pending` | `pending` (só não-resolvidas) · `all` |
 | `--hitl-only` | off | renderiza só o ramo HITL |
 | `--pending-only` | off | mantém nós flagged / com HITL |
@@ -143,6 +154,11 @@ uma conversa que tinha **2** gates seus.
 - **O default em `--hitl-only` é a sessão**: só os itens cuja proveniência (a coluna
   `Sessão` do próprio ledger) nomeia esta conversa.
 - **Só `--scope all` amplia** — pedido explícito, nunca inferido.
+- **`--this-session-only` é o alias de `--scope session`** — a mesma fatia, em qualquer
+  modo (inclusive no painel geral, onde o resto do ledger continua inteiro). Como só
+  restringe, ele **contradiz** `--scope all`: as duas juntas são recusadas com erro de
+  uso (exit 2), porque resolver a contradição em silêncio entregaria um ledger inteiro
+  a quem pediu "só esta conversa".
 - **Item sem proveniência é legado**: entra no escopo global e nunca no da sessão.
   Mencionar o ID de um item no chat não o torna seu; a prova é o ledger. Um ledger
   escrito antes da coluna existir é lido assim: todas as suas linhas são legadas.
@@ -166,12 +182,24 @@ No envelope JSON os mesmos fatos vêm em `meta.hitl_scope`, `meta.hitl_scope_rea
 `meta.hitl_scope_unresolved` e `meta.hitl_ledger_total` (o total **antes** do recorte,
 para "0 mostrados" nunca ser lido como "0 existentes").
 
+### Contrato dos itens JSON
+
+Além dos campos normalizados do ledger, cada item preserva `title`, `titulo`,
+`idade` e `options`, quando presentes, sem converter seus tipos. O `decision-engine`
+consome os títulos para o guard e reusa `options`: cada opção admite `label`,
+`description`, `recommended`, `evidence` e `confidence`. Só `evidence` string não vazia
+habilita a recomendação evidenciada; `opcoes` e evidência avulsa não são aliases.
+Metadados extras não substituem os campos canônicos nem o escopo/proveniência
+calculados pelo renderer. Opções e recomendações são dados consultivos, nunca
+consentimento, aprovação ou resolução do gate.
+
+
 ### Procedência do ledger (qual arquivo foi lido)
 
 Todo render nomeia o ledger que leu, e avisa quando ele diverge da versão rastreada:
 
 ```
-> HITL ledger: `/Users/<you>/eko-engram/hitl/punch-list.md`
+> HITL ledger: `/Users/<you>/Projects/eko-engram/hitl/punch-list.md`
 >
 > ⚠ ledger read from the WORKING TREE and it diverges from the tracked version:
 >   MODIFIED relative to HEAD; the repo is 21 commit(s) BEHIND its upstream.
@@ -179,7 +207,10 @@ Todo render nomeia o ledger que leu, e avisa quando ele diverge da versão rastr
 ```
 
 No envelope JSON os mesmos fatos vêm em `meta.hitl_source`, `meta.hitl_source_kind`,
-`meta.hitl_source_dirty`, `meta.hitl_source_behind` e `meta.hitl_warning`.
+`meta.hitl_source_available`, `meta.hitl_source_dirty`, `meta.hitl_source_behind` e
+`meta.hitl_warning`. Markdown ausente preserva a degradação não fatal do painel,
+mas informa fonte indisponível, `hitl_ledger_total: null` e, no modo AskUserQuestion,
+`no_decisions: false`. Uma fonte disponível sem itens continua sendo fila vazia válida.
 
 **Por que avisar e não trocar o arquivo.** Medido em 2026-10-26: um vault 21 commits
 atrás do upstream, com o ledger modificado, rendeu **16 abertos** — exatamente o mesmo
@@ -243,6 +274,7 @@ fusões falso-positivas (E5). Dormente-por-design caso contrário.
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
+| 0.2.0 | 2026-10-27 | **`--this-session-only`** — o alias de `--scope session` para a fatia do ledger HITL (ticket eko-backlog#231). Nova flag no motor: só os itens cuja proveniência (coluna `Sessão`) nomeia esta conversa, **em qualquer modo** (inclusive no painel geral, onde o resto do ledger continua inteiro). Como o alias só **restringe**, ele **contradiz** `--scope all` — as duas juntas saem com erro de uso (exit 2), nunca resolvidas em silêncio (resolver em favor da ampliação entregaria um ledger inteiro a quem pediu "só esta conversa"). `--scope session` passa a ter o mesmo efeito no painel geral (antes só no digest puro), para que o alias seja um alias de verdade e não uma segunda grafia de outra coisa. **Zero nunca é mudo**: a fatia vazia de uma fila cheia diz "0 de N ledger items are this conversation's" e por quê — "0 mostrados" não pode ser lido como "0 existem" (a mesma linha agora entra também no preâmbulo do `ask-user-question`, para que a linha da spec "nenhuma decisão pendente" nunca fique sozinha ao lado de um ledger cheio). Testes: `skills/synopsis-panel/tests/test_hitl_session_scope.py` (alias, contradição, o caso "0 de N"). |
 | 0.1.0 | 2026-10-21 | Bootstrap — a camada fina de **fusão + render** que faltava: funde a N-Tree de pendências (`work-compass --json`) + o ledger HITL (`punch-list.md`) num só modelo e renderiza tree/mermaid/HTML (humano) + JSON (agente). Net-new = só o modelo de fusão (anexa HITL à pendência por token de Link/ID; HITL órfão vira ramo próprio, nunca descartado) + os 4 renderers + self-heal. Reimplementa zero: agregação/Eisenhower ← work-compass (SSOT), ledger ← hitl-punch-list (SSOT), visual ← hitl-digest house-style. Nomeada via `anima` (`synopsis-panel`; rejeitado `confluence-panel` por colisão trademark Atlassian, `ntree-hitl-panel` por gloss-independence fraca). Forjada via pipeline MAOS (o DDR rodou EXPAND→FILTER→HARMONIZE). **forged-not-yet-dogfooded** (bounded: thin layer + PR, sem dogfood/merge). |
 
 ## License
