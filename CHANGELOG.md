@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `cloud-iac-engineer` agent
+
+- New agent `agents/cloud-iac-engineer.md` (generic, `latent`): Terraform/OpenTofu networking and security groups, managed-database networking and TLS enforcement, IAM roles and workload identity, drift detection, import of hand-made resources ending in a no-op plan, and plan-review discipline. It declares the `SEAT-PROFILE.md` seat profile (L5; L4 for state restructuring and database cutovers) and a `latent` role contract; applies to shared or production environments, stateful destroy/replace and shared-state edits stay with the human owner.
+- `agents/README.md` and `agents/COWORK-AUTONOMY-POLICY.md` list the agent; the Role Coverage Map row "DevOps (AWS/IaC/Terraform)" points to it, with the external plugin agents kept as optional extras.
+- The `devsecops-engineer` first proposed in the same PR was dropped: the version in main (#504), with `security-incident-responder` and `secops-engineer`, already covers its scope.
+
 ### Fixed — on-call-shift recovery follow-ups
 
 - `recover_child` now refuses `STALE_CHECKPOINT_IN_FLIGHT` when an item that was in flight at a failed child save is no longer in flight in the new checkpoint and is not recorded as completed in its log. The failed in-flight sets of the same pending entry are unioned for every failed save that advanced the floor (tuple >= the current floor), and an earlier failure never loses items already in the floor, so a reload to an older revision followed by another failed save cannot erase the item. A checkpoint with non-string `in_flight` or logged ids is refused as `CHECKPOINT_UNREADABLE` instead of raising `TypeError`.

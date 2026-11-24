@@ -28,6 +28,7 @@ Agent definitions for the multi-agent-os plugin. These define specialized person
 | solution-architect | `solution-architect.md` | Solution design: boundaries, contracts, NFRs, ADRs, topology, expand/contract, rollback design (L4; proposes L1) |
 | devsecops-engineer | `devsecops-engineer.md` | DevSecOps/AppSec: threat model, secrets hygiene, supply chain, IAM, authz/RLS review, negative tests, containment (L4) |
 | devops-engineer | `devops-engineer.md` | Hosted CI/CD + PaaS deploys (`specialty`), reproducible builds, previews, release records, rollback (L5; L4 release plans) |
+| cloud-iac-engineer | `cloud-iac-engineer.md` | Cloud/IaC: Terraform/OpenTofu networking, managed-DB TLS, IAM/workload identity, drift, import, plan review (L5; L4 state restructuring and DB cutovers) |
 | security-incident-responder | `security-incident-responder.md` | Security incident response for secrets/exposure findings (contain → rotate → prevent); prepares and verifies, never rotates itself |
 | secops-engineer | `secops-engineer.md` | SecOps/AppSec: exposure response, rotation runbooks for the owner, secret-scan triage (locations only), CVE fix PRs (v0.1.0, dogfooding) |
 | release-engineer | `release-engineer.md` | Release/CI: merge convergence across repos, fail-closed CI gates, pipeline parity, branch/release model (v0.1.0, dogfooding) |
@@ -73,11 +74,11 @@ Generic, product-agnostic delivery specialists materializing the standard softwa
 roles. Compose with the existing registry (most roles already covered — these fill the genuine
 per-stack/role gaps; see "Role Coverage Map" below).
 
-**Autonomy posture** (all 11): per [`COWORK-AUTONOMY-POLICY.md`](./COWORK-AUTONOMY-POLICY.md) —
+**Autonomy posture** (all 12): per [`COWORK-AUTONOMY-POLICY.md`](./COWORK-AUTONOMY-POLICY.md) —
 co-work as peers and **substitute over the human with NO-HITL when `autonomy_score ≥ 0.90`** in
 their own domain (a stricter bar than the default HIGH ≥0.85). ⛔ Carve-outs HOLD even at ≥0.90
 (HUMAN_DOMAIN · merge→main/prod = HITL human-owner · ABSOLUTE guardrails); council-before-HITL first. Seats still
-`latent` (`solution-architect`, `devsecops-engineer`, `devops-engineer` until promoted) hold no
+`latent` (`solution-architect`, `devsecops-engineer`, `devops-engineer`, `cloud-iac-engineer` until promoted) hold no
 NO-HITL grant: every domain decision goes to the human owner.
 
 - `angular-frontend-engineer` — Angular SPA implementation/review
@@ -90,6 +91,7 @@ NO-HITL grant: every domain decision goes to the human owner.
 - `solution-architect` — solution design, contracts, NFRs, ADRs (generic; proposes, never decides, L1 direction)
 - `devsecops-engineer` — threat modeling, supply chain, IAM, authz review (generic; privacy stays with DPO)
 - `devops-engineer` — hosted CI/CD + PaaS (`specialty`); Kubernetes/GitOps stays with `gitops-engineer`
+- `cloud-iac-engineer` — Terraform/OpenTofu cloud infrastructure, drift, import, plan review (generic; in-cluster state stays with `gitops-engineer`)
 - `security-incident-responder` — secrets exposure / CSIRT lifecycle, prepares and verifies (generic)
 
 #### Role Coverage Map (reuse-first — most cowork roles already exist)
@@ -107,7 +109,7 @@ that used them keeps working.
 
 | Cowork role | Coverage | Provider |
 |---|---|---|
-| DevOps (AWS/IaC/Terraform) | EXISTS | `cloud-infrastructure:cloud-architect` · `terraform-specialist` |
+| DevOps (AWS/IaC/Terraform) | **GAP→NEW** | `cloud-iac-engineer` · optional: `cloud-infrastructure:cloud-architect` · `terraform-specialist` |
 | DevOps (Fly/Render/Railway/CI-CD) | **GAP→NEW** | `devops-engineer` (hosted CI/CD + PaaS `specialty`) · optional: `cloud-infrastructure:deployment-engineer` · Kubernetes/GitOps → `maos:gitops-engineer` |
 | Infra Engineer (K8s/Network) | EXISTS | `cloud-infrastructure:kubernetes-architect` · `network-engineer` |
 | DevSecOps / Security | **GAP→NEW** | `devsecops-engineer` · optional: `architecture:security-reviewer` · `code-modernization:security-auditor` · `maos:governance-auditor` (audit) |
