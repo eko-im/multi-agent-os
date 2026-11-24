@@ -1,0 +1,11 @@
+version: 1
+mode: observe
+rules:
+  - purpose: "Every change takes one reviewer who is not its author. Claude comments and never approves."
+    paths: ["**"]
+    verdict: { claude: comments, seats: [{ count: 1, from: [humans, "!pr/authors"] }] }
+    advisory: ["claude/code_review"]
+  - purpose: "A change to the review rules takes one reviewer who is not its author."
+    paths: ["**/.claude/**", "**/REVIEW.md", "**/.gitattributes", "**/.gitmodules"]
+    nested: inherit
+    verdict: { claude: comments, seats: [{ count: 1, from: [humans, "!pr/authors"] }] }
