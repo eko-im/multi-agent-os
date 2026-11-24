@@ -43,6 +43,8 @@ Tier 6  External reach        → maos-mcp-hub (6 typed Atlassian gateways)
 
 For the complete generated inventory and current count, read [`../README.md`](../README.md).
 
+For session recovery, re-entry, or prioritization, use the canonical [session orientation selector](./SKILL.md#session-orientation-selector); this registry points to that decision rather than maintaining another selector.
+
 | Cluster | Skills |
 |---|---|
 | Orchestration/delegation | `agent-select` · `agentic-delegation` · `delegate-governance` · `context-prep` · `auto-pilot` |

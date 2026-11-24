@@ -1,6 +1,6 @@
 ---
 name: git-cycle-sentinel
-description: Rode o ciclo-git completo (add · worktree · pr-cycle · merge · boy-scout) como processo autônomo — o agente só SALVA, a sentinela cicla; repo-aware, idempotente; gate não se pula (sem dismiss, sem --no-verify, sem --admin, sem bypass de assinatura); merge só com --match-head-commit
+description: Rode o ciclo-git completo (add · worktree · pr-cycle · merge · boy-scout) como processo autônomo — o agente só SALVA, a sentinela cicla; repo-aware, idempotente; gate não se pula (sem dismiss, sem --no-verify, sem --admin); assinatura opcional (D2); merge só com --match-head-commit
 ---
 
 # /git-cycle-sentinel Command
@@ -42,9 +42,8 @@ sobre a [`git-cycle-sentinel` skill](../skills/git-cycle-sentinel/SKILL.md).
   contornar. Forte = os três, sem contorno (proteção clássica com as mesmas regras equivale a
   ruleset). Fraco para o ator **não libera nada**: sem `--admin`, sem bypass, sem push direto na base.
 - **Gate não se pula**: sem dismiss de review, sem pular check obrigatório, sem `--no-verify`, sem
-  bypass de assinatura (inclusive temporário), sem `gh pr merge --admin`.
-- **Assinatura verificada de fato** no ambiente que commita. Onde o repo exige e o ambiente não
-  assina, não commita dali. Não regride e não força onde `gpgsign=false`.
+  `gh pr merge --admin`.
+- **Assinatura opcional** (A4, D2 2026-11-21): tenta assinar onde `gpgsign=true`; se o assinador falhar, commita sem assinatura e segue. Só ruleset `required_signatures` obriga.
 - **Preflight**: raiz fora da default (outra branch, HEAD destacado, worktrees anexadas) não é
   trocada nem limpa. O trabalho segue numa worktree nova a partir de `origin/<default>`, preservando
   o que está na raiz.
@@ -133,8 +132,8 @@ pr        #<n>                     head <sha>  merge <sha>  idmp theme-repo-YYYY
   empurra e abre o PR. O coordenador sem credencial própria lê o portão, comenta o status (rotina,
   sem segredo, PII nem nome privado), rotula e pode mesclar PR técnico se os guardrails passarem,
   pelo conector, e pede ao executor o que mutar.
-  Ninguém faz checkout nas máquinas do usuário. `--admin`, dismiss, `--no-verify` e bypass de
-  assinatura são nunca. A tabela completa está na skill.
+  Ninguém faz checkout nas máquinas do usuário. `--admin`, dismiss e `--no-verify` são nunca. A
+  tabela completa está na skill.
 - Convergência de refutação: [`skills/converge/SKILL.md`](../skills/converge/SKILL.md).
 - Genesis: skill de pipeline de ferramentas agênticas do projeto (método e autoria) + agente de nomeação do projeto (nome).
 - Composes (delega, não reimplementa): `worktree-policy` · `anti-conflict` · `hierarchical-merge` ·

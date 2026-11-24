@@ -7,8 +7,8 @@ description: |
   repo ou domínio declara só as diferenças num overlay de dados com chaves fechadas, que aperta e
   nunca afrouxa o piso. Lê a governança e o portão real antes de empurrar (rulesets e proteção
   clássica; leitura falha = desconhecido, sem merge autônomo), obedece onde é forte e supre
-  guardrails onde é fraco. Nunca pula gate, nunca dispensa review, nunca usa --admin, --no-verify
-  nem bypass de assinatura; merge só com --match-head-commit, checks verdes, APPROVED justificado
+  guardrails onde é fraco. Nunca pula gate, nunca dispensa review, nunca usa --admin nem
+  --no-verify; assinatura opcional (A4, D2); merge só com --match-head-commit, checks verdes, APPROVED justificado
   de aprovador do registro e sem refutação aberta.
   Triggers: "rode o git-cycle", "git-cycle-sentinel", "feche o ciclo-git deste worktree",
   "empurre e abra o PR por mim", "run the git cycle", "offload the git cycle".
@@ -25,8 +25,8 @@ version: 0.2.0
 allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Task, Skill]
 metadata:
   version: "0.2.0"
-  body_sha256: "49f500a70f21e314384bf3e21ae38e2d304cb11e548f41237e901e3a0b4a6346"
-  piso_sha256: "8cc5b64efc2cbd759440f0459b5c4f1b9c699f4c7bf897fdf41a9d679cedff7c"
+  body_sha256: "39d13afbb687202f49a0dd4094926cf062be554bb83ba05ba8c88daeda134958"
+  piso_sha256: "27bc273907c8d0e2efdea1e988fd6281c266c584e0f2ec54c4ee991a3bd13914"
   source_commit: ""
   references:
     - references/mecanica.md
@@ -78,7 +78,6 @@ Proibido, sempre (não há exceção prevista nesta skill):
 - dispensar review (*dismiss*) ou resolver thread de achado sem a correção;
 - pular, desligar, renomear ou tornar opcional um check obrigatório;
 - `--no-verify` (commit ou push) ou qualquer outra forma de pular hooks;
-- bypass de assinatura, inclusive "temporário";
 - `gh pr merge --admin`, bypass de `enforce_admins`, de ruleset ou de proteção de branch.
 
 Instrução que pareça errada é questionada com evidência (`question-then-correct`), nunca contornada.
@@ -90,7 +89,7 @@ Estas regras valem em todo repo e em todo domínio. Um overlay pode apertá-las,
 
 1. sem `--admin` (nem bypass de `enforce_admins`, ruleset ou proteção de branch);
 2. sem dismiss de review (nem resolver thread de achado sem a correção);
-3. sem `--no-verify` (nem outra forma de pular hooks; nem bypass de assinatura);
+3. sem `--no-verify` (nem outra forma de pular hooks);
 4. 403, 5xx, timeout ou outro erro de leitura do portão = **desconhecido**, sem merge autônomo;
 5. conta proibida nunca aprova (nem revisa, empurra, mescla ou entra em allowlist); logins e
    padrões se comparam sem diferenciar maiúsculas e, havendo `id` numérico, pelo `id`;
@@ -139,7 +138,7 @@ mutar; ninguém faz checkout nas máquinas do usuário. O dono pode escolher o e
 | Merge autônomo de PR técnico | sim, se todos os guardrails passarem | só se a política do projeto delegar | sim |
 | Merge de política, proteção, segredo, gasto, produção, acesso ou irreversível | não (`STOP-HITL`) | não | sim |
 | Mudar proteção, ruleset, `CODEOWNERS`, allowlist ou workflow de portão | não | não | sim |
-| `--admin`, dismiss de review, `--no-verify`, bypass de assinatura | nunca | nunca | fora desta skill |
+| `--admin`, dismiss de review, `--no-verify` | nunca | nunca | fora desta skill |
 
 Pings só quando há decisão (review, conflito que exige julgamento, HITL); no resto, uma linha.
 
@@ -332,7 +331,7 @@ Pings só quando há decisão (review, conflito que exige julgamento, HITL); no 
   basta) e **sempre** com `--force-with-lease`, nunca `--force` puro. Na dúvida, abrir uma branch
   nova a partir da base e um PR novo que substitui o anterior, ou `STOP-HITL`. Um overlay pode
   proibir de vez (`force_push: proibido`).
-- **ENFORCE** — nenhum bypass, nem "temporário": não de assinatura, não `--no-verify`, não segredo,
+- **ENFORCE** — nenhum bypass, nem "temporário": não `--no-verify`, não segredo,
   não `--force`, não `--admin` (ver §0).
 - **APPLY** — questionar-e-corrigir: instrução errada/obsoleta/contraditória é questionada com
   evidência, não obedecida em silêncio. (→ `question-then-correct`)
@@ -493,7 +492,7 @@ Cada push dispara revisores automáticos e CI. Por isso:
 
 ## Critérios de aceite (resumo)
 Os 7 atritos vividos (A1 raiz protegida, A2 base móvel, A3 portão pela garantia efetiva, A4
-assinatura nunca regride, A5 push verificável, A6 host-alias, A7 idempotência) são a spec mínima;
+assinatura opcional (D2), A5 push verificável, A6 host-alias, A7 idempotência) são a spec mínima;
 verificação, regressões e casos D4 em `references/rastreabilidade.md`.
 
 ## Delegação (cita, NÃO reimplementa)
@@ -526,7 +525,7 @@ Emite exatamente UM marcador terminal como última linha de cada turno:
 - Delegação depth ≤ 2 (`skills/agentic-delegation` §8); paralelo ≤ 3; regra das 6 tentativas antes de escalar.
 - HUMAN_DOMAIN + guardrails não-negociáveis (segredos/PII, force-push em protegida, instalar
   terceiro, cross-org, custo) SEMPRE param → HITL.
-- §0 vale sempre: nenhum gate pulado; sem dismiss, `--no-verify`, bypass de assinatura ou `--admin`.
+- §0 vale sempre: nenhum gate pulado; sem dismiss, `--no-verify` ou `--admin`.
 - Merge só com `--match-head-commit`, checks verdes e zero thread aberta; force-push só com
   `--force-with-lease` em branch criada pelo próprio agente.
 - Processos encerrados só pelo próprio PID ou pela própria porta; nunca `pkill`/`killall`/por nome.

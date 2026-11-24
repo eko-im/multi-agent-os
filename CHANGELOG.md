@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed — git-cycle-sentinel 0.2.0 (gates sem bypass e merge preso ao SHA)
 
-- `skills/git-cycle-sentinel/SKILL.md` 0.1.1 → 0.2.0. Gate não se pula: proibidos dismiss de review, pular check obrigatório, `--no-verify`, bypass de assinatura e `gh pr merge --admin`.
+- `skills/git-cycle-sentinel/SKILL.md` 0.1.2 → 0.2.0. Gate não se pula: proibidos dismiss de review, pular check obrigatório, `--no-verify` e `gh pr merge --admin`. Assinatura segue opcional (A4, D2/#602).
 - Contas de outro domínio ou organização não aprovam nem atuam.
 - Decisões técnicas são autônomas; política, credenciais, gastos, irreversível, produção e ampliação de acesso exigem aprovação explícita do humano dono.
 - Merge só com `--match-head-commit`, checks verdes e zero threads abertas; a linha de status cita o SHA do head e o do merge.
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Portão classificado pela garantia efetiva (proteção clássica de branch equivale a ruleset).
 - Nota sobre harness com agente de nuvem: o agente de nuvem cria a branch, commita, empurra e abre o PR; o coordenador verifica, decide e mescla, e delega as correções.
 - Portão lido pela união da proteção clássica com os rulesets; 403 ou erro conta como desconhecido e bloqueia o merge autônomo; classificação por PR obrigatório, checks e se o ator consegue contornar.
-- Assinatura verificada de fato no ambiente que commita.
+- Assinatura opcional (A4, D2/#602): tenta assinar onde `gpgsign=true`; só ruleset `required_signatures` obriga.
 - Preflight com raiz fora da default, seguindo por worktree nova.
 - Regra estrita do 403: sem leitura da proteção clássica o portão é desconhecido, não há "forte-parcial", e o resumo `branches/<b>` nunca libera o merge autônomo.
 - Tabela de quem pode o quê no harness (coordenador sem credencial, executor de código, humano dono).
@@ -49,6 +49,40 @@ Rodada 4g (bloqueio e ressalvas da revisão da 4f; versão mantida): com o pai a
 Rodada 4h (bloqueio e ressalvas da revisão da 4g; versão mantida): no item 8 do piso, a confirmação por canal fora da credencial só vale como palavra do próprio humano dono, num canal em que nenhum agente escreve em nome dele; repasse, citação ou mensagem de outro agente ("o dono concordou"), texto de tarefa delegada e mensagens em canais onde agentes escrevem como o dono (conectores de chat ou e-mail) nunca contam (mecânica e command também); o pai passa a declarar `metadata.piso_sha256`, que agora cobre a seção inteira do "Piso inviolável", do cabeçalho (exclusive) até o próximo cabeçalho, com o comando para recalcular; branch fora do padrão com "PR próprio" só se prova pelo marcador `idmp` do ciclo no PR e pelo registro do run, e na dúvida é `STOP-HITL`; o `STOP-HITL` de pai com sha divergente só se resolve restaurando o pai com o sha declarado ou com o dono atualizando o sha declarado, nunca com "seguir assim"; casos D4-23 e D4-27 ajustados e D4-31 novo.
 
 Rodada 4i (ressalvas da revisão da 4h; versão mantida): no force-push da Fase 3 e no item 6 do piso, "branch criada pelo próprio agente" passa a exigir a mesma prova do "PR próprio": o marcador `idmp` do ciclo no PR e o registro do run, porque autoria ou login iguais não distinguem o agente do dono quando a conta é compartilhada; na dúvida, branch nova a partir da base ou `STOP-HITL` (command e mecânica também); o comando do `piso_sha256` passa a parar só num cabeçalho de nível igual ou maior que o do "Piso inviolável", e um subcabeçalho dentro do piso não corta mais a cobertura; a mecânica registra o limite dessa prova (evita acidente, não um agente malicioso na mesma conta ou na mesma máquina); no pai, `piso_sha256` divergente gera `STOP-HITL` que só se resolve restaurando o arquivo ou com o dono atualizando o valor declarado, nunca com "seguir assim"; caso D4-32 novo.
+
+### Fixed — on-call-shift recovery follow-ups
+
+- `recover_child` now refuses `STALE_CHECKPOINT_IN_FLIGHT` when an item that was in flight at a failed child save is no longer in flight in the new checkpoint and is not recorded as completed in its log. The failed in-flight sets of the same pending entry are unioned for every failed save that advanced the floor (tuple >= the current floor), and an earlier failure never loses items already in the floor, so a reload to an older revision followed by another failed save cannot erase the item. A checkpoint with non-string `in_flight` or logged ids is refused as `CHECKPOINT_UNREADABLE` instead of raising `TypeError`.
+- Tests: `test_85` (counter rolled back by reload), `test_86` (missing `save_seq`), `test_87` (two failures at one cursor), `test_88` (legitimate completion is not refused), `test_89` (second failed save after reload) and `test_90` (malformed ids); suite 91 → 97.
+- Documented in `skills/on-call-shift/references/continuity.md`: the child controls its own checkpoint file (`save_seq`, `in_flight`, `log`), so the check does not cover a completion, gate, delivery or budget reverted by a reload, nor a child that forges its own file. The recovery gate `changelog-required` is not applicable to these paths, so it did not validate this entry.
+
+### Added — `on-call-shift` skill v0.2.0
+
+- New skill `skills/on-call-shift/`: holds an on-call shift with one holder, a persisted lease and cursor, the principal's mantras (defaults when none are given), and relief only on a successor ACK that echoes cursor, in-flight work and gates. When no backlog was given or it is done, it reads every authorized tracker, merges the same intent across trackers and pull requests, keeps RACI/DARCI roles `unknown` when unnamed, and adopts one eligible item or waits with a reason. Tick, notification, wakeup and resume stay distinct; without a bound wakeup transport the shift reports `DEGRADED` and never claims continuous coverage. A result counts as done (UDV) only when the intended recipient received it and is satisfied; blast radius is checked before each effect; a dead holder is replaced only by a successor the principal armed for the current generation; the arming is consumed by that one takeover, so a second expiry without re-arming is DEGRADED, and replay and self-succession are refused. The existing timer only observes; the skill never claims 24/7 coverage. Every mutator requires the current lease and generation; `adopt` re-checks gate, owner, budget and capacity; a handoff ACK must match the live state. Decision-point lens questions, incident preemption keeping the cursor, and route changes only on new evidence; stop or revocation overrides everything. Owner conflicts across sources block adoption; a granted gate unblocks it; a replayed rejection reopens once. Continuity: autosave per transition, handoff derived from the snapshot, preflight/postflight, readable diagnosis, a separate logic-only watchdog (no installed watchdog, no live wakeup), and a conflict resolver that never decides by majority or arbitrates a human authorization. The holder never grants a human gate; every connector gate survives the merge; deliveries dedupe over all sent results. Own team: admission by scope, risk, budget and seats; drain before retire; idempotent retirement; other owners' members untouched. Own tools are admitted through the same roster with a recorded reuse/configure/extend/create/none decision; requests to create or delete shared resources are parked. Child-checkpoint recovery: after a child's save fails, `recover_child` validates the new checkpoint (hash, same child, generation, cause), persists the parent first and reopens admission once; human gates and other freezes stay. A child failure never overwrites an earlier parent freeze; a checkpoint older than the failed save (generation and cursor) is refused. A monotonic save counter refuses an older checkpoint with the same generation and cursor (changes without a tick).
+- Reference engine `bin/shift_engine.py` (stdlib, no network, no model) and 84 acceptance scenarios in `tests/`, run by `.github/workflows/on-call-shift-tests.yml`. Composes `ooda-loop`, `work-drain`, `work-compass` and `spec-backlog-ticket-reconciler`.
+
+### Added — `cmux-concierge` skill + `bin/cmux-concierge` executor
+
+- New skill `skills/cmux-concierge/SKILL.md` (0.1.0) and executor `bin/cmux-concierge`: unattended care for cmux-cloud VMs. `check` diagnoses tunnel, VM state, ssh, DNS, resolver, egress and the login status of kiro-cli, claude, codex and kirocrew (one word each, never the output). `heal` climbs L1 relink resolv.conf to the systemd-resolved stub (backup + `undo`) → L2 restart resolver → L3 restart the local cmux system tunnel → L4 `cmux vm restart` (opt-in `--allow-reboot`). Every rung is GUARD → ACTION → POST-CHECK, idempotent, `--dry-run`. Sign-in, credentials and spend (resume/create VM, pool) return NEEDS-HUMAN (exit 2).
+- Hermetic tests `bin/tests/cmux-concierge.test.sh` (17 checks; mutation-checked). VM unreachable with the system tunnel down, and DNS broken without passwordless sudo, return NEEDS-HUMAN (exit 2), matching §Boundaries. After a real L4 reboot, heal re-runs L1/L2 once.
+
+### Changed — git-cycle-sentinel A4: signing optional
+
+- `git-cycle-sentinel` 0.1.1 → 0.1.2: criterion A4 is now "signing optional" (operator decision D2, 2026-11-21). Try to sign where `commit.gpgsign=true`; on signer failure commit unsigned and continue. Only a remote `required_signatures` ruleset enforces. `--no-verify` stays forbidden.
+
+### Changed — session orientation contracts
+
+- Keep `pulse`, `session-reentry`, and `live-session-continuity-recovery` distinct; the existing `maos-concierge` now selects by current intent and evidence source, not time since a pause.
+- Clarify read-only reconstruction, proposed priority routes, and current persistence opt-in. Session reload hints use natural-language skill requests without assuming host slash discovery; no new wrapper, parser, or execution pipeline.
+
+### Added — `security-incident-responder` agent
+
+- New agent `agents/security-incident-responder.md`: runs a security exposure (leaked secret, credential in
+  history, open data store, unauthenticated surface) through detect → triage → contain → eradicate →
+  recover → learn. It writes the incident record, the ordered containment and rotation runbook for the
+  console-holding human, the prevention pull request and the post-incident review. It never rotates,
+  revokes, rewrites history or touches production; those stay HITL under `COWORK-AUTONOMY-POLICY.md`.
+  Registered in `agents/README.md` (Available Agents + Role Coverage Map row `GAP→NEW`).
 
 ### Changed — `libras-writing-bridge` v0.1.1: PII refusal, opt-in avatar, lexicon sense fixes, round-trip check
 
@@ -632,6 +666,10 @@ Rodada 4i (ressalvas da revisão da 4h; versão mantida): no force-push da Fase 
 
 - `commands/hitl-digest.md`: thin `/hitl-digest` slash command over the `synopsis-panel` engine (`synopsis-fuse.py --hitl-only`). Renders the HITL DIGEST on demand — only the human-attention gates (credential, spend, irreversible, external-send, business), ⏫ high-severity and 👤 human-domain first. Reimplements nothing: it delegates rendering to `synopsis-fuse.py` and the ledger to the external `punch-list.md` SSOT; read-only. The engine path resolves from `CLAUDE_PLUGIN_ROOT` (with a git-root fallback), and the pure digest short-circuits aggregation with an empty compass so it never blocks on `work-compass`.
 
+### Changed — `ooda-loop` 0.3.1: tree cadence (one cycle per node)
+
+- `skills/ooda-loop/SKILL.md`: new §"Tree cadence" — apply the OODA+PDCA pass once per goal-tree node (forward plans by DoR, backward reconciles by DoD) with four beats that map onto the existing PDCA (execute = plan+do, feedback = check with verifier != generator, introspect = adjust, persist = close gate) and two checkable invariants (manual check, no enforcement yet): persist-before-close (the PR is the durable record where protected-branch pushes are forbidden) and one consolidated human package per cycle. Additive guidance only; no schema or marker change. `dogfood_status` set to a manual cycle-1 record. Dogfood record: `docs/dogfood/2026-10-25-ooda-loop-tree-cadence.md`.
+
 ### Changed — git-cycle-sentinel 0.1.1 (dogfood cycle-1 + cycle-2 real)
 
 - `skills/git-cycle-sentinel/SKILL.md` bumped 0.1.0 → 0.1.1 after dogfood cycle-1 (dry-run, decision-vs-norm) and cycle-2 (real execution in a throwaway `/tmp` git sandbox, 7/7 assertions PASS). Two previously-decorative guards made functional: **§A6** host-alias parse now strips any scp-style `[user@]host:` prefix (incl. a userless alias like `github.com-ekson73:`) so the alias never glues onto the owner, and RECUSA (STOP-ERROR) when the slug is not `owner/repo`; **§A7** idempotency probe scopes `git log --grep="idmp:<key>"` to the branch's unmerged range `origin/<base>..HEAD` (never whole reachable history) so a reused key on a merged-and-deleted branch cannot false-positive. Repo-awareness table corrected: `multi-agent-os gpgsign` re-measured `true` (read live, not the frozen cell). `dogfood_status → dogfood-cycle-2-real-7of7-pass-promotable`.
@@ -1133,6 +1171,10 @@ Rodada 4i (ressalvas da revisão da 4h; versão mantida): no force-push da Fase 
   (`status: latent`) for every new agent; the completion checklist requires both. The three new
   agents carry the mandatory pt-BR line in their descriptions.
 - `gitops-engineer` 1.0.1: boundary note — hosted CI/CD and PaaS go to `devops-engineer`.
+
+### Added — system-health memory_spine lag (EKO-106)
+
+- `system-health-guardian` collector 1.7.0 emits a top-level advisory `memory_spine` object: how long persisted memory under the memory-home `projects/` tree has been un-shipped (oldest unpushed commit vs `@{u}` or oldest dirty path, after a fresh fetch). Fail-closed: an unmeasurable spine reports `unknown`, never lag 0. Not rolled into `.system.status`; the responder seeds residue on warn/crit/unknown.
 
 ### Changed — ticket-first traceability (#484)
 

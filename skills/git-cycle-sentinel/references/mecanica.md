@@ -96,11 +96,10 @@ roda **antes** da mutação; sem ela a mutação é
 **recusada** (não é "best-effort"). Isto torna A7 verificável: um segundo run com a mesma key não
 produz nenhum objeto novo (prova: contagem de PR/commit/comentário idêntica ao 1º run).
 
-> **Não-regressão de assinatura (A4) é inviolável**: a norma C1 é *condicional ao repo* — assinar
-> onde o repo exige (`required_signatures` no ruleset ou na proteção clássica) ou onde o ambiente
-> já assina (`commit.gpgsign` lido **ao vivo** e assinatura de teste que passa); **não** forçar onde
-> o repo não exige e o `gpgsign` lido é `false`. Repo exige e o ambiente não assina → não commita
-> dali. A sentinela **respeita** o estado medido, nunca o inverte.
+> **Assinatura opcional (A4, decisão D2 do dono, 2026-11-21, #602)**: commit assinado **não** é
+> obrigatório. A sentinela **tenta** assinar onde `commit.gpgsign=true` (lido **ao vivo**); se o
+> assinador falhar, commita **sem assinatura** (`--no-gpg-sign`) e segue, sem parar nem pedir
+> desbloqueio. Só um ruleset remoto ou proteção clássica com `required_signatures` obriga. Nunca `--no-verify`.
 
 ## Achados de review abertos: por thread, não por head
 O modo-falha que esta regra **recusa**: filtrar comentários de review pelo `commit_id` igual ao head
