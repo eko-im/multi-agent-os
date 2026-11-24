@@ -1087,12 +1087,30 @@ def _overflow_line(overflow: list[dict]) -> str:
     return prefix + ", ".join(shown) + (f" +{hidden}" if hidden else "")
 
 
+def _instant(now: int | None) -> dt.datetime:
+    return dt.datetime.fromtimestamp(now if now is not None else dt.datetime.now(dt.timezone.utc).timestamp(),
+                                     tz=dt.timezone.utc)
+
+
 def _digest_code(now: int | None, session_id: str | None) -> str | None:
+    """spec §2: `K<YYMMDD>-<HHMM>-<s8>`, date and minute in UTC. The only code generator:
+    bin/hitl-scorecard.py imports it."""
     if not session_id or len(session_id) < 8:
         return None  # spec §2: root session id unknown ⇒ no code (AUQ binds the answer)
-    t = dt.datetime.fromtimestamp(now if now is not None else dt.datetime.now(dt.timezone.utc).timestamp(),
-                                  tz=dt.timezone.utc).astimezone()
-    return f"K{t.strftime('%y%m%d-%H%M')}-{session_id[-8:]}"
+    return f"K{_instant(now).strftime('%y%m%d-%H%M')}-{session_id[-8:]}"
+
+
+def _local_time(now: int | None) -> str:
+    """spec §2 `<local>`: the same instant in the host zone, `HH:MM ±HH[MM]`; correlation only."""
+    return re.sub(r"([+-]\d{2})00$", r"\1", _instant(now).astimezone().strftime("%H:%M %z"))
+
+
+def _digest_head(code: str | None, now: int | None) -> str:
+    """spec §2 header `══ 🟠 HITL DIGEST · <code> (<local>) ══`; `(<local>)` dropped past 80 columns."""
+    if not code:
+        return "══ \U0001F7E0 HITL DIGEST ══"
+    head = f"══ \U0001F7E0 HITL DIGEST · {code} ({_local_time(now)}) ══"
+    return head if _cols(head) <= 80 else f"══ \U0001F7E0 HITL DIGEST · {code} ══"
 
 
 def render_ask_user_question(fused: dict, title: str, raw_hitl: list[dict], *,
@@ -1140,8 +1158,7 @@ def render_ask_user_question(fused: dict, title: str, raw_hitl: list[dict], *,
         record.append(line)
         if not has_rec:
             record.append("    sem recomendação: falta ponteiro de evidência")
-    head = f"══ \U0001F7E0 HITL DIGEST · {code} ══" if code else \
-        "══ \U0001F7E0 HITL DIGEST ══"
+    head = _digest_head(code, now)
     count = f"{len(cards)} + 0 estac." + (f" + {len(overflow)} próximo digest" if overflow else "")
     pre = [head, count, *record]
     meta = fused.get("meta", {})

@@ -278,8 +278,11 @@ Regras do payload (cada uma vem do spec, nenhuma é nova):
   (credencial · gasto · irreversível · envio · negócio) + `Manter pendente`. Nunca inventadas por item.
 - `(recomendado)` só na opção estruturada com `recommended: true` **e** `evidence` textual não vazia após remover espaços (§3: sem ponteiro de evidência não há recomendação). Ela vem primeiro. Sem ela, o preâmbulo diz
   `sem recomendação: falta ponteiro de evidência`.
-- O preâmbulo traz o cabeçalho com o código `K<YYMMDD>-<HHMM>-<s8>` (data e hora locais da máquina; sem id de sessão raiz, sem
-  código), a linha de contagem, uma linha `· … aberta no AskUserQuestion` por card (registro durável,
+- O preâmbulo traz o cabeçalho `══ 🟠 HITL DIGEST · K<YYMMDD>-<HHMM>-<s8> (<local>) ══`: data e
+  minuto do código em **UTC** (spec §2, desde a 2.5.4; gerador único `_digest_code`, que o
+  `hitl-scorecard.py` importa); a hora local do mesmo instante só no parêntese de correlação,
+  omitido se a linha passar de 80 colunas. Sem id de sessão raiz, sem código. Depois vêm a linha
+  de contagem, uma linha `· … aberta no AskUserQuestion` por card (registro durável,
   sem letras e sem `Responda:`), o `⏭` e `harness · repo · sessão`. Cada linha cabe em 80 colunas.
 - **Fatia vazia, ledger cheio ⇒ o preâmbulo diz o tamanho do ledger.** Quando a fatia desta
   conversa não tem nenhum card, o preâmbulo acrescenta `0 of N ledger items are this
@@ -287,7 +290,7 @@ Regras do payload (cada uma vem do spec, nenhuma é nova):
   (`--scope all` mostra o ledger inteiro). A linha `nenhuma decisão pendente` (que é da spec)
   continua lá — o que muda é que ela **nunca é lida sozinha**: "0 decisions" sem o total do
   ledger é o "0 = não existe" que o DoD proíbe.
-- Determinístico: mesma entrada + `--now` + `--session-id` + mesmo fuso local ⇒ mesmo payload. Timestamps dos envelopes de máquina continuam em UTC.
+- Determinístico: mesma entrada + `--now` + `--session-id` ⇒ mesmo código em qualquer fuso; só o `(<local>)` do cabeçalho depende do fuso local. Timestamps dos envelopes de máquina continuam em UTC.
 
 ```bash
 echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \

@@ -9,6 +9,8 @@ import json
 import os
 import pathlib
 import re
+import subprocess
+import sys
 import unittest
 
 _SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "bin" / "hitl-scorecard.py"
@@ -19,6 +21,7 @@ _spec.loader.exec_module(sc)
 SESSION = "01a20e56-ecbe-7673-8116-76600e63ce53"
 NOW = 1795469400                      # fixed instant (UTC) for deterministic codes
 CODE = "K" + dt.datetime.fromtimestamp(NOW, tz=dt.timezone.utc).strftime("%y%m%d-%H%M") + "-" + SESSION[-8:]
+FUSE = _SCRIPT.parent / "synopsis-fuse.py"
 
 
 def decision(i, urgency="baixa", owner=False, rec="Manter", evidence="spec.md:1", multi=False, n_opts=2):
@@ -32,7 +35,7 @@ def decision(i, urgency="baixa", owner=False, rec="Manter", evidence="spec.md:1"
         "options": [{"label": l, "effect": f"efeito {l}", "confidence": "média",
                      "evidence": evidence if l in (rec if isinstance(rec, list) else [rec]) else ""}
                     for l in labels],
-        "recommended": rec, "because": "é o caminho mais barato",
+        "recommended": rec, "rationale": "é o mais barato",
     }
 
 
@@ -99,6 +102,86 @@ class RenderTest(unittest.TestCase):
             if old is not None:
                 os.environ["NO_COLOR"] = old
 
+    def test_compact_is_five_lines_bluf_and_never_cut(self):
+        out = sc.render_text(doc(decision(1, "alta", True)), now=NOW, session=SESSION, layout="compact")
+        lines = out.splitlines()
+        self.assertNotIn("…", out)
+        card = lines[4:-1]
+        self.assertEqual(len(card), 4)                    # origin = footer ⇒ no L5
+        self.assertTrue(card[1].startswith("    A ✅ Manter — porque é o mais barato (média · spec.md:1)"))
+        self.assertEqual(card[2], "    B Mudar")
+        self.assertEqual(card[3], "    ⌛ o item fica parado · ↩️ REVERSÍVEL")
+
+    def test_compact_origin_shown_only_when_it_differs_from_footer(self):
+        d = doc(decision(1), decision(2))
+        d["decisions"][1]["origin"] = {"harness": "Codex", "repo": "org/outro", "session": "x" * 8 + "99990000"}
+        out = sc.render_text(d, now=NOW, session=SESSION, layout="compact")
+        self.assertIn("Codex · org/outro · 99990000", out)
+        self.assertEqual(out.count("org/repo"), 1)        # only the footer
+
+    def test_compact_degrades_lowest_priority_card_first(self):
+        d = doc(decision(1, "alta", True), decision(2, "media", True), decision(3))
+        for x in d["decisions"]:
+            x["origin"] = dict(x["origin"], repo=f"org/r{x['id']}")       # 5-line cards
+        out = sc.render_text(d, now=NOW, session=SESSION, layout="compact")
+        body = out.splitlines()
+        self.assertLessEqual(len(body), 15)
+        self.assertNotIn("…", out)
+        starts = [i for i, l in enumerate(body) if re.match(r"\d · ", l)] + [len(body) - 1]
+        sizes = [b - a for a, b in zip(starts, starts[1:])]
+        self.assertEqual(sorted(sizes, reverse=True), sizes)          # 3rd card shrinks first
+        for r in ("org/rD1", "org/rD2", "org/rD3"):
+            self.assertIn(r, out)                                       # origin never dropped
+
+
+class CodeTimezoneTest(unittest.TestCase):
+    """spec §2: one code generator (synopsis-fuse `_digest_code`), in UTC. The same instant
+    gives the same code in both surfaces whatever the host zone; local time only in `( )`."""
+
+    def _env(self, tz):
+        env = {k: v for k, v in os.environ.items() if k not in (
+            "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "PI_SESSION_ID", "PI_SESSION_FILE",
+            "MAOS_SELF_SESSION_ID", "CLAUDE_SESSION_ID")}
+        env["TZ"] = tz
+        return env
+
+    def test_same_instant_same_code_in_both_surfaces_outside_utc(self):
+        self.assertIs(sc.fuse._digest_code, sc.fuse._digest_code)
+        self.assertFalse(hasattr(sc, "digest_code"))      # no duplicate generator
+        now = 1793060820                                    # 2026-10-27 00:27 UTC = 21:27 -03 the day before
+        with tempfile_dir() as tmp:
+            dj = pathlib.Path(tmp, "d.json")
+            dj.write_text(json.dumps(doc(decision(1))), encoding="utf-8")
+            hj = pathlib.Path(tmp, "h.json")
+            hj.write_text(json.dumps([{"id": "H-0001", "sev": "🟡 NORMAL", "tipo": "negocio",
+                                       "decidir": "x", "session_id": SESSION}]), encoding="utf-8")
+            codes, heads = [], []
+            for tz in ("America/Sao_Paulo", "UTC"):
+                card = subprocess.run([sys.executable, str(_SCRIPT), "ask", str(dj), "--target", "claude",
+                                       "--session", SESSION, "--now", str(now)],
+                                      capture_output=True, text=True, env=self._env(tz), check=True)
+                auq = subprocess.run([sys.executable, str(FUSE), "--hitl-only", "--compass-json", "-",
+                                      "--hitl-json", str(hj), "--scope", "all", "--format", "ask-user-question",
+                                      "--session-id", SESSION, "--now", str(now)], input="{}",
+                                     capture_output=True, text=True, env=self._env(tz), check=True)
+                a, b = json.loads(card.stdout), json.loads(auq.stdout)
+                codes += [a["code"], b["code"]]
+                heads.append(b["preamble"][0])
+        self.assertEqual(set(codes), {"K261027-0027-" + SESSION[-8:]})
+        self.assertIn("(21:27 -03)", heads[0])
+        self.assertIn("(00:27 +00)", heads[1])
+
+
+class tempfile_dir:
+    def __enter__(self):
+        import tempfile
+        self._d = tempfile.TemporaryDirectory()
+        return self._d.name
+
+    def __exit__(self, *exc):
+        self._d.cleanup()
+
+
 
 class PlanTest(unittest.TestCase):
     def test_fourth_card_only_for_urgent_and_never_more_than_four(self):
@@ -142,6 +225,22 @@ class AskTest(unittest.TestCase):
                               "options": [{"label": "só"}], "multiSelect": "no"}]}
         errs = sc.lint_auq(bad)
         self.assertEqual(len(errs), 3)
+
+    def test_single_real_option_is_refused_never_padded(self):
+        d = doc(decision(1, n_opts=1))
+        for fn in (lambda: sc.render_text(d, now=NOW, session=SESSION),
+                   lambda: sc.ask_claude(d, now=NOW, session=SESSION),
+                   lambda: sc.ask_omp(d, now=NOW, session=SESSION)):
+            with self.assertRaises(sc.InputError):
+                fn()
+        errs, _ = sc.lint_doc(d, now=NOW, session=SESSION)
+        self.assertTrue(any("2–4 opções (tem 1)" in e for e in errs))
+        res = sc.aggregate([("s.log", "NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; confidence=alta ; "
+                                      "cost-of-not-deciding=PR parado ; origin=OMP·org/a·aaaaaaaa1111")],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["decisions"], [])
+        self.assertEqual(len(res["rejected"]), 1)
+        self.assertNotIn("Manter pendente", json.dumps(res, ensure_ascii=False))
 
     def test_omp_form_has_no_preselect_and_a_confirmation_gate(self):
         d = doc(decision(1, "alta", True), decision(2, multi=True, rec=["Manter", "Mudar"], n_opts=3))
@@ -240,6 +339,16 @@ class AggregateLintTest(unittest.TestCase):
         self.assertIn("(+1 sessões)", out)
         self.assertNotIn("✅", out)                       # bare lines carry no evidence pointer
 
+    def test_same_ask_in_two_repos_is_two_cards(self):
+        line = ("NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar ; confidence=alta ; "
+                "cost-of-not-deciding=PR parado ; origin=OMP·{repo}·{s}")
+        res = sc.aggregate([("s1.log", line.format(repo="org/a", s="aaaaaaaa1111")),
+                            ("s2.log", line.format(repo="org/b", s="bbbbbbbb2222"))],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["deduped"], 0)
+        self.assertEqual(len(res["queue"]["cards"]), 2)
+        self.assertEqual({d["origin"]["repo"] for d in res["decisions"]}, {"org/a", "org/b"})
+
     def test_lint_clean_and_dirty(self):
         good = doc(decision(1, "alta", True), decision(2))
         self.assertEqual(sc.lint_doc(good, now=NOW, session=SESSION)[0], [])
@@ -253,6 +362,14 @@ class AggregateLintTest(unittest.TestCase):
         self.assertTrue(any("não é uma opção" in e for e in errs))
         _, warns = sc.lint_doc(doc(decision(1, evidence="")), now=NOW, session=SESSION)
         self.assertTrue(any("sem ponteiro" in w for w in warns))
+        no_why = copy.deepcopy(good)
+        no_why["decisions"][0].pop("rationale")
+        errs, _ = sc.lint_doc(no_why, now=NOW, session=SESSION)
+        self.assertTrue(any("sem rationale" in e for e in errs))
+        long = doc(decision(1))
+        long["decisions"][0]["cost_of_delay"] = "x " * 45
+        _, warns = sc.lint_doc(long, now=NOW, session=SESSION)
+        self.assertTrue(any("cost_of_delay passa do orçamento" in w for w in warns))
 
     def test_lint_text_flags_width_and_dash_offer(self):
         errs = sc.lint_text("x" * 81 + f"\nResponda: {CODE} 1:-\n")

@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added — `/hitl-digest` scorecard view + selection panel (`synopsis-panel` v0.3.0)
 
 - `skills/synopsis-panel/bin/hitl-scorecard.py` (`render` · `ask` · `parse` · `aggregate` · `lint`) implements `hitl-digest` spec §8 (v2.7.0): BLUF cards with `harness · repo · sessão` origin, AskUserQuestion payload or OMP `ask` HTML form with nothing preselected (timeout, idle auto-resolve, cancel and free text stay pending), multi-session `NEEDS-OPERATOR` aggregation, and spec lint. Reuses the engine's option builder; `/hitl-digest` stays the entry point. Tests: `skills/synopsis-panel/tests/test_hitl_scorecard.py`.
+- Compact card (the one that goes in a reply): up to 5 lines in BLUF order (title · `A ✅ <action> — porque <rationale> (<conf> · <pointer>)` · other options · `⌛ cost · ↩️/🚪` · origin only when it differs from the footer). When the body would pass 15 lines, cards drop to 3 lines from the lowest priority up. Nothing is cut with `…`; the lint warns when `title`, `rationale`, `cost_of_delay` or `effect` exceed their line budget, so they are shortened at the source. New schema field `rationale`, required with a recommendation (lint error).
+- A decision needs 2–4 real options: `render`/`ask` refuse one with a single option and `aggregate` lists it under `rejected`. Before, the engine's `Manter pendente` filler turned a one-option card into a phantom letter B.
+- `aggregate` dedupes by (`origin.repo`, normalized ask); the session stands in only when the repo is unknown. The same ask in two repos is now two cards.
+
+### Fixed — `synopsis-panel` digest code is UTC (spec §2)
+
+- `synopsis-fuse.py` `_digest_code` computed the code minute in host local time; spec §2 requires UTC since 2.5.4. It is now the only generator (UTC) and `hitl-scorecard.py` imports it; the local time appears only in the header's correlation parenthetical (`_digest_head`). Same instant ⇒ same code in both surfaces under any `TZ` (tests in both suites). `commands/hitl-digest.md` updated.
+
+**Activation after merge** (this entry stays under `[Unreleased]`): the live OMP and Claude Code load `maos@vek-claude-plugins`, whose cache is keyed by `.claude-plugin/plugin.json` `version` (1.22.1). Ship it with a separate `chore(release): maos 1.23.0` PR (only `plugin.json` version + a `## [1.23.0]` CHANGELOG section, per `scripts/check-release-coherence.py`), then `scripts/sync-version.sh` for the derived files, then on each machine `claude plugin marketplace update vek-claude-plugins && claude plugin update maos@vek-claude-plugins` and restart the session.
 
 ### Fixed — on-call-shift recovery follow-ups
 

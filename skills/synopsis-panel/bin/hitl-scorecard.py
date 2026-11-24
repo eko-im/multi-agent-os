@@ -37,6 +37,8 @@ _spec.loader.exec_module(fuse)
 SCHEMA = "hitl-scorecard/v1"
 COLS = 80
 BODY_MAX = 15                     # attention contract v1.1: body lines
+IND = "    "                      # card body indentation
+EFFECT_MAX = 60                   # source budget for an option effect (full card line, panel)
 LETTERS = "ABCD"
 URG = {"alta": ("\u23eb", "ALTA", "1;31"), "media": ("\U0001f53c", "MÉDIA", "1;33"),
        "baixa": ("\U0001f53d", "BAIXA", "32")}
@@ -75,17 +77,6 @@ def cols(text: str) -> int:
         n += 2 if (wide or emoji) else 1
     return n
 
-
-def clip(text: str, n: int = COLS) -> str:
-    text = text.rstrip()
-    if cols(text) <= n:
-        return text
-    out = ""
-    for ch in text:
-        if cols(out + ch + "…") > n:
-            break
-        out += ch
-    return out.rstrip(" ,;·") + "…"
 
 
 def wrap(text: str, first: str, cont: str | None = None, n: int = COLS) -> list[str]:
@@ -168,7 +159,7 @@ def normalize(d: dict) -> dict:
             "owner_only": bool(d.get("owner_only")),
             "reversible": rev if isinstance(rev, bool) else None,
             "cost_of_delay": _s(d.get("cost_of_delay")), "time_to_decide": _s(d.get("time_to_decide")),
-            "multi": multi, "because": _s(d.get("because")),
+            "multi": multi, "rationale": _s(d.get("rationale")),
             "unblocks": int(d.get("unblocks") or 0), "parked": int(d.get("parked") or 0),
             "options": shown, "rec": [o["letter"] for o in shown if o["recommended"]],
             "rec_requested": bool(refs)}
@@ -225,23 +216,23 @@ def load_doc(path: str) -> dict:
     return doc
 
 
-# ---------------------------------------------------------------- code + session
+# ---------------------------------------------------------------- session
 def root_session(flag: str | None) -> str | None:
     """Root harness session only (spec §2). A child id (e.g. OMP PI_SESSION_ID in a
     subagent) is never read: pass the root id with --session."""
     return flag or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CODEX_THREAD_ID") or None
 
 
-def digest_code(now: int, session: str | None) -> str | None:
-    if not session or len(session) < 8:
-        return None                       # spec §2: no root id ⇒ no numbered digest
-    t = dt.datetime.fromtimestamp(now, tz=dt.timezone.utc)
-    return f"K{t.strftime('%y%m%d-%H%M')}-{session[-8:]}"
+def load_cards(doc: dict) -> list[dict]:
+    """Cards for render/ask/parse. A decision with fewer than 2 real options is not a
+    decision, and more than 4 do not fit a question: refused, never padded (spec §8.5)."""
+    cards = [normalize(d) for d in doc["decisions"]]
+    for i, c in enumerate(cards, 1):
+        if not 2 <= len(c["options"]) <= 4:
+            raise InputError(f"{c['id'] or f'#{i}'}: {len(c['options'])} opção(ões) real(is); "
+                             "uma decisão exige 2–4 (nenhuma opção é inventada)")
+    return cards
 
-
-def local_time(now: int) -> str:
-    s = dt.datetime.fromtimestamp(now, tz=dt.timezone.utc).astimezone().strftime("%H:%M %z")
-    return re.sub(r"([+-]\d{2})00$", r"\1", s)
 
 
 # ---------------------------------------------------------------- render
@@ -271,35 +262,88 @@ def _ptr(o: dict) -> str:
     return " · ".join(x for x in (o["confidence"], o["evidence"]) if x)
 
 
-def card_lines(c: dict, n, layout: str) -> list[str]:
-    """No card line starts with a header glyph (🔴🟡🟢✅) after its indentation: the
-    attention-contract checker (sinal-check) would read it as a misplaced header.
+def card_lines(c: dict, n) -> list[str]:
+    """Full layout. No card line starts with a header glyph (🔴🟡🟢✅) after its indentation:
+    the attention-contract checker (sinal-check) would read it as a misplaced header.
     So an option line starts with its letter (`A ✅ …`) and the BLUF line with `BLUF:`."""
-    if layout == "compact":
-        opts = []
-        for o in c["options"]:
-            mark = " \u2705" if o["recommended"] else ""
-            tail = f" ({_ptr(o)})" if o["recommended"] and _ptr(o) else ""
-            opts.append(f"{o['letter']}{mark} {o['label']}{tail}")
-        if not c["rec"]:
-            opts.append("sem recomendação")
-        badges = f"{_origin(c)} · {DOOR.get(c['reversible'], '?')} · \u231b {c['cost_of_delay'] or '?'}"
-        return [clip(_title_line(c, n)), clip("    " + " · ".join(opts)), clip("    " + badges)]
-    out = wrap(_title_line(c, n), "", "    ")
-    out += wrap(f"origem: {_origin(c)}", "    ", "      ")
-    out += wrap(f"decisão: {c['ask']}", "    ", "      ")
+    out = wrap(_title_line(c, n), "", IND)
+    out += wrap(f"origem: {_origin(c)}", IND, IND + "  ")
+    out += wrap(f"decisão: {c['ask']}", IND, IND + "  ")
     if c["rec"]:
-        why = f" porque {c['because']}" if c["because"] else ""
-        out += wrap(f"BLUF: \u2705 recomendo {'+'.join(c['rec'])}{why}", "    ", "      ")
+        why = f" porque {c['rationale']}" if c["rationale"] else ""
+        out += wrap(f"BLUF: \u2705 recomendo {'+'.join(c['rec'])}{why}", IND, IND + "  ")
     else:
-        out.append(f"    BLUF: {NO_REC}")
-    out += wrap(f"contexto: {c['context']}", "    ", "      ")
+        out.append(f"{IND}BLUF: {NO_REC}")
+    out += wrap(f"contexto: {c['context']}", IND, IND + "  ")
     for o in c["options"]:
         mark = "\u2705 " if o["recommended"] else "   "
         body = o["label"] + (f" → {o['effect']}" if o["effect"] else "") + (f" · {_ptr(o)}" if _ptr(o) else "")
-        out += wrap(body, f"    {o['letter']} {mark}", " " * 9)
-    out += wrap(_badges(c), "    ", "      ")
+        out += wrap(body, f"{IND}{o['letter']} {mark}", " " * 9)
+    out += wrap(_badges(c), IND, IND + "  ")
     return out
+
+
+def pack(tokens: list[str], indent: str = IND) -> list[str]:
+    """Join tokens with ` · ` within 80 columns; a token that does not fit moves to the
+    next line, and one longer than a line is word-wrapped. Nothing is ever cut."""
+    lines, line = [], None
+    for t in tokens:
+        cand = f"{line} · {t}" if line else indent + t
+        if cols(cand) <= COLS:
+            line = cand
+            continue
+        if line:
+            lines.append(line)
+        w = wrap(t, indent, indent + "  ")
+        lines += w[:-1]
+        line = w[-1]
+    if line:
+        lines.append(line)
+    return lines
+
+
+def _rec_line(c: dict) -> str:
+    """Compact L2 (BLUF): `A ✅ <action> — porque <rationale> (<conf> · <pointer>)`. The
+    letter comes before ✅ so the line never starts with a header glyph (sinal-check)."""
+    rec = [o for o in c["options"] if o["recommended"]]
+    if not rec:
+        return NO_REC
+    head = " + ".join(f"{o['letter']} \u2705 {o['label']}" for o in rec)
+    why = f" — porque {c['rationale']}" if c["rationale"] else ""
+    ptrs = "; ".join(_ptr(o) for o in rec if _ptr(o))
+    return head + why + (f" ({ptrs})" if ptrs else "")
+
+
+def _risk(c: dict) -> str:
+    return f"\u231b {c['cost_of_delay'] or '?'} · {DOOR.get(c['reversible'], '? REVERSÍVEL NÃO INFORMADO')}" \
+        + (" · \u2611 VÁRIAS" if c["multi"] else "")
+
+
+def origin_delta(c: dict, foot: dict) -> str:
+    """The card's origin fields that differ from the footer (harness · repo · sessão).
+    Never omitted when they differ: it is what tells N sessions apart (spec §8.1)."""
+    o = c["origin"]
+    parts = [v for v, f in ((o["harness"], foot["harness"]), (o["repo"], foot["repo"]),
+                            (o["session"][-8:], foot["session"])) if v and v != f]
+    if c["extra_origins"]:
+        parts.append(f"(+{c['extra_origins']} sessões)")
+    return " · ".join(parts)
+
+
+def compact_lines(c: dict, n, foot: dict, short: bool = False) -> list[str]:
+    """Compact card (spec §8.1), BLUF/Minto order. 5 lines: L1 title · L2 recommendation +
+    rationale + pointer · L3 the other options · L4 ⌛ cost · ↩️/🚪 · L5 origin (only when it
+    differs from the footer). `short` = 3 lines: L3 carries options, ⌛, door and origin."""
+    rest = [o for o in c["options"] if not o["recommended"]] if c["rec"] else c["options"]
+    opts = [f"{o['letter']} {o['label']}" for o in rest]
+    delta = origin_delta(c, foot)
+    out = wrap(_title_line(c, n), "", IND) + wrap(_rec_line(c), IND, IND + "  ")
+    if short:
+        return out + pack(opts + [_risk(c)] + ([delta] if delta else []))
+    out += pack(opts) + pack([_risk(c)])
+    return out + (pack([delta]) if delta else [])
+
+
 
 
 def _hint(need: list[str], total: int) -> str:
@@ -312,12 +356,8 @@ def _hint(need: list[str], total: int) -> str:
 
 
 def header_lines(shown, parked, nxt, code, now) -> list[str]:
-    if code:
-        head = f"══ 🟠 HITL DIGEST · {code} ({local_time(now)}) ══"
-        if cols(head) > COLS:
-            head = f"══ 🟠 HITL DIGEST · {code} ══"
-    else:
-        head = "══ 🟠 HITL DIGEST · sem código (sessão raiz desconhecida) ══"
+    head = fuse._digest_head(code, now) if code else \
+        "══ 🟠 HITL DIGEST · sem código (sessão raiz desconhecida) ══"
     lines = [head, f"{len(shown)} + {len(parked)} estac." + (f" + {len(nxt)} próximo digest" if nxt else "")]
     if code and shown:
         toks = " ".join(f"{i}:{'+'.join(c['rec']) or 'A'}" for i, c in enumerate(shown, 1))
@@ -330,22 +370,32 @@ def header_lines(shown, parked, nxt, code, now) -> list[str]:
 
 def render_text(doc: dict, *, now: int, session: str | None, layout: str = "full",
                 harness: str | None = None, repo: str | None = None) -> str:
-    cards = [normalize(d) for d in doc["decisions"]]
-    shown, parked, nxt = plan(cards)
-    code = digest_code(now, session)
-    lines = header_lines(shown, parked, nxt, code, now)
-    for i, c in enumerate(shown, 1):
-        lines += card_lines(c, i if code else "•", layout)
+    shown, parked, nxt = plan(load_cards(doc))
+    code = fuse._digest_code(now, session)
+    foot = {"harness": harness or _s(doc.get("harness")), "repo": repo or _s(doc.get("repo")),
+            "session": session[-8:] if session else ""}
+    head = header_lines(shown, parked, nxt, code, now)
+    tail = []
     for c in parked:
         act = f"{c['title']}: {c['options'][0]['label']}" if c["rec"] else c["ask"]
-        lines.append(clip(f"⏸ {min(c['parked'] + 1, 2)}/2 estacionada (informativa): {act}"
-                          f" · {c['cost_of_delay'] or '?'}"))
+        tail += wrap(f"⏸ {min(c['parked'] + 1, 2)}/2 estacionada (informativa): {act}"
+                     f" · {c['cost_of_delay'] or '?'}", "", "  ")
     if nxt:
-        lines.append(fuse._overflow_line([{"sev": URG_TO_SEV[c["urgency"]], "id": c["title"]} for c in nxt]))
-    s8 = session[-8:] if session else "?"
-    lines.append(clip(f"harness: {harness or doc.get('harness') or '?'} · repo: "
-                      f"{repo or doc.get('repo') or '?'} · sessão: {s8}"))
-    return "\n".join(lines) + "\n"
+        tail.append(fuse._overflow_line([{"sev": URG_TO_SEV[c["urgency"]], "id": c["title"]} for c in nxt]))
+    tail += wrap(f"harness: {foot['harness'] or '?'} · repo: {foot['repo'] or '?'} · "
+                 f"sessão: {foot['session'] or '?'}", "", "  ")
+    nums = [i if code else "•" for i in range(1, len(shown) + 1)]
+    if layout == "full":
+        body = [card_lines(c, k) for c, k in zip(shown, nums)]
+    else:
+        # spec §8.1: 5-line cards while the body fits the attention contract (15 lines);
+        # otherwise the lowest-priority card drops to 3 lines first, then the next one up.
+        body = [compact_lines(c, k, foot) for c, k in zip(shown, nums)]
+        for j in reversed(range(len(shown))):
+            if len(head) + len(tail) + sum(map(len, body)) <= BODY_MAX:
+                break
+            body[j] = compact_lines(shown[j], nums[j], foot, short=True)
+    return "\n".join(head + [l for card in body for l in card] + tail) + "\n"
 
 
 def ansi(text: str) -> str:
@@ -387,13 +437,14 @@ def auq_question(c: dict, n: int) -> dict:
 
 
 def ask_claude(doc: dict, *, now: int, session: str | None) -> dict:
-    shown, parked, nxt = plan([normalize(d) for d in doc["decisions"]])
-    code = digest_code(now, session)
+    shown, parked, nxt = plan(load_cards(doc))
+    code = fuse._digest_code(now, session)
     record = [f"· {i} {URG[c['urgency']][0]} {c['title']} — aberta no AskUserQuestion"
               for i, c in enumerate(shown, 1)]
     return {"schema": "hitl-scorecard/ask-claude/v1", "code": code, "no_preselect": True,
             "timeout_is": "pending",
-            "preamble": [clip(x) for x in header_lines(shown, parked, nxt, code, now)[:2] + record],
+            "preamble": [l for x in header_lines(shown, parked, nxt, code, now)[:2] + record
+                         for l in wrap(x, "", "  ")],
             "ask_user_question": {"questions": [auq_question(c, i) for i, c in enumerate(shown, 1)]}}
 
 
@@ -402,14 +453,14 @@ def ask_omp(doc: dict, *, now: int, session: str | None) -> str:
     timeout, so nothing is checked/selected/prefilled and an explicit, unchecked
     confirmation box gates every answer (no box ⇒ everything pending)."""
     e = html.escape
-    shown, parked, nxt = plan([normalize(d) for d in doc["decisions"]])
-    code = digest_code(now, session) or "sem código"
+    shown, parked, nxt = plan(load_cards(doc))
+    code = fuse._digest_code(now, session) or "sem código"
     out = ["<form>", f"<h3>🟠 HITL DIGEST · {e(code)}</h3>",
            "<p>Nenhuma opção vem marcada. Tempo esgotado, cancelamento ou envio sem a caixa "
            "de confirmação = <strong>pendente</strong> (nunca consentimento).</p>"]
     for i, c in enumerate(shown, 1):
         kind = "checkbox" if c["multi"] else "radio"
-        rec = (f"✅ recomendo {'+'.join(c['rec'])}" + (f" porque {c['because']}" if c["because"] else "")
+        rec = (f"✅ recomendo {'+'.join(c['rec'])}" + (f" porque {c['rationale']}" if c["rationale"] else "")
                if c["rec"] else NO_REC)
         out += [f"<fieldset>", f"<legend>{e(_title_line(c, i))}</legend>", "<table>",
                 f"<tr><th>Origem</th><td>{e(_origin(c))}</td></tr>",
@@ -595,8 +646,13 @@ def needs_line_to_decision(line: str, default_origin: dict) -> dict | None:
             "options": opts, "recommended": rec or None}
 
 
-def _key(d: dict) -> str:
-    return re.sub(r"[^\w]+", " ", _s(d.get("ask") or d.get("title")).casefold()).strip()
+def _key(d: dict) -> tuple[str, str]:
+    """Dedupe key (spec §8.6): (repo, normalized ask). The same ask in two repos is two
+    decisions; the same ask from two sessions of one repo merges (+N sessões). The session
+    stands in for the repo only when the repo is unknown."""
+    o = d.get("origin") if isinstance(d.get("origin"), dict) else {}
+    where = _s(o.get("repo")).casefold() or f"session:{_s(o.get('session'))}"
+    return where, re.sub(r"[^\w]+", " ", _s(d.get("ask") or d.get("title")).casefold()).strip()
 
 
 def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
@@ -611,7 +667,7 @@ def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
             continue
         origin = dict(default_origin) if any(default_origin.values()) else _origin_from(f"?·?·{Path(name).stem}")
         found += [d for d in (needs_line_to_decision(l, origin) for l in text.splitlines()) if d]
-    merged: dict[str, dict] = {}
+    merged: dict[tuple[str, str], dict] = {}
     for d in found:
         k = _key(d)
         if k not in merged:
@@ -623,7 +679,16 @@ def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
         m["urgency"] = min((a, b), key=URG_RANK.get)
         m["owner_only"] = bool(m.get("owner_only")) or bool(d.get("owner_only"))
         m["unblocks"] = int(m.get("unblocks") or 0) + int(d.get("unblocks") or 0)
-    decisions = list(merged.values())
+    # spec §8.5: one real option is not a decision. Never padded with an invented option
+    # (a "Manter pendente" filler became a phantom letter B on parse); listed as rejected.
+    decisions, rejected = [], []
+    for d in merged.values():
+        n = len([o for o in (d.get("options") or []) if isinstance(o, dict) and _s(o.get("label"))])
+        if 2 <= n <= 4:
+            decisions.append(d)
+        else:
+            rejected.append({"ask": _s(d.get("ask")), "origin": d.get("origin") or {},
+                             "reason": f"{n} opção(ões) real(is); uma decisão exige 2–4 (alt=…)"})
     cards = [normalize(d) for d in decisions]
     shown, parked, nxt = plan(cards)
     pos = {id(c): i for i, c in enumerate(cards)}
@@ -631,7 +696,7 @@ def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
     return {"schema": SCHEMA, "decisions": [decisions[i] for i in order],
             "queue": {"cards": [cards[pos[id(c)]]["title"] for c in shown],
                       "parked": [c["title"] for c in parked], "next": [c["title"] for c in nxt]},
-            "deduped": len(found) - len(decisions)}
+            "deduped": len(found) - len(merged), "rejected": rejected}
 
 
 # ---------------------------------------------------------------- lint
@@ -718,13 +783,14 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
                 errs.append(f"{tag}: recommended '{r}' não é uma opção")
             elif not _s(opts[j].get("evidence")):
                 warns.append(f"{tag}: recomendação sem ponteiro de evidência → card sem ✅")
-        if refs and not _s(d.get("because")):
-            warns.append(f"{tag}: falta because (✅ recomendo A porque …)")
+        if refs and not _s(d.get("rationale")):
+            errs.append(f"{tag}: recomendação sem rationale (A ✅ … — porque <rationale>)")
         if not isinstance(d.get("reversible"), bool):
             warns.append(f"{tag}: reversible não informado (↩️/🚪)")
     if errs:
         return errs, warns
-    shown, parked, nxt = plan([normalize(d) for d in decisions])
+    warns += budget_warnings(doc, session)
+    shown, parked, nxt = plan(load_cards(doc))
     if len(shown) > 4:
         errs.append("mais de 4 cards")
     for layout in ("full", "compact"):
@@ -735,6 +801,37 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
     errs += lint_auq(ask_claude(doc, now=now, session=session), "ask-claude")
     errs += lint_html(ask_omp(doc, now=now, session=session), "ask-omp")
     return errs, warns
+
+
+def budget_warnings(doc: dict, session: str | None) -> list[str]:
+    """Source budgets of the compact card (spec §8.1): every field fits its line in 80
+    columns. Nothing is truncated: a field over budget wraps and the lint asks to shorten
+    it at the source."""
+    warns = []
+    foot = {"harness": _s(doc.get("harness")), "repo": _s(doc.get("repo")),
+            "session": session[-8:] if session else ""}
+    for c in load_cards(doc):
+        tag = c["id"] or c["title"]
+        if cols(_title_line(c, 9)) > COLS:
+            warns.append(f"{tag}: title passa do orçamento da L1 ({cols(_title_line(c, 9))} > {COLS} colunas)")
+        if c["rec"] and cols(IND + _rec_line(c)) > COLS:
+            warns.append(f"{tag}: rótulo + rationale + ponteiro passam do orçamento da L2 "
+                         f"({cols(IND + _rec_line(c))} > {COLS} colunas)")
+        rest = [o for o in c["options"] if not o["recommended"]] if c["rec"] else c["options"]
+        if len(pack([f"{o['letter']} {o['label']}" for o in rest])) > 1:
+            warns.append(f"{tag}: rótulos das demais opções passam de 1 linha (L3)")
+        if cols(IND + _risk(c)) > COLS:
+            warns.append(f"{tag}: cost_of_delay passa do orçamento da L4 ({cols(IND + _risk(c))} > {COLS} colunas)")
+        delta = origin_delta(c, foot)
+        if delta and cols(IND + delta) > COLS:
+            warns.append(f"{tag}: origem passa de 1 linha (L5)")
+        if len(compact_lines(c, 9, foot, short=True)) > 3:
+            warns.append(f"{tag}: card de 3 linhas não cabe (L3 = demais opções · ⌛ · porta · origem); "
+                         "encurte cost_of_delay ou os rótulos")
+        for o in c["options"]:
+            if cols(o["effect"]) > EFFECT_MAX:
+                warns.append(f"{tag} {o['letter']}: effect passa do orçamento ({cols(o['effect'])} > {EFFECT_MAX} colunas)")
+    return warns
 
 
 # ---------------------------------------------------------------- CLI
@@ -790,7 +887,7 @@ def main(argv=None) -> int:
                 sys.stdout.write(ask_omp(doc, now=now, session=session))
         elif a.cmd == "parse":
             doc = load_doc(a.decisions)
-            shown, _, _ = plan([normalize(d) for d in doc["decisions"]])
+            shown, _, _ = plan(load_cards(doc))
             raw = a.answer if a.answer is not None else _read(a.input or "-")
             if a.source == "text":
                 resolved = dict((int(k), v.upper()) for k, v in (r.split("=", 1) for r in a.resolved))
