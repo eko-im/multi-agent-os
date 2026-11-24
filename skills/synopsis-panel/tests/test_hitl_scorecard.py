@@ -661,6 +661,40 @@ class AggregateLintTest(unittest.TestCase):
         finally:
             tmp.unlink()
 
+    def test_text_parse_rebuilds_manifest_from_the_code_not_the_environment(self):
+        """Borderline fit: with the root session the footer is short and 2 cards fit;
+        a parser without a session would rebuild a 1-card manifest and reject `2:A`."""
+        ds = []
+        for i in (1, 2):
+            d = decision(i, "alta", True)
+            d["rationale"] = "é o mais barato" + " x" * 36
+            d["cost_of_delay"] = "o item fica parado" + " y" * 18
+            ds.append(d)
+        d = doc(*ds)
+        shown = sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")[1]
+        self.assertEqual(len(shown), 2)
+        self.assertEqual(len(sc.render_with_cards(d, now=NOW, session=None, layout="compact")[1]), 1)
+        self.assertEqual(sc._identity_from_code(CODE), (NOW - NOW % 60, SESSION[-8:]))
+        tmp = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "hitl_parse_identity_test.json"
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")}
+        try:
+            proc = subprocess.run([sys.executable, str(_SCRIPT), "parse", str(tmp), "--source", "text",
+                                   "--layout", "compact", "--code", CODE, "--answer", f"{CODE} 1:A 2:A"],
+                                  capture_output=True, text=True, env=env)
+            res = json.loads(proc.stdout)
+            self.assertEqual([i["status"] for i in res["items"]], ["decided", "decided"])
+        finally:
+            tmp.unlink()
+
+    def test_lint_uses_the_same_door_fallback_as_normalize(self):
+        d = decision(1)                                  # recommended Manter, confidence média
+        d["reversible"] = False
+        d["options"][0]["reversible"] = None             # null inherits the card default
+        self.assertIs(sc.normalize(d)["options"][0]["reversible"], False)
+        errs, _ = sc.lint_doc(doc(d), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA com confiança 'média'" in e for e in errs))
+
     def test_lint_text_flags_width_and_dash_offer(self):
         errs = sc.lint_text("x" * 81 + f"\nResponda: {CODE} 1:-\n")
         self.assertEqual(len(errs), 2)

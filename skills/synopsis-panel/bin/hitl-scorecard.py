@@ -119,6 +119,13 @@ def _option_index(ref, opts: list[dict]):
     return None
 
 
+def _door(o: dict, card_rev) -> bool | None:
+    """Effective door of one option: its own boolean `reversible`, else the legacy
+    card-level default, else unknown. normalize() and lint both use this one rule."""
+    orev = o.get("reversible")
+    return orev if isinstance(orev, bool) else (card_rev if isinstance(card_rev, bool) else None)
+
+
 def normalize(d: dict) -> dict:
     """One decision (schema hitl-scorecard/v1) -> card: display order, letters, recommendation."""
     if not isinstance(d, dict):
@@ -141,8 +148,7 @@ def normalize(d: dict) -> dict:
     shown = []
     for k, i in enumerate(order):
         o = opts[i]
-        orev = o.get("reversible")
-        orev = orev if isinstance(orev, bool) else (rev if isinstance(rev, bool) else None)
+        orev = _door(o, rev)
         shown.append({"letter": LETTERS[k] if k < len(LETTERS) else "?", "label": _s(o.get("label")),
                       "effect": _s(o.get("effect")), "confidence": _s(o.get("confidence")),
                       "evidence": _s(o.get("evidence")), "recommended": i in rec, "reversible": orev})
@@ -566,6 +572,20 @@ def _fechado(code: str | None, items: list[dict]) -> str:
     return f"{code or 'AskUserQuestion'} fechado: {toks}"
 
 
+def _identity_from_code(code: str | None) -> tuple[int, str] | None:
+    """(instant, session suffix) that produced a digest code `K<YYMMDD>-<HHMM>-<s8>`
+    (UTC minute, spec §2). Rendering with them reproduces the digest that was shown, with
+    the same code, header and footer, whatever the parser's own clock or session."""
+    m = re.fullmatch(r"K(\d{6})-(\d{4})-([0-9A-Za-z]{8})", _s(code))
+    if not m:
+        return None
+    try:
+        t = dt.datetime.strptime(m.group(1) + m.group(2), "%y%m%d%H%M").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        return None
+    return int(t.timestamp()), m.group(3)
+
+
 def parse_text(cards, answer: str, code: str | None, closed=(), resolved=None) -> dict:
     resolved = resolved or {}
     if not code:
@@ -874,13 +894,14 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
             errs.append(f"{tag}: rótulos repetidos")
         if d.get("multi") and any("," in x for x in labels):
             errs.append(f"{tag}: vírgula em rótulo de multi-seleção")
-        if d.get("multi") and any(o.get("reversible", d.get("reversible")) is False for o in opts):
+        card_rev = d.get("reversible")
+        door = lambda o: _door(o, card_rev)     # the same fallback as normalize()
+        if d.get("multi") and any(door(o) is False for o in opts):
             errs.append(f"{tag}: opção 🚪 SEM VOLTA em card multi (separe numa escolha única)")
         rec = d.get("recommended")
         refs = rec if isinstance(rec, list) else ([] if rec in (None, "", False) else [rec])
         if not d.get("multi") and len(refs) > 1:
             errs.append(f"{tag}: escolha única com mais de uma recomendação")
-        card_rev = d.get("reversible")
         for r in refs:
             j = _option_index(r, opts)
             if j is None:
@@ -888,15 +909,14 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
                 continue
             if not _s(opts[j].get("evidence")):
                 warns.append(f"{tag}: recomendação sem ponteiro de evidência → card sem ✅")
-            orev = opts[j].get("reversible", card_rev)
+            orev = door(opts[j])
             if orev is False and _s(opts[j].get("confidence")).casefold() not in HIGH_CONF:
                 errs.append(f"{tag}: recomendada '{_s(opts[j].get('label'))}' é 🚪 SEM VOLTA com confiança "
                             f"'{_s(opts[j].get('confidence')) or '?'}': exija confiança alta ou "
                             "deixe o card sem recomendação")
         if refs and not _s(d.get("rationale")):
             errs.append(f"{tag}: recomendação sem rationale (A ✅ … — porque <rationale>)")
-        unknown = [_s(o.get("label")) for o in opts
-                   if not isinstance(o.get("reversible", card_rev), bool)]
+        unknown = [_s(o.get("label")) for o in opts if door(o) is None]
         if unknown:
             warns.append(f"{tag}: reversible não informado (↩️/🚪) em: {', '.join(unknown)}")
         for o in opts:
@@ -1007,11 +1027,13 @@ def main(argv=None) -> int:
             raw = a.answer if a.answer is not None else _read(a.input or "-")
             if a.source == "text":
                 # A text answer refers to the cards the text digest made answerable, and the
-                # compact fit may move some to ⏭ (not answerable now). The layout that was
-                # shown is never assumed: it selects the same answer manifest.
+                # compact fit may move some to ⏭ (not answerable now). The manifest is rebuilt
+                # from what was shown: the layout given, and the instant + session suffix the
+                # digest code carries, never the parser's clock or session environment.
                 if not a.layout:
                     raise InputError("parse --source text exige --layout (o layout do digest mostrado)")
-                _, shown = render_with_cards(doc, now=now, session=session, layout=a.layout,
+                shown_now, shown_session = _identity_from_code(a.code) or (now, session)
+                _, shown = render_with_cards(doc, now=shown_now, session=shown_session, layout=a.layout,
                                              harness=a.harness, repo=a.repo)
                 resolved = dict((int(k), v.upper()) for k, v in (r.split("=", 1) for r in a.resolved))
                 res = parse_text(shown, raw, a.code, a.closed, resolved)
