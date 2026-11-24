@@ -132,9 +132,10 @@ def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
         if (attempt["generation"], attempt["cursor_seq"], attempt["save_seq"]) >= (
                 pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"],
                 pending["failed_at"].get("save_seq", 0)):
-            # floor = newest state that failed to save; the in-flight set is the UNION of
-            # every failure of this pending, so a later failed save after a reload to an
-            # older revision cannot erase an item that was in flight at an earlier failure.
+            # floor = newest state that failed to save; this branch only runs when the
+            # (generation, cursor_seq, save_seq) tuple is >= the floor, and it unions the
+            # in_flight of every failure that advanced the floor, so an earlier failure
+            # never loses items already at the floor.
             pending["failed_at"] = dict(attempt, in_flight=sorted(
                 set(attempt["in_flight"]) | set(pending["failed_at"].get("in_flight", []))))
         parent["children"][child_id]["pending"] = pending

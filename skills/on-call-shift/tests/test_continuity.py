@@ -613,6 +613,7 @@ class ChildRecovery(unittest.TestCase):
         out = self.recover(parent, "child-a", path, sha)
         self.assertFalse(out["recovered"], "checkpoint lacking the failed in-flight item "
                          "was accepted after a counter rollback")
+        self.assertEqual(out["reason"], "STALE_CHECKPOINT_IN_FLIGHT")
         self.assertEqual(parent, before)
         self.assertFalse(parent["admission"]["open"])
         self.assertIsNotNone(parent["children"]["child-a"]["pending"])
@@ -731,6 +732,27 @@ class ChildRecovery(unittest.TestCase):
             self.assertEqual((out["recovered"], out["reason"]),
                              (False, "CHECKPOINT_UNREADABLE"), field)
             self.assertEqual(parent, before)
+
+    def test_91_non_item_completed_event_with_the_lost_id_does_not_count_as_completion(self):
+        # Contrast for the item_completed filter: the reloaded checkpoint logs an event of
+        # another type carrying the lost item's id; it must not excuse the missing item.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)  # good save, no item
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        reloaded, _ = co.load_checked(path)
+        reloaded["log"] = list(reloaded.get("log") or []) + [{"event": "item_adopted", "id": "k1"}]
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]["save_seq"]
+        sha = None
+        while sha is None or reloaded["save_seq"] <= floor:  # counter must pass the floor
+            sha = co.autosave(reloaded, path)["sha256"]
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_IN_FLIGHT"))
+        self.assertEqual(parent, before)
+
 
 class OwnTeam(unittest.TestCase):
     """The holder's own team: admission, drain, idempotent retirement, other owners untouched."""
