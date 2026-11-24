@@ -1,0 +1,4 @@
+{
+  "default": "deny",
+  "allow": ["launch", "close", "tab_list", "navigate", "snapshot", "scroll", "wait", "get", "read", "url", "title", "gettext"]
+}
