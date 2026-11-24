@@ -67,6 +67,7 @@ This folder contains reusable Agent Skills for the Multi-Agent OS framework. Ski
 | `mvv-synthesis` | `mvv-synthesis/SKILL.md` | Synthesize Mission, Vision, Values from ontological analysis output |
 | `notebooklm` | `notebooklm/SKILL.md` | Route NotebookLM work between the notebooklm-py CLI, the notebooklm-mcp-cli MCP server, and the `@notebooklm-mcp` Claude Code toggle. |
 | `omniroute-concierge` | `omniroute-concierge/SKILL.md` | Concierge / health-check / inventory / router for the operator's **OmniRoute** gateway (v3.8+ local AI proxy). |
+| `on-call-shift` | `on-call-shift/SKILL.md` | Hold an on-call shift as one accountable holder with a persisted lease and cursor; adopt one eligible item from authorized trackers when no backlog was given; hand off only on the successor's ACK; report DEGRADED when the runtime cannot wake the exact supervisor. |
 | `ontological-analysis` | `ontological-analysis/SKILL.md` | Analyze repository through 8 philosophical dimensions for MVV extraction |
 | `ooda-loop` | `ooda-loop/SKILL.md` | Run a profile-aware, bounded delivery loop when work arrives through chat, ticket, backlog, specification, PR, hook, webhook, bootstrap or prototype. |
 | `opendesign-concierge` | `opendesign-concierge/SKILL.md` | Concierge / onboarding / guide / capability-detector for the Open Design platform (`nexu-io/open-design` — the open-source, agent-native, local-first  |
@@ -126,7 +127,7 @@ For active-conversation recovery, dormant/foreign re-entry, or prioritization, u
 - **Session lifecycle**: `preflight` → `morning-briefing` → `postflight` (+ `quiesce` · `signoff` · `session-wrapup` · `sync-to-git` · `session-fission` · `session-reentry` · `live-session-continuity-recovery` · `session-to-vault` · `reactivate` · `context-prep` · `verified-agentic-session-model`)
 - **Concierge routing**: `maos-concierge` · `claude-concierge` · `harness-concierge` · `9router-concierge` · `omniroute-concierge` · `opendesign-concierge` · `openrig-concierge` · `walkthrough-concierge`
 - **Governance & convergence**: `council-gate` · `request-carried-authorization` · `convergence-engine` · `converge` · `red-team` · `delegate-governance` · `worktree-policy` · `anti-conflict` · `hierarchical-merge` · `ttl-policy` · `pii-masking`
-- **Loops & recovery**: `ooda-loop` · `gap-loop` · `ratchet-loop` · `virtuous-spiral` · `goal-recovery` · `live-session-continuity-recovery` · `auto-pilot`
+- **Loops & recovery**: `ooda-loop` · `on-call-shift` · `gap-loop` · `ratchet-loop` · `virtuous-spiral` · `goal-recovery` · `live-session-continuity-recovery` · `auto-pilot`
 - **Fleet & bulk convergence**: `fleet-campaign` (Classis — N resources → one declared config state, measured rounds) · `work-drain` (tracker register → DONE) · `repo-custody-transfer` (ONE repo, host→host)
 - **Founder journey**: `founder-playbook` · `founder-stage-idea` · `founder-stage-mvp` · `founder-stage-launch` · `founder-stage-scale`
 - **Content & language**: `content-recast` · `proofread` · `transcript-corrector` · `libras-writing-bridge` (Ponte de Escrita Surda (Libras) — draft-only written bridge, not a sign interpreter)
