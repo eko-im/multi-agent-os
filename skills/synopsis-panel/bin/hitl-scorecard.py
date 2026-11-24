@@ -222,12 +222,17 @@ def root_session(flag: str | None) -> str | None:
 
 def load_cards(doc: dict) -> list[dict]:
     """Cards for render/ask/parse. A decision with fewer than 2 real options is not a
-    decision, and more than 4 do not fit a question: refused, never padded (contrato §6)."""
+    decision, and more than 4 do not fit a question: refused, never padded (contrato §6).
+    A 🚪 SEM VOLTA option (own or inherited) never goes in a multi card (contrato §5):
+    refused before any answer surface exists."""
     cards = [normalize(d) for d in doc["decisions"]]
     for i, c in enumerate(cards, 1):
         if not 2 <= len(c["options"]) <= 4:
             raise InputError(f"{c['id'] or f'#{i}'}: {len(c['options'])} opção(ões) real(is); "
                              "uma decisão exige 2–4 (nenhuma opção é inventada)")
+        if c["multi"] and False in c["doors"]:
+            raise InputError(f"{c['id'] or f'#{i}'}: opção 🚪 SEM VOLTA em card multi; "
+                             "separe-a numa decisão de escolha única")
     return cards
 
 
@@ -853,6 +858,8 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
             errs.append(f"{tag}: rótulos repetidos")
         if d.get("multi") and any("," in x for x in labels):
             errs.append(f"{tag}: vírgula em rótulo de multi-seleção")
+        if d.get("multi") and any(o.get("reversible", d.get("reversible")) is False for o in opts):
+            errs.append(f"{tag}: opção 🚪 SEM VOLTA em card multi (separe numa escolha única)")
         rec = d.get("recommended")
         refs = rec if isinstance(rec, list) else ([] if rec in (None, "", False) else [rec])
         if not d.get("multi") and len(refs) > 1:
@@ -954,6 +961,8 @@ def main(argv=None) -> int:
     p.add_argument("--code", help="code of the digest shown (required for text answers)")
     p.add_argument("--closed", action="append", default=[], help="code already closed (repeatable)")
     p.add_argument("--resolved", action="append", default=[], help="n=LETTER already resolved in this digest")
+    p.add_argument("--layout", choices=["full", "compact"],
+                   help="layout of the text digest that was shown (required with --source text)")
     p = sub.add_parser("aggregate", parents=[common])
     p.add_argument("inputs", nargs="+", help="decision JSON files and/or files with NEEDS-OPERATOR lines (- = stdin)")
     p.add_argument("--origin", default="", help="harness·repo·session for bare NEEDS-OPERATOR lines")
@@ -981,9 +990,12 @@ def main(argv=None) -> int:
             doc = load_doc(a.decisions)
             raw = a.answer if a.answer is not None else _read(a.input or "-")
             if a.source == "text":
-                # A text answer refers to the cards the text digest made answerable; the
-                # compact fit may have moved some to ⏭, and those are not answerable now.
-                _, shown = render_with_cards(doc, now=now, session=session, layout="compact",
+                # A text answer refers to the cards the text digest made answerable, and the
+                # compact fit may move some to ⏭ (not answerable now). The layout that was
+                # shown is never assumed: it selects the same answer manifest.
+                if not a.layout:
+                    raise InputError("parse --source text exige --layout (o layout do digest mostrado)")
+                _, shown = render_with_cards(doc, now=now, session=session, layout=a.layout,
                                              harness=a.harness, repo=a.repo)
                 resolved = dict((int(k), v.upper()) for k, v in (r.split("=", 1) for r in a.resolved))
                 res = parse_text(shown, raw, a.code, a.closed, resolved)

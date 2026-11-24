@@ -112,7 +112,8 @@ never consent, and the card returns in the next digest:
 - At most 4 options per question; split the question when there are more.
 - The recommendation may be a set. The text answer is `n:A+C`. No label of a multi card
   contains a comma, because the tool returns the picks comma-separated.
-- A one-way-door option never goes in a multi card.
+- A one-way-door option never goes in a multi card: `render`, `ask` and `parse` refuse
+  it (exit 2) and `lint` fails; split it into a single-choice decision.
 
 ## 6. Aggregating many sessions
 
@@ -152,6 +153,7 @@ The compact body never passes 15 lines (§1): cards degrade, then overflow to `�
   confidence is not `alta`: make the recommendation stronger or leave the card
   `sem recomendação`;
 - labels repeat, or a recommendation names something that is not an option;
+- a multi card has a 🚪 SEM VOLTA option (own or inherited `reversible: false`);
 - the origin, context, ask or cost is missing;
 - the `Responda:` line offers `-`;
 - an `AskUserQuestion` bound is broken;

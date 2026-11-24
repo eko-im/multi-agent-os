@@ -315,7 +315,7 @@ python3 "$SC" render queue.json --layout compact              # resposta (≤15 
 python3 "$SC" render queue.json --layout full > card.txt      # detalhe em arquivo
 python3 "$SC" ask queue.json --target claude                  # payload AskUserQuestion
 python3 "$SC" ask queue.json --target omp > form.html         # <form> do ask do OMP
-python3 "$SC" parse queue.json --source text --code "$CODE" --answer "$CODE 1:A 2:-"
+python3 "$SC" parse queue.json --source text --layout compact --code "$CODE" --answer "$CODE 1:A 2:-"
 python3 "$SC" lint queue.json                                 # regras da spec
 ```
 

@@ -616,6 +616,40 @@ class AggregateLintTest(unittest.TestCase):
                              (CODE.lower(), f"{CODE.lower()} 1:A")):
             self.assertEqual(sc.parse_text(cs, answer, code)["items"][0]["status"], "decided")
 
+    def test_one_way_option_in_multi_card_is_refused(self):
+        d = decision(1, multi=True, rec=["Manter"], n_opts=3)
+        d["options"][2]["reversible"] = False                # not recommended, still refused
+        errs, _ = sc.lint_doc(doc(d), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA em card multi" in e for e in errs))
+        for fn in (lambda: sc.render_text(doc(d), now=NOW, session=SESSION),
+                   lambda: sc.ask_claude(doc(d), now=NOW, session=SESSION),
+                   lambda: sc.ask_omp(doc(d), now=NOW, session=SESSION)):
+            with self.assertRaises(sc.InputError):
+                fn()
+        inherited = decision(2, multi=True, rec=["Manter"])
+        inherited["reversible"] = False
+        self.assertTrue(any("SEM VOLTA em card multi" in e
+                            for e in sc.lint_doc(doc(inherited), now=NOW, session=SESSION)[0]))
+
+    def test_text_parse_uses_the_layout_that_was_shown(self):
+        d = doc(long_decision(1, "alta"), long_decision(2), long_decision(3, "baixa"))
+        tmp = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "hitl_parse_layout_test.json"
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        try:
+            full_n = len(sc.render_with_cards(d, now=NOW, session=SESSION)[1])
+            compact_n = len(sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")[1])
+            self.assertGreater(full_n, compact_n)            # fixture: compact moves a card to ⏭
+            base = [sys.executable, str(_SCRIPT), "parse", str(tmp), "--source", "text", "--code", CODE,
+                    "--answer", f"{CODE} {full_n}:B", "--now", str(NOW), "--session", SESSION]
+            run = lambda *x: subprocess.run(base + list(x), capture_output=True, text=True)
+            res = json.loads(run("--layout", "full").stdout)
+            self.assertEqual(res["items"][full_n - 1]["status"], "decided")
+            res = json.loads(run("--layout", "compact").stdout)
+            self.assertEqual(res["rejected_tokens"][0]["n"], full_n)
+            self.assertEqual(run().returncode, 2)            # layout never assumed
+        finally:
+            tmp.unlink()
+
     def test_lint_text_flags_width_and_dash_offer(self):
         errs = sc.lint_text("x" * 81 + f"\nResponda: {CODE} 1:-\n")
         self.assertEqual(len(errs), 2)
