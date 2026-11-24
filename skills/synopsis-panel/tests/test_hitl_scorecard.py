@@ -98,6 +98,25 @@ class CompactCapTest(unittest.TestCase):
         res = sc.parse_text(shown, f"{CODE} {n + 1}:A", CODE)
         self.assertNotIn("decided", [it["status"] for it in res.get("items", [])])
 
+    def test_parked_lines_overflow_before_any_urgent_card(self):
+        urgent_cards = [long_decision(i, "alta") for i in (1, 2, 3)]
+        parked = []
+        for i in (7, 8, 9):
+            p = decision(i)
+            p["parked"] = 1
+            parked.append(p)
+        d = doc(*urgent_cards, *parked)
+        out, shown = sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")
+        self.assertLessEqual(len(self._lines(out)), sc.BODY_MAX, out)
+        self.assertFalse(any(c["id"] in ("D7", "D8", "D9") for c in shown), "a parked item became a card")
+        over = next(l for l in out.splitlines() if l.startswith("⏭"))
+        hidden_urgent = [c["id"] for c in urgent_cards if c["id"] not in {s["id"] for s in shown}]
+        self.assertTrue(hidden_urgent, out)              # this fixture MUST push an urgent card out
+        self.assertNotIn("⏸", out)                       # …and only after every ⏸ line moved
+        for pid in ("D7", "D8", "D9", *hidden_urgent):
+            self.assertEqual(over.count(f" {pid}"), 1)
+        self.assertIn("1 · ⏫ ALTA", out)
+
     def test_single_card_over_cap_is_an_error_not_a_cut(self):
         d = long_decision(1, "alta")
         d["title"] = " ".join(["palavra"] * 60)

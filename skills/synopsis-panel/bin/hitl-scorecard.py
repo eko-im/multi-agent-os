@@ -413,7 +413,7 @@ def render_with_cards(doc: dict, *, now: int, session: str | None, layout: str =
     foot = {"harness": harness or _s(doc.get("harness")), "repo": repo or _s(doc.get("repo")),
             "session": session[-8:] if session else ""}
 
-    def frame(shown, nxt):
+    def frame(shown, nxt, parked):
         head = header_lines(shown, parked, nxt, code, now)
         tail = []
         for c in parked:
@@ -429,16 +429,17 @@ def render_with_cards(doc: dict, *, now: int, session: str | None, layout: str =
 
     nums = lambda shown: [i if code else "•" for i in range(1, len(shown) + 1)]
     if layout == "full":
-        head, tail = frame(shown, nxt)
+        head, tail = frame(shown, nxt, parked)
         body = [card_lines(c, k) for c, k in zip(shown, nums(shown))]
         return "\n".join(head + [l for card in body for l in card] + tail) + "\n", shown
     # spec §8.1: 5-line cards while the WRAPPED output fits the attention contract (15
     # lines); otherwise the lowest-priority card drops to 3 lines first, then the next one
-    # up. If all-3-line still does not fit, the lowest-priority card moves to the
-    # `⏭ próximo digest` line (spec §4 item 3), until it fits. A single card that still does
-    # not fit is an error: shorten it at the source (never cut, never exceed the cap).
+    # up. If all-3-line still does not fit, informative ⏸ lines move to `⏭ próximo digest`
+    # first (they are never answerable now, so a ⏫/👤 card is never hidden to keep them);
+    # only then the lowest-priority card moves to ⏭, until it fits. A single card that
+    # still does not fit is an error: shorten it at the source (never cut, never exceed).
     while True:
-        head, tail = frame(shown, nxt)
+        head, tail = frame(shown, nxt, parked)
         ks = nums(shown)
         body = [compact_lines(c, k, foot) for c, k in zip(shown, ks)]
         for j in reversed(range(len(shown))):
@@ -447,6 +448,10 @@ def render_with_cards(doc: dict, *, now: int, session: str | None, layout: str =
             body[j] = compact_lines(shown[j], ks[j], foot, short=True)
         if len(head) + len(tail) + sum(map(len, body)) <= BODY_MAX:
             return "\n".join(head + [l for card in body for l in card] + tail) + "\n", shown
+        if parked:
+            nxt = list(nxt) + [parked[-1]]
+            parked = parked[:-1]
+            continue
         if len(shown) <= 1:
             raise ValueError(f"render-compact: um card sozinho passa de {BODY_MAX} linhas; "
                              "encurte title/rationale/cost_of_delay/rótulos na fonte")
