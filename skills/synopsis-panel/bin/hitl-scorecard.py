@@ -26,7 +26,6 @@ import os
 import re
 import sys
 import time
-import unicodedata
 from pathlib import Path
 
 _FUSE_PATH = Path(__file__).resolve().parent / "synopsis-fuse.py"
@@ -69,16 +68,9 @@ def _s(v) -> str:
     return " ".join(str(v if v is not None else "").split())
 
 
-def cols(text: str) -> int:
-    """Display columns; spec §2: an emoji counts as 2 (box drawing stays 1)."""
-    n = 0
-    for ch in text:
-        if unicodedata.combining(ch) or ch in "\ufe0f\u200d":
-            continue
-        wide = unicodedata.east_asian_width(ch) in "WF"
-        emoji = unicodedata.category(ch) == "So" and not "\u2500" <= ch <= "\u257f"
-        n += 2 if (wide or emoji) else 1
-    return n
+# Display columns: one measure for the digest, the ⏭ line and the lint (spec §2: an emoji
+# counts as 2, box drawing stays 1). The engine owns it; this module never re-implements it.
+cols = fuse._cols
 
 
 
@@ -230,7 +222,7 @@ def root_session(flag: str | None) -> str | None:
 
 def load_cards(doc: dict) -> list[dict]:
     """Cards for render/ask/parse. A decision with fewer than 2 real options is not a
-    decision, and more than 4 do not fit a question: refused, never padded (spec §8.5)."""
+    decision, and more than 4 do not fit a question: refused, never padded (contrato §6)."""
     cards = [normalize(d) for d in doc["decisions"]]
     for i, c in enumerate(cards, 1):
         if not 2 <= len(c["options"]) <= 4:
@@ -258,7 +250,7 @@ def _glyph(o: dict) -> str:
 
 
 def _doors(c: dict) -> str:
-    """Legend of the doors present on the card's options, glyph + CAPS word (spec §8.2);
+    """Legend of the doors present on the card's options, glyph + CAPS word (contrato §1);
     the per-option glyph sits beside each option."""
     words = [DOOR[False]] if False in c["doors"] else []
     words += [DOOR[True]] if True in c["doors"] else []
@@ -349,7 +341,7 @@ def _risk(c: dict, short: bool = False) -> str:
 
 def origin_delta(c: dict, foot: dict) -> str:
     """The card's origin fields that differ from the footer (harness · repo · sessão).
-    Never omitted when they differ: it is what tells N sessions apart (spec §8.1)."""
+    Never omitted when they differ: it is what tells N sessions apart (contrato §1)."""
     o = c["origin"]
     parts = [v for v, f in ((o["harness"], foot["harness"]), (o["repo"], foot["repo"]),
                             (o["session"][-8:], foot["session"])) if v and v != f]
@@ -359,7 +351,7 @@ def origin_delta(c: dict, foot: dict) -> str:
 
 
 def compact_lines(c: dict, n, foot: dict, short: bool = False) -> list[str]:
-    """Compact card (spec §8.1), BLUF/Minto order. 5 lines: L1 title · L2 recommendation +
+    """Compact card (contrato §1), BLUF/Minto order. 5 lines: L1 title · L2 recommendation +
     rationale + pointer · L3 the other options · L4 ⌛ cost · ↩️/🚪 · L5 origin (only when it
     differs from the footer). `short` = 3 lines: L3 carries options, ⌛, door and origin."""
     rest = [o for o in c["options"] if not o["recommended"]] if c["rec"] else c["options"]
@@ -389,7 +381,7 @@ def header_lines(shown, parked, nxt, code, now) -> list[str]:
     lines = [head, f"{len(shown)} + {len(parked)} estac." + (f" + {len(nxt)} próximo digest" if nxt else "")]
     if code and shown:
         # A card without a recommendation offers no letter: `?` is not an answer token the
-        # parser accepts, so a pasted Responda line cannot decide it by copy (spec §8.4).
+        # parser accepts, so a pasted Responda line cannot decide it by copy (contrato §10).
         toks = " ".join(f"{i}:{'+'.join(c['rec']) or '?'}" for i, c in enumerate(shown, 1))
         lines.append(f"Responda: {code} {toks}")
         lines.append(_hint([str(i) for i, c in enumerate(shown, 1) if needs_letter(c)], len(shown)))
@@ -432,7 +424,7 @@ def render_with_cards(doc: dict, *, now: int, session: str | None, layout: str =
         head, tail = frame(shown, nxt, parked)
         body = [card_lines(c, k) for c, k in zip(shown, nums(shown))]
         return "\n".join(head + [l for card in body for l in card] + tail) + "\n", shown
-    # spec §8.1: 5-line cards while the WRAPPED output fits the attention contract (15
+    # contrato §1: 5-line cards while the WRAPPED output fits the attention contract (15
     # lines); otherwise the lowest-priority card drops to 3 lines first, then the next one
     # up. If all-3-line still does not fit, informative ⏸ lines move to `⏭ próximo digest`
     # first (they are never answerable now, so a ⏫/👤 card is never hidden to keep them);
@@ -471,9 +463,12 @@ def ansi(text: str) -> str:
 
 
 # ---------------------------------------------------------------- ask (panel)
-def _question(c: dict) -> str:
+def _question(c: dict, n: int) -> str:
+    """AskUserQuestion keys `answers` by the question text, so the text starts with the
+    card number and id (`<n> · <id> — `): two decisions with the same ask never collide."""
     ask = c["ask"].rstrip(" ?") + "?"
-    return (f"{ask} Contexto: {c['context']} Origem: {_origin(c)}. "
+    ident = f"{n} · {c['id']} — " if c["id"] else f"{n} — "
+    return (f"{ident}{ask} Contexto: {c['context']} Origem: {_origin(c)}. "
             f"Sem resposta: {c['cost_of_delay'] or '?'}.")
 
 
@@ -490,11 +485,21 @@ def auq_question(c: dict, n: int) -> dict:
                     "evidence": o["evidence"], "confidence": o["confidence"]})
     opts, _has_rec, _src = fuse._card_options({"idade": "?"}, {"options": raw})   # reused builder
     if c["multi"]:
+        # raw carries no `recommended` in a multi card, so `_card_options` keeps the source
+        # order and opts[k] is c["options"][k]. The marker goes on after clipping, and the
+        # labels are deduplicated with the marker kept: each pick keeps its identity.
+        seen: set[str] = set()
         for o, src in zip(opts, c["options"]):
-            if src["recommended"]:
-                o["label"] = fuse._clip(src["label"], fuse.AUQ_LABEL_MAX - len(REC)) + REC
+            mark = REC if src["recommended"] else ""
+            label, k = fuse._clip(src["label"], fuse.AUQ_LABEL_MAX - len(mark)) + mark, 1
+            while label in seen:
+                k += 1
+                suffix = f" ({k})"
+                label = fuse._clip(src["label"], fuse.AUQ_LABEL_MAX - len(mark) - len(suffix)) + suffix + mark
+            o["label"] = label
+            seen.add(label)
     header = f"{n} {URG[c['urgency']][1]}" + (" \U0001f464" if c["owner_only"] else "")
-    return {"question": _question(c), "header": header[: fuse.AUQ_HEADER_MAX],
+    return {"question": _question(c, n), "header": header[: fuse.AUQ_HEADER_MAX],
             "options": opts, "multiSelect": c["multi"]}
 
 
@@ -709,13 +714,15 @@ def needs_line_to_decision(line: str, default_origin: dict) -> dict | None:
 
 
 def _key(d: dict) -> tuple[str, str]:
-    """Dedupe key (spec §8.6): (repo, id) when the decision carries an explicit id;
+    """Dedupe key (contrato §6): (repo, id) when the decision carries an explicit id;
     otherwise (repo, normalized ask), the legacy path for bare NEEDS-OPERATOR lines. Two
     distinct ids with the same ask in one repo stay two decisions; the same ask in two repos
     is two decisions; the same ask from two sessions of one repo merges (+N sessões). The
-    session stands in for the repo only when the repo is unknown."""
+    session stands in for the repo only when the repo is unknown (empty or the `?`
+    placeholder), so sources of unknown repos never merge across sessions."""
     o = d.get("origin") if isinstance(d.get("origin"), dict) else {}
-    where = _s(o.get("repo")).casefold() or f"session:{_s(o.get('session'))}"
+    repo = _s(o.get("repo")).casefold()
+    where = repo if repo not in ("", "?") else f"session:{_s(o.get('session'))}"
     ident = _s(d.get("id")).strip()
     if ident:
         return where, f"id:{ident.casefold()}"
@@ -723,12 +730,18 @@ def _key(d: dict) -> tuple[str, str]:
 
 
 def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
-    """sources: (name, text). JSON documents and NEEDS-OPERATOR lines; dedupe; order."""
+    """sources: (name, text). JSON documents and NEEDS-OPERATOR lines; dedupe; order.
+    A source that is not valid JSON is listed in `rejected` with its name; the others go on."""
     found: list[dict] = []
+    rejected: list[dict] = []
     for name, text in sources:
         stripped = text.strip()
         if stripped.startswith(("{", "[")):
-            doc = json.loads(stripped)
+            try:
+                doc = json.loads(stripped)
+            except json.JSONDecodeError as e:
+                rejected.append({"source": name, "reason": f"JSON inválido: {e}"})
+                continue
             doc = {"decisions": doc} if isinstance(doc, list) else doc
             found += [d for d in doc.get("decisions", []) if isinstance(d, dict)]
             continue
@@ -746,9 +759,9 @@ def aggregate(sources: list[tuple[str, str]], default_origin: dict) -> dict:
         m["urgency"] = min((a, b), key=URG_RANK.get)
         m["owner_only"] = bool(m.get("owner_only")) or bool(d.get("owner_only"))
         m["unblocks"] = int(m.get("unblocks") or 0) + int(d.get("unblocks") or 0)
-    # spec §8.5: one real option is not a decision. Never padded with an invented option
+    # contrato §6: one real option is not a decision. Never padded with an invented option
     # (a "Manter pendente" filler became a phantom letter B on parse); listed as rejected.
-    decisions, rejected = [], []
+    decisions = []
     for d in merged.values():
         n = len([o for o in (d.get("options") or []) if isinstance(o, dict) and _s(o.get("label"))])
         if 2 <= n <= 4:
@@ -883,7 +896,7 @@ def lint_doc(doc: dict, *, now: int, session: str | None) -> tuple[list[str], li
 
 
 def budget_warnings(doc: dict, session: str | None) -> list[str]:
-    """Source budgets of the compact card (spec §8.1): every field fits its line in 80
+    """Source budgets of the compact card (contrato §1): every field fits its line in 80
     columns. Nothing is truncated: a field over budget wraps and the lint asks to shorten
     it at the source."""
     warns = []

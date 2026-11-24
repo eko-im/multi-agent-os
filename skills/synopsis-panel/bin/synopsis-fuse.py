@@ -1048,8 +1048,17 @@ def _card_options(h: dict, raw: dict) -> tuple[list[dict], bool, str]:
 
 
 def _cols(text: str) -> int:
-    return sum(0 if unicodedata.combining(c) else
-               2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+    """Display columns, the only measure of every digest surface (bin/hitl-scorecard.py
+    uses it as `cols`); spec §2: an emoji counts as 2, box drawing stays 1, and
+    combining marks, VS16 and ZWJ count 0."""
+    n = 0
+    for ch in text:
+        if unicodedata.combining(ch) or ch in "\ufe0f\u200d":
+            continue
+        wide = unicodedata.east_asian_width(ch) in "WF"
+        emoji = unicodedata.category(ch) == "So" and not "\u2500" <= ch <= "\u257f"
+        n += 2 if (wide or emoji) else 1
+    return n
 
 
 def _wrap_cols(text: str, n: int = 80) -> list[str]:

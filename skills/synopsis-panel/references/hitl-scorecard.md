@@ -75,7 +75,7 @@ chat or markdown. When `NO_COLOR` is set, no ANSI is emitted.
 
 | Consumer and harness | Surface | Mapping |
 |---|---|---|
-| `human-live`, Claude Code | `AskUserQuestion` | one card per question; header `<n> <URGÊNCIA>[ 👤]`, at most 12 characters; the A/B/C labels are the options (2–4), recommended first with `(recomendado)`; each option description carries its effect and its door (`Reversível.`/`Sem volta.`); the question text carries ask, context, origin and cost; the digest keeps only the `aberta no AskUserQuestion` record line |
+| `human-live`, Claude Code | `AskUserQuestion` | one card per question; header `<n> <URGÊNCIA>[ 👤]`, at most 12 characters; the A/B/C labels are the options (2–4), recommended first with `(recomendado)`, unique after clipping (a multi card with two recommended options keeps both markers and adds ` (2)`); each option description carries its effect and its door (`Reversível.`/`Sem volta.`); the question text starts with `<n> · <id> — ` (the tool keys `answers` by question text, so two decisions with the same ask never collide) and carries ask, context, origin and cost; the digest keeps only the `aberta no AskUserQuestion` record line |
 | `human-live`, OMP | `ask` (one HTML form) | `<fieldset>`/`<legend>` per card, briefing in a `<table>`; radio for single choice, checkbox for multi; each option shows effect, door and pointer; nothing `checked`, `selected` or prefilled; an unchecked `confirm` box |
 | `human-deferred`, or no tool | text digest | the durable fallback; a `machine` consumer gets no text |
 
@@ -121,7 +121,9 @@ origin.
 
 - **Dedupe** by (`origin.repo`, `id`) when the decision carries an explicit `id`;
   otherwise, the legacy path for bare `NEEDS-OPERATOR` lines, by (`origin.repo`,
-  normalized ask). The session stands in for the repo only when the repo is unknown.
+  normalized ask). The session stands in for the repo only when the repo is unknown
+  (empty, or `?` for a bare line without `--origin`, scoped to its source file), so
+  sources of unknown repos never merge across sessions.
   Two distinct ids with the same ask in one repo are two decisions; the same id (or, in
   the legacy path, the same ask) in two repos is two decisions; from two sessions of one
   repo it is one card with `(+N sessões)`. On a merge the origins are kept, the highest

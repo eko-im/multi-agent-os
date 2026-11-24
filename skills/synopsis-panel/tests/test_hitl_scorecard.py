@@ -11,6 +11,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 import unittest
 
 _SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "bin" / "hitl-scorecard.py"
@@ -113,8 +114,13 @@ class CompactCapTest(unittest.TestCase):
         hidden_urgent = [c["id"] for c in urgent_cards if c["id"] not in {s["id"] for s in shown}]
         self.assertTrue(hidden_urgent, out)              # this fixture MUST push an urgent card out
         self.assertNotIn("⏸", out)                       # …and only after every ⏸ line moved
-        for pid in ("D7", "D8", "D9", *hidden_urgent):
-            self.assertEqual(over.count(f" {pid}"), 1)
+        # every moved id is either named once or counted in the `+N` tail (never dropped);
+        # the line is measured by the one column function (emoji = 2), so it may count some
+        named = [p for p in ("D7", "D8", "D9", *hidden_urgent) if over.count(f" {p}") == 1]
+        tail = re.search(r" \+(\d+)$", over)
+        self.assertEqual(len(named) + (int(tail.group(1)) if tail else 0), 3 + len(hidden_urgent), over)
+        self.assertTrue(all(p in named for p in hidden_urgent), over)   # urgent ids come first
+        self.assertLessEqual(sc.cols(over), sc.COLS)
         self.assertIn("1 · ⏫ ALTA", out)
 
     def test_single_card_over_cap_is_an_error_not_a_cut(self):
@@ -361,6 +367,58 @@ class AskTest(unittest.TestCase):
         self.assertEqual(sc.lint_html(form), [])
         self.assertEqual(len(sc.lint_html(form.replace('value="A">', 'value="A" checked>'))), 1)
 
+    def test_recommended_b_keeps_letter_label_description_aligned(self):
+        """Bot finding (zip after `_card_options` reorders): the source recommends its 2nd
+        option (B in source order). normalize() makes the recommended option letter A on
+        every surface (spec 1.1.0: recommended is always A), so `_card_options` moving it to
+        index 0 is a no-op and AUQ index k == card letter k. Checked byte by byte: label,
+        description and the letter parse_claude returns belong to the same option, and the
+        text digest and the OMP form use the same letter."""
+        for multi, rec in ((False, "Mudar"), (True, ["Mudar"])):
+            d = doc(decision(1, rec=rec, multi=multi, n_opts=3))
+            c = cards(d)[0]
+            q = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+            self.assertEqual(len(q["options"]), len(c["options"]))
+            for k, (o, src) in enumerate(zip(q["options"], c["options"])):
+                self.assertEqual(src["letter"], sc.LETTERS[k])
+                self.assertEqual(o["label"], src["label"] + (sc.REC if src["recommended"] else ""))
+                self.assertTrue(o["description"].startswith(f"efeito {src['label']}."))
+                res = sc.parse_claude([c], {"answers": {q["question"]: o["label"]}}, CODE)
+                self.assertEqual((res["items"][0]["letters"], res["items"][0]["labels"]),
+                                 ([src["letter"]], [src["label"]]))
+            want = next(o["letter"] for o in c["options"] if o["label"] == "Mudar")
+            self.assertEqual(want, "B" if multi else "A")       # multi keeps source order
+            form = sc.ask_omp(d, now=NOW, session=SESSION)
+            self.assertIn(f'value="{want}"> ✅ {want} — Mudar (recomendado)', form)
+            txt = sc.render_text(d, now=NOW, session=SESSION)
+            self.assertRegex(txt, rf"(?m)^    {want} ✅ Mudar → efeito Mudar")
+
+    def test_same_ask_distinct_ids_get_distinct_questions_and_answers(self):
+        base = decision(1)
+        d = doc(dict(copy.deepcopy(base), id="D-A"), dict(copy.deepcopy(base), id="D-B"))
+        qs = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"]
+        self.assertNotEqual(qs[0]["question"], qs[1]["question"])
+        self.assertTrue(qs[0]["question"].startswith("1 · D-A — "))
+        self.assertTrue(qs[1]["question"].startswith("2 · D-B — "))
+        res = sc.parse_claude(cards(d), {"answers": {qs[0]["question"]: qs[0]["options"][1]["label"]}}, CODE)
+        self.assertEqual([(i["id"], i["status"], i["letters"]) for i in res["items"]],
+                         [("D-A", "decided", ["B"]), ("D-B", "pending", [])])
+
+    def test_multi_two_recommended_long_labels_stay_unique(self):
+        d = decision(1, multi=True, n_opts=2)
+        stem = "Keep the following archived deployment environment unchanged "
+        for o, tail in zip(d["options"], ("alpha", "beta")):
+            o["label"], o["evidence"] = stem + tail, "spec.md:1"
+        d["recommended"] = [o["label"] for o in d["options"]]
+        dd = doc(d)
+        q = sc.ask_claude(dd, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        labels = [o["label"] for o in q["options"]]
+        self.assertEqual(len(set(labels)), 2)
+        self.assertTrue(all(l.endswith(sc.REC) and len(l) <= sc.fuse.AUQ_LABEL_MAX for l in labels))
+        self.assertEqual(sc.lint_auq({"questions": [q]}), [])
+        res = sc.parse_claude(cards(dd), {"answers": {q["question"]: labels[1]}}, CODE)
+        self.assertEqual(res["items"][0]["letters"], ["B"])
+
 
 class ParseTextTest(unittest.TestCase):
     def setUp(self):
@@ -511,6 +569,52 @@ class AggregateLintTest(unittest.TestCase):
         one_way_alt = decision(3)                        # 🚪 on a NON-recommended option is fine
         one_way_alt["options"][1]["reversible"] = False
         self.assertEqual(sc.lint_doc(doc(one_way_alt), now=NOW, session=SESSION)[0], [])
+
+    def test_malformed_json_source_is_rejected_and_others_go_on(self):
+        line = "NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar ; origin=OMP·org/a·aaaaaaaa1111"
+        res = sc.aggregate([("bad.json", "{nope"), ("ok.log", line)], {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(len(res["decisions"]), 1)
+        self.assertEqual(res["rejected"][0]["source"], "bad.json")
+        self.assertIn("JSON inválido", res["rejected"][0]["reason"])
+
+    def test_unknown_repo_scopes_bare_lines_to_their_own_source(self):
+        line = "NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar"
+        none = {"harness": "", "repo": "", "session": ""}
+        res = sc.aggregate([("session1.log", line), ("session2.log", line)], none)
+        self.assertEqual(res["deduped"], 0)
+        self.assertEqual({d["origin"]["session"] for d in res["decisions"]}, {"session1", "session2"})
+        res = sc.aggregate([("s.log", line + "\n" + line)], none)    # same source: still merges
+        self.assertEqual(res["deduped"], 1)
+
+    def test_overflow_line_fits_80_columns_by_the_one_measure(self):
+        self.assertIs(sc.cols, sc.fuse._cols)
+        for n in (5, 40, 200):
+            line = sc.fuse._overflow_line([{"sev": "URGENTE", "id": f"D{i:03d}"} for i in range(n)])
+            self.assertLessEqual(sc.cols(line), 80, line)
+            shown = len(re.findall(r"D\d{3}", line))
+            hidden = int(re.search(r"\+(\d+)$", line).group(1)) if shown < n else 0
+            self.assertEqual(shown + hidden, n)
+
+    def test_local_time_offset_format(self):
+        old = os.environ.get("TZ")
+        try:
+            for tz, want in (("Asia/Kolkata", "03:00 +0530"), ("America/Sao_Paulo", "18:30 -03"),
+                             ("UTC", "21:30 +00")):
+                os.environ["TZ"] = tz
+                time.tzset()
+                self.assertEqual(sc.fuse._local_time(1795469400), want)
+        finally:
+            if old is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old
+            time.tzset()
+
+    def test_code_case_is_normalized_on_both_sides(self):
+        cs = cards(doc(decision(1)))
+        for code, answer in ((CODE.lower(), f"{CODE} 1:A"), (CODE, f"{CODE.lower()} 1:A"),
+                             (CODE.lower(), f"{CODE.lower()} 1:A")):
+            self.assertEqual(sc.parse_text(cs, answer, code)["items"][0]["status"], "decided")
 
     def test_lint_text_flags_width_and_dash_offer(self):
         errs = sc.lint_text("x" * 81 + f"\nResponda: {CODE} 1:-\n")
