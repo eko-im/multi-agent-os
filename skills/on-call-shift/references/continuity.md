@@ -35,7 +35,13 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
   never clears `pending` by itself. Every save attempt bumps a monotonic `save_seq` (kept even
   when a failed transition rolls back); only a checkpoint with a higher `save_seq` than the
   failed save can recover it (`STALE_CHECKPOINT_SAVE_SEQ`), which covers changes made without
-  a tick (same generation and cursor).
+  a tick (same generation and cursor). `pending.failed_at.in_flight` is the union of the
+  in-flight items of every failed save that advanced the floor (tuple >= the current floor);
+  an earlier failure never loses items already in the floor. A checkpoint where one of them is no
+  longer in flight and is not recorded as `item_completed` in its log is refused
+  (`STALE_CHECKPOINT_IN_FLIGHT`), even after the child reloaded an older revision and failed
+  again. A checkpoint whose `in_flight` or logged completion ids are not strings is refused as
+  `CHECKPOINT_UNREADABLE`.
 - No agent recursion just to save, no secrets copied, no rescans, no overwriting someone's WIP.
 
 ## Handoff
@@ -108,3 +114,11 @@ own. Active dependents block retirement; retirement never edits dependents.
 - **Blast radius before `deliver` is the host's duty.** `deliver` records a send the host
   reports; it does not itself require `assess_effect`. A host must call `assess_effect` before
   any effect and only then deliver.
+- **A child's own checkpoint file is not externally anchored.** `save_seq`, `in_flight` and
+  `log` all live in the file the child controls. `recover_child` detects one thing beyond the
+  counter: an item that was in flight when a save failed and has since disappeared from the
+  checkpoint without an `item_completed` entry (`STALE_CHECKPOINT_IN_FLIGHT`), including a
+  reload followed by another failed save, because the failed in-flight sets are unioned. It
+  does NOT detect a completion, gate, delivery or budget that a reload reverted, nor a child
+  that forges `save_seq`, `in_flight` or a log entry. Without an authority external to the
+  child there is no local fix; the host must anchor the checkpoint.

@@ -123,6 +123,7 @@ def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
         attempt = {"generation": child_state["generation"],
                    "cursor_seq": child_state["cursor"]["seq"],
                    "save_seq": child_state["save_seq"],
+                   "in_flight": sorted(child_state["in_flight"]),
                    "sha256": snapshot_sha(child_state)}
         pending = dict(previous) if previous else {
             "cause": "CHILD_PERSISTENCE_FAILED", "shift_id": child_state["shift_id"],
@@ -131,7 +132,12 @@ def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
         if (attempt["generation"], attempt["cursor_seq"], attempt["save_seq"]) >= (
                 pending["failed_at"]["generation"], pending["failed_at"]["cursor_seq"],
                 pending["failed_at"].get("save_seq", 0)):
-            pending["failed_at"] = attempt  # floor = newest state that failed to save
+            # floor = newest state that failed to save; this branch only runs when the
+            # (generation, cursor_seq, save_seq) tuple is >= the floor, and it unions the
+            # in_flight of every failure that advanced the floor, so an earlier failure
+            # never loses items already at the floor.
+            pending["failed_at"] = dict(attempt, in_flight=sorted(
+                set(attempt["in_flight"]) | set(pending["failed_at"].get("in_flight", []))))
         parent["children"][child_id]["pending"] = pending
         # Never overwrite an earlier freeze (POSTFLIGHT, PREFLIGHT_INCONSISTENT, ...):
         # that reason stays, so a child recovery cannot lift it.
@@ -179,6 +185,19 @@ def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, no
     # only a save made AFTER the failed one can recover it.
     if not isinstance(doc.get("save_seq"), int) or doc["save_seq"] <= floor.get("save_seq", 0):
         return {"recovered": False, "reason": "STALE_CHECKPOINT_SAVE_SEQ"}
+    # The counter lives in the child's own file, so a child that reloads an older revision
+    # can push it back above the floor. Independent of the counter: every item that was in
+    # flight when the save failed must still be in flight, or be recorded as completed.
+    log, flight = doc.get("log") or [], doc.get("in_flight") or []
+    if not isinstance(log, list) or not isinstance(flight, list):
+        return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
+    done = [e.get("id") for e in log
+            if isinstance(e, dict) and e.get("event") == "item_completed"]
+    if not all(isinstance(k, str) for k in flight + done):
+        return {"recovered": False, "reason": "CHECKPOINT_UNREADABLE"}
+    concluded, kept = set(done), set(flight)
+    if any(k not in kept and k not in concluded for k in floor.get("in_flight", [])):
+        return {"recovered": False, "reason": "STALE_CHECKPOINT_IN_FLIGHT"}
     if cause != pending["cause"]:
         return {"recovered": False, "reason": "CAUSE_MISMATCH"}
     trial = copy.deepcopy(parent)

@@ -590,6 +590,170 @@ class ChildRecovery(unittest.TestCase):
         out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
         self.assertTrue(out["recovered"])
 
+    def test_85_counter_rolled_back_by_a_child_reload_must_not_make_an_old_file_recover(self):
+        # R2 (parecer 05): the counter lives in the child's own file. The child fails to save
+        # an adopted item, crashes, reloads the previous revision (lower counter) and saves
+        # again; after enough saves the counter passes the failure floor. The correct
+        # behaviour is that the counter never goes back, so a checkpoint without the lost
+        # item is not accepted as the recovery of that failure.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)  # file: no item, save_seq 1
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)  # no tick: same cursor
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)  # seq 2 fails
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]["save_seq"]
+        reloaded, _ = co.load_checked(path)  # the child restarts from the old revision
+        self.assertEqual(reloaded["in_flight"], [])
+        self.assertLessEqual(reloaded["save_seq"], floor)
+        sha = None
+        for _ in range(floor + 1):  # saves until the rolled-back counter passes the floor
+            sha = co.autosave(reloaded, path)["sha256"]
+        self.assertGreater(reloaded["save_seq"], floor)  # the symptom: the counter regressed
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertFalse(out["recovered"], "checkpoint lacking the failed in-flight item "
+                         "was accepted after a counter rollback")
+        self.assertEqual(out["reason"], "STALE_CHECKPOINT_IN_FLIGHT")
+        self.assertEqual(parent, before)
+        self.assertFalse(parent["admission"]["open"])
+        self.assertIsNotNone(parent["children"]["child-a"]["pending"])
+
+    def test_86_checkpoint_without_save_seq_is_refused(self):
+        # Q1c (parecer 05): a legacy checkpoint (no save_seq) that is otherwise acceptable by
+        # generation and cursor must still be refused. Discriminates "accept when absent".
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]
+        legacy = json.loads(json.dumps(child))
+        del legacy["save_seq"]
+        data = json.dumps(legacy, indent=2, sort_keys=True).encode("utf-8")
+        co._atomic_write(path, data)  # same generation and cursor, newest content, no counter
+        self.assertEqual((legacy["generation"], legacy["cursor"]["seq"]),
+                         (floor["generation"], floor["cursor_seq"]))
+        self.assertNotIn("save_seq", json.loads(read(path)))
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, hashlib.sha256(data).hexdigest())
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_SAVE_SEQ"))
+        self.assertEqual(parent, before)
+        self.assertFalse(parent["admission"]["open"])
+
+    def test_87_two_failures_at_the_same_cursor_keep_the_floor_on_the_latest_one(self):
+        # Q1g (parecer 05): failure A, a good save, then failure B at the SAME cursor. The
+        # floor must move to B, so the good save made between A and B (without B's item)
+        # is refused. Discriminates a floor that stays on the first failure.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)  # failure A
+        first = dict(parent["children"]["child-a"]["pending"]["failed_at"])
+        child["admission"] = {"open": True, "reason": None}  # the child itself reopens, then
+        between = co.autosave(child, path)["sha256"]  # good save: holds k1, not k2
+        se.adopt(child, "agent-c", "k2", backlog(), 1002, generation=1)  # still no tick
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)  # failure B
+        second = parent["children"]["child-a"]["pending"]["failed_at"]
+        self.assertEqual(first["cursor_seq"], second["cursor_seq"])  # same cursor
+        self.assertGreater(second["save_seq"], first["save_seq"])
+        self.assertEqual(json.loads(read(path))["in_flight"], ["k1"])
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, between)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_SAVE_SEQ"))
+        self.assertEqual(parent, before)
+        out = self.recover(parent, "child-a", path, self.fresh_checkpoint(child, path))
+        self.assertEqual((out["recovered"], out["reopened"]), (True, True))
+
+    def test_88_child_that_legitimately_completed_the_failed_item_is_not_refused(self):
+        # R2 counterpart: the in-flight item that failed to save was then really finished
+        # (in_flight shrinks, cursor advances) and saved. The checkpoint omits k1 for a good
+        # reason, so recovery must accept it: no false STALE.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]
+        child["admission"] = {"open": True, "reason": None}  # the child reopens itself
+        se.complete_item(child, "agent-c", "k1", author="agent-c", reviewer="agent-2",
+                         now=1002, generation=1)
+        se.apply_tick(child, "agent-c", "t-done", 1003, generation=1)
+        sha = self.fresh_checkpoint(child, path)
+        doc = json.loads(read(path))
+        self.assertEqual(doc["in_flight"], [])  # k1 is gone from the checkpoint...
+        self.assertGreater(doc["cursor"]["seq"], floor["cursor_seq"])  # ...and the cursor moved
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertEqual((out["recovered"], out["reason"]), (True, None))
+        self.assertIsNone(parent["children"]["child-a"]["pending"])
+
+    def test_89_second_failed_save_after_a_reload_keeps_the_lost_item_in_the_floor(self):
+        # Review 06 (A1): good save with no item, adopt k1, failed save (floor holds k1), the
+        # child reloads the old revision (counter back to a tie), a NEW failed save replaces
+        # the floor, then a good save. The floor must keep k1 (union of failures), so the
+        # checkpoint that lacks k1 is refused with STALE_CHECKPOINT_IN_FLIGHT.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)  # good save, no item, save_seq 1
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)  # seq 2
+        reloaded, _ = co.load_checked(path)  # the child restarts from the old revision
+        self.assertEqual(reloaded["in_flight"], [])
+        co.checkpoint_child(parent, "child-a", reloaded, path, writer=failing_writer)  # tie
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]
+        self.assertEqual(floor["in_flight"], ["k1"])  # union: the first failure's item stays
+        sha = co.autosave(reloaded, path)["sha256"]  # good save, still without k1
+        self.assertEqual(json.loads(read(path))["in_flight"], [])
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_IN_FLIGHT"))
+        self.assertEqual(parent, before)
+        self.assertFalse(parent["admission"]["open"])
+
+    def test_90_malformed_in_flight_or_log_id_is_refused_not_raised(self):
+        # Review 06 (A2): a hash-valid checkpoint with non-string ids must get a structured
+        # refusal, not a TypeError.
+        for field in ("in_flight", "log"):
+            parent, child = shift(), self.child()
+            path = os.path.join(self.d, "child-a-%s.json" % field)
+            se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+            co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+            floor = parent["children"]["child-a"]["pending"]["failed_at"]
+            bad = json.loads(json.dumps(child))
+            bad["save_seq"] = floor["save_seq"] + 1
+            if field == "in_flight":
+                bad["in_flight"] = [["k1"]]
+            else:
+                bad["log"] = [{"event": "item_completed", "id": ["k1"]}]
+            data = json.dumps(bad, indent=2, sort_keys=True).encode("utf-8")
+            co._atomic_write(path, data)
+            before = se.snapshot(parent)
+            out = self.recover(parent, "child-a", path, hashlib.sha256(data).hexdigest())
+            self.assertEqual((out["recovered"], out["reason"]),
+                             (False, "CHECKPOINT_UNREADABLE"), field)
+            self.assertEqual(parent, before)
+
+    def test_91_non_item_completed_event_with_the_lost_id_does_not_count_as_completion(self):
+        # Contrast for the item_completed filter: the reloaded checkpoint logs an event of
+        # another type carrying the lost item's id; it must not excuse the missing item.
+        parent, child = shift(), self.child()
+        path = os.path.join(self.d, "child-a.json")
+        co.checkpoint_child(parent, "child-a", child, path)  # good save, no item
+        se.adopt(child, "agent-c", "k1", backlog(), 1001, generation=1)
+        co.checkpoint_child(parent, "child-a", child, path, writer=failing_writer)
+        reloaded, _ = co.load_checked(path)
+        reloaded["log"] = list(reloaded.get("log") or []) + [{"event": "item_adopted", "id": "k1"}]
+        floor = parent["children"]["child-a"]["pending"]["failed_at"]["save_seq"]
+        sha = None
+        while sha is None or reloaded["save_seq"] <= floor:  # counter must pass the floor
+            sha = co.autosave(reloaded, path)["sha256"]
+        before = se.snapshot(parent)
+        out = self.recover(parent, "child-a", path, sha)
+        self.assertEqual((out["recovered"], out["reason"]),
+                         (False, "STALE_CHECKPOINT_IN_FLIGHT"))
+        self.assertEqual(parent, before)
+
+
 class OwnTeam(unittest.TestCase):
     """The holder's own team: admission, drain, idempotent retirement, other owners untouched."""
 
