@@ -4,7 +4,7 @@ description: PR governance unificado [C07+C12] — workflow de PRs e revisão
 
 # PR Governance — Unified Workflow [C07+C12]
 
-<!-- Auto-loaded rule | Version: 1.2.0 | 2026-07-01 -->
+<!-- Auto-loaded rule | Version: 1.3.0 | 2026-11-24 -->
 <!-- Replaces: pr-review-protocol.md (C07 v3.0), pr-email-review-loop.md (C12 v3.0) -->
 <!-- References: ~/.claude/docs/git-worktree-protocol.md (C04 — full spec) -->
 
@@ -12,8 +12,8 @@ description: PR governance unificado [C07+C12] — workflow de PRs e revisão
 
 ```
 MANDATORY: Worktree -> Code -> LOCAL REVIEW -> Push -> PR -> Bot Review -> Merge -> Cleanup
-FORBIDDEN: Merge without review | Push without local review | git checkout in main repo
-SCOPE: All agents, all sessions, all repos
+FORBIDDEN: Merge to main/master without review | git checkout in main repo
+SCOPE: main/master; other branches: review optional (pr-review-protocol §0)
 ```
 
 ## Complete Lifecycle (12 steps)

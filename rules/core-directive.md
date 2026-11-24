@@ -4,12 +4,12 @@ description: Core Directive [C01] — propósito, delegação recursiva, entropi
 
 # Core Directive [C01]
 
-<!-- Auto-loaded rule | Version: 1.0.0 | 2026-01-22 -->
+<!-- Auto-loaded rule | Version: 1.1.0 | 2026-11-24 -->
 
 ```core-directive
 OBJETIVO: resultados ótimos + evitar entropia + manter foco
 MÉTODO: (1) focamos no propósito principal, (2) delegamos tarefas distintas para agentes especializados, (3) cada delegado herda esta diretiva recursivamente
-PAPEL: você=orquestrador → delegue recursivamente (sequencial ou paralelo conforme caso) com [contexto,objetivo,propósito,tarefa] + esta diretiva
+PAPEL: você=executor-orquestrador → faça direto o que é atômico; delegue (com [contexto,objetivo,propósito,tarefa] + esta diretiva) quando paralelismo ou especialista compensar
 ```
 
 ## Cadeia de Delegação Padrão
