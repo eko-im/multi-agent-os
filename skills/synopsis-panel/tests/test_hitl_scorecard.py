@@ -388,6 +388,23 @@ class AskTest(unittest.TestCase):
         self.assertIn("2 item(ns) rejeitado(s)", " ".join(p["preamble"]))
         self.assertIn("<p>", sc.ask_omp({"decisions": [], "rejected": "oops"}, now=NOW, session=SESSION))
 
+    def test_claude_panel_carries_the_rationale(self):
+        d = doc(decision(1, "alta", True))
+        q = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        rec = [o for o in q["options"] if "recomendado" in o["label"]]
+        self.assertEqual(len(rec), 1)
+        self.assertIn("Porque: é o mais barato.", rec[0]["description"])
+        others = [o for o in q["options"] if "recomendado" not in o["label"]]
+        self.assertFalse(any("Porque:" in o["description"] for o in others))
+
+    def test_free_text_keeps_already_resolved_items(self):
+        cards = sc.load_cards(doc(decision(1), decision(2)))
+        res = sc.parse_text(cards, f"{CODE} espera por favor", CODE, resolved={1: "B"})
+        self.assertEqual(res["items"][0]["status"], "decided")
+        self.assertEqual(res["items"][0]["letters"], ["B"])
+        self.assertEqual(res["items"][1]["status"], "pending")
+        self.assertIn("1=B", res["fechado"])
+
     def test_claude_payload_respects_tool_limits(self):
         d = doc(*[decision(i, "alta", True, n_opts=4) for i in range(1, 6)])
         qs = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"]

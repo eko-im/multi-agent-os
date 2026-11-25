@@ -496,6 +496,9 @@ def auq_question(c: dict, n: int) -> dict:
         desc = o["effect"] + ("." if o["effect"] and o["effect"][-1] not in ".!?" else "")
         desc = f"{desc} {door}".strip()
         single_rec = o["recommended"] and not c["multi"]
+        if o["recommended"] and c["rationale"]:
+            # the panel is the only answer surface in its flow: the "why" must be there too
+            desc = f"{desc} Porque: {c['rationale']}.".strip()
         if not single_rec and _ptr(o):
             desc = f"{desc} Evidência: {_ptr(o)}.".strip()
         raw.append({"label": o["label"], "description": desc, "recommended": single_rec,
@@ -642,7 +645,10 @@ def parse_text(cards, answer: str, code: str | None, closed=(), resolved=None) -
         if not 1 <= n <= len(cards):
             extra.append({"n": n, "status": "rejected", "note": "não é card deste digest; nada executado"})
     if not seen:
-        items = [_item(i, c, "pending", note="texto livre: nada decidido") for i, c in enumerate(cards, 1)]
+        # free text decides nothing new, but what was already resolved stays resolved
+        items = [_item(i, c, "decided", resolved[i].split("+"), "resolvido antes") if i in resolved
+                 else _item(i, c, "pending", note="texto livre: nada decidido")
+                 for i, c in enumerate(cards, 1)]
         return {"status": "ok", "code": code, "items": items, "fechado": _fechado(code, items)}
     for i, c in enumerate(cards, 1):
         vals = seen.get(i)
