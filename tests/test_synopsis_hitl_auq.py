@@ -422,11 +422,13 @@ def test_answerable_question_preserves_authorization_limit_and_condition(tmp_pat
     assert questions[0]["question"] != questions[1]["question"]
 
 
-@pytest.mark.parametrize("tz, expected", [
-    ("UTC", "K261027-0027-aaaabbbb"),
-    ("America/Sao_Paulo", "K261026-2127-aaaabbbb"),
+@pytest.mark.parametrize("tz, local", [
+    ("UTC", "(00:27 +00)"),
+    ("America/Sao_Paulo", "(21:27 -03)"),
 ])
-def test_digest_code_uses_process_local_date_and_time(ledger, tz, expected):
+def test_digest_code_is_utc_and_local_time_only_in_parentheses(ledger, tz, local):
+    """spec §2 (since 2.5.4): the code minute is UTC whatever the host zone; the local
+    time of the same instant appears only in the header's correlation parenthetical."""
     parent_tz = os.environ.get("TZ")
     args = ["--hitl-md", str(ledger), "--scope", "all",
             "--format", "ask-user-question", *ARGS, "--now", "1793060820"]
@@ -434,6 +436,6 @@ def test_digest_code_uses_process_local_date_and_time(ledger, tz, expected):
     b = run(*args, tz=tz)
     assert a == b
     d = json.loads(a)
-    assert d["code"] == expected
-    assert expected in d["preamble"][0]
+    assert d["code"] == "K261027-0027-aaaabbbb"
+    assert d["preamble"][0] == f"══ 🟠 HITL DIGEST · K261027-0027-aaaabbbb {local} ══"
     assert os.environ.get("TZ") == parent_tz
