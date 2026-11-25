@@ -79,6 +79,13 @@ chat or markdown. When `NO_COLOR` is set, no ANSI is emitted.
 | `human-live`, OMP | `ask` (one HTML form) | `<fieldset>`/`<legend>` per card, briefing in a `<table>`; radio for single choice, checkbox for multi; each option shows effect, door and pointer; nothing `checked`, `selected` or prefilled; an unchecked `confirm` box |
 | `human-deferred`, or no tool | text digest | the durable fallback; a `machine` consumer gets no text |
 
+**Empty queue.** With no answerable card, no panel opens: `ask --target claude` returns
+`ask_user_question: null` and `ask --target omp` returns a `<p>` with no form. The line is
+`✅ Nenhuma decisão sua pendente` only when nothing was rejected; if inputs were rejected
+(for example a `NEEDS-OPERATOR` line with a single real option), it reads
+`⚠️ Nenhuma decisão válida; N item(ns) rejeitado(s): <first, clipped> +K outros`, and the
+full structured list stays in `rejected`. Silence never reads as "nothing pending".
+
 Measured limits:
 
 - **Claude Code 2.1.331 binary.**

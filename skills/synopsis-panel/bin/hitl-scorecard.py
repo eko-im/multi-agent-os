@@ -520,9 +520,31 @@ def auq_question(c: dict, n: int) -> dict:
             "options": opts, "multiSelect": c["multi"]}
 
 
+def _empty_line(doc: dict) -> str:
+    """Empty-queue line. Rejected inputs (aggregate's `rejected`) are never silent: a
+    malformed NEEDS-OPERATOR line must not read as 'nothing pending'. Only the first
+    reject is summarized (clipped, untrusted text); the full list stays structured."""
+    rej = doc.get("rejected") if isinstance(doc, dict) else None
+    rej = rej if isinstance(rej, list) else []
+    if rej:
+        first = rej[0] if isinstance(rej[0], dict) else {}
+        ask = _s(first.get("ask")) or "?"
+        why = _s(first.get("reason"))
+        head = f"⚠️ Nenhuma decisão válida; {len(rej)} item(ns) rejeitado(s): "
+        more = f" +{len(rej) - 1} outros" if len(rej) > 1 else ""
+        body = f"{ask[:40]}{'…' if len(ask) > 40 else ''}" + (f" ({why[:40]}{'…' if len(why) > 40 else ''})" if why else "")
+        return head + body + more
+    return "✅ Nenhuma decisão sua pendente"
+
+
 def ask_claude(doc: dict, *, now: int, session: str | None) -> dict:
     shown, parked, nxt = plan(load_cards(doc))
     code = fuse._digest_code(now, session)
+    if not shown:
+        # AskUserQuestion takes 1–4 questions: an empty queue opens no panel (contrato §3).
+        return {"schema": "hitl-scorecard/ask-claude/v1", "code": code, "no_preselect": True,
+                "timeout_is": "pending", "preamble": wrap(_empty_line(doc), "", "  "),
+                "rejected": doc.get("rejected") or [], "ask_user_question": None}
     record = [f"· {i} {URG[c['urgency']][0]} {c['title']} — aberta no AskUserQuestion"
               for i, c in enumerate(shown, 1)]
     return {"schema": "hitl-scorecard/ask-claude/v1", "code": code, "no_preselect": True,
@@ -538,6 +560,9 @@ def ask_omp(doc: dict, *, now: int, session: str | None) -> str:
     confirmation box gates every answer (no box ⇒ everything pending)."""
     e = html.escape
     shown, parked, nxt = plan(load_cards(doc))
+    if not shown:
+        # No form with nothing to answer: an empty `ask` would only submit a bare confirm box.
+        return f"<p>{e(_empty_line(doc))}</p>\n"
     code = fuse._digest_code(now, session) or "sem código"
     out = ["<form>", f"<h3>🟠 HITL DIGEST · {e(code)}</h3>",
            "<p>Nenhuma opção vem marcada. Tempo esgotado, cancelamento ou envio sem a caixa "
@@ -840,6 +865,13 @@ def lint_text(text: str, name: str = "text") -> list[str]:
 
 def lint_auq(payload: dict, name: str = "auq") -> list[str]:
     errs = []
+    # Only the explicit empty envelope from ask_claude is valid without questions: the
+    # schema says no panel (`ask_user_question: null`) and the preamble says so.
+    if (isinstance(payload, dict) and "ask_user_question" in payload
+            and payload["ask_user_question"] is None):
+        pre = payload.get("preamble") or []
+        return [] if any("Nenhuma decisão" in l for l in pre) else \
+            [f"{name}: envelope sem painel exige preâmbulo 'Nenhuma decisão sua pendente'"]
     qs = ((payload.get("ask_user_question") or payload) or {}).get("questions")
     if not isinstance(qs, list) or not 1 <= len(qs) <= 4:
         return [f"{name}: AskUserQuestion exige 1–4 perguntas"]

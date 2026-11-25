@@ -342,6 +342,52 @@ class PlanTest(unittest.TestCase):
 
 
 class AskTest(unittest.TestCase):
+    def test_empty_queue_opens_no_panel(self):
+        empty = {"decisions": [], "harness": "OMP", "repo": "org/repo"}
+        p = sc.ask_claude(empty, now=NOW, session=SESSION)
+        self.assertIsNone(p["ask_user_question"])
+        self.assertIn("Nenhuma decisão", p["preamble"][0])
+        self.assertEqual(sc.lint_auq(p), [])                       # explicit empty envelope: valid
+        self.assertTrue(sc.lint_auq({"ask_user_question": {"questions": []}}))  # still invalid
+        self.assertTrue(sc.lint_auq({"ask_user_question": None, "preamble": []}))
+        html_out = sc.ask_omp(empty, now=NOW, session=SESSION)
+        self.assertNotIn("<form", html_out)
+        self.assertNotIn("confirm", html_out)
+
+    def test_rejected_only_aggregate_opens_no_panel_but_reports_rejects(self):
+        line = ("NEEDS-OPERATOR: Só uma opção ; rec=fazer ; confidence=alta ; "
+                "cost-of-not-deciding=nada ; origin=OMP·org/a·aaaaaaaa1111")
+        res = sc.aggregate([("s.log", line)], {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["decisions"], [])
+        self.assertEqual(len(res["rejected"]), 1)
+        p = sc.ask_claude(res, now=NOW, session=SESSION)          # the full aggregate, not a slice
+        self.assertIsNone(p["ask_user_question"])
+        pre = " ".join(p["preamble"])
+        self.assertIn("Nenhuma decisão válida; 1 item(ns) rejeitado(s)", pre)
+        self.assertIn("Só uma opção", pre)
+        self.assertNotIn("✅", pre)                                # never reads as nothing pending
+        self.assertEqual(len(p["rejected"]), 1)
+        self.assertEqual(sc.lint_auq(p), [])
+        html_out = sc.ask_omp(res, now=NOW, session=SESSION)
+        self.assertIn("1 item(ns) rejeitado(s)", html_out)
+        self.assertNotIn("<form", html_out)
+
+    def test_many_long_and_malformed_rejects_stay_bounded_and_escaped(self):
+        rej = [{"ask": "<script>alert(1)</script> " + "x" * 300, "reason": "y" * 300}
+               for _ in range(20)]
+        doc_ = {"decisions": [], "rejected": rej}
+        p = sc.ask_claude(doc_, now=NOW, session=SESSION)
+        self.assertTrue(all(sc.cols(l) <= 80 for l in p["preamble"]), p["preamble"])
+        self.assertIn("+19 outros", " ".join(p["preamble"]))
+        self.assertEqual(len(p["rejected"]), 20)                   # full list kept structured
+        html_out = sc.ask_omp(doc_, now=NOW, session=SESSION)
+        self.assertNotIn("<script>", html_out)
+        self.assertIn("&lt;script&gt;", html_out)
+        bad = {"decisions": [], "rejected": ["bad", None]}
+        p = sc.ask_claude(bad, now=NOW, session=SESSION)           # non-dict items: no crash
+        self.assertIn("2 item(ns) rejeitado(s)", " ".join(p["preamble"]))
+        self.assertIn("<p>", sc.ask_omp({"decisions": [], "rejected": "oops"}, now=NOW, session=SESSION))
+
     def test_claude_payload_respects_tool_limits(self):
         d = doc(*[decision(i, "alta", True, n_opts=4) for i in range(1, 6)])
         qs = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"]
