@@ -157,7 +157,30 @@ class RenderTest(unittest.TestCase):
     def test_hint_requires_letter_on_urgent_and_owner_only(self):
         out = sc.render_text(self.doc, now=NOW, session=SESSION)
         self.assertIn(f"Responda: {CODE} 1:A 2:A 3:A", out)
-        self.assertIn("(1 e 2 exigem letra · omitido = pendente · - = aceitar A nos demais)", out)
+        self.assertIn("(1 e 2 exigem letra · omitido = pendente · - = recomendado nos demais)", out)
+        self.assertNotIn("aceitar A", out)
+
+    def test_dash_accepts_exactly_the_printed_multi_recommendation(self):
+        d = decision(1, rec=["Mudar", "Adiar"], multi=True, n_opts=3)
+        out = sc.render_text(doc(d), now=NOW, session=SESSION)
+        line = next(l for l in out.splitlines() if l.startswith("Responda:"))
+        self.assertIn(" 1:B+C", line)                    # the hint's `-` means this, not A
+        self.assertIn("- = aceitar o recomendado de cada item", out)
+        self.assertNotIn("aceitar A", out)
+        res = sc.parse_text(sc.load_cards(doc(d)), f"{CODE} 1:-", CODE)
+        self.assertEqual(res["items"][0]["status"], "decided")
+        self.assertEqual(sorted(res["items"][0]["letters"]), ["B", "C"])
+
+    def test_needs_operator_rationale_is_imported(self):
+        line = ("NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar ; confidence=alta ; "
+                "evidence=pr:12 ; rationale=checks verdes ; cost-of-not-deciding=PR parado ; "
+                "origin=OMP·org/a·aaaaaaaa1111")
+        res = sc.aggregate([("s.log", line)], {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["decisions"][0]["rationale"], "checks verdes")
+        errs, _ = sc.lint_doc({"decisions": res["decisions"]}, now=NOW, session=SESSION)
+        self.assertFalse(any("rationale" in e for e in errs), errs)
+        out = sc.render_text({"decisions": res["decisions"]}, now=NOW, session=SESSION)
+        self.assertIn("porque checks verdes", out)
 
     def test_recommendation_without_pointer_has_no_check_mark(self):
         d = doc(decision(1, evidence=""))

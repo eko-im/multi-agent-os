@@ -382,11 +382,13 @@ def compact_lines(c: dict, n, foot: dict, short: bool = False) -> list[str]:
 
 
 def _hint(need: list[str], total: int) -> str:
+    """`-` accepts exactly the recommendation printed in the Responda line for that card
+    (it may be B+C on a multi card), never a fixed letter."""
     if not need:
-        return "(omitido = pendente · - = aceitar A)"
+        return "(omitido = pendente · - = aceitar o recomendado de cada item)"
     names = need[0] if len(need) == 1 else ", ".join(need[:-1]) + " e " + need[-1]
     verb = "exige" if len(need) == 1 else "exigem"
-    tail = " · - = aceitar A nos demais" if len(need) < total else ""
+    tail = " · - = recomendado nos demais" if len(need) < total else ""
     return f"({names} {verb} letra · omitido = pendente{tail})"
 
 
@@ -758,7 +760,7 @@ def needs_line_to_decision(line: str, default_origin: dict) -> dict | None:
                            "no": False, "false": False}.get(kv.get("reversible", "").casefold()),
             "cost_of_delay": kv.get("cost-of-not-deciding", ""), "time_to_decide": kv.get("ttd", ""),
             "unblocks": int(kv.get("unblocks", "0") or 0) if kv.get("unblocks", "0").isdigit() else 0,
-            "options": opts, "recommended": rec or None}
+            "options": opts, "recommended": rec or None, "rationale": kv.get("rationale", "")}
 
 
 def _key(d: dict) -> tuple[str, str]:
