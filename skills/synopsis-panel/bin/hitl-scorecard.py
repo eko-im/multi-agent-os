@@ -544,7 +544,8 @@ def ask_claude(doc: dict, *, now: int, session: str | None) -> dict:
         # AskUserQuestion takes 1–4 questions: an empty queue opens no panel (contrato §3).
         return {"schema": "hitl-scorecard/ask-claude/v1", "code": code, "no_preselect": True,
                 "timeout_is": "pending", "preamble": wrap(_empty_line(doc), "", "  "),
-                "rejected": doc.get("rejected") or [], "ask_user_question": None}
+                "rejected": doc.get("rejected") if isinstance(doc.get("rejected"), list) else [],
+                "ask_user_question": None}
     record = [f"· {i} {URG[c['urgency']][0]} {c['title']} — aberta no AskUserQuestion"
               for i, c in enumerate(shown, 1)]
     return {"schema": "hitl-scorecard/ask-claude/v1", "code": code, "no_preselect": True,
@@ -869,7 +870,8 @@ def lint_auq(payload: dict, name: str = "auq") -> list[str]:
     # schema says no panel (`ask_user_question: null`) and the preamble says so.
     if (isinstance(payload, dict) and "ask_user_question" in payload
             and payload["ask_user_question"] is None):
-        pre = payload.get("preamble") or []
+        pre = payload.get("preamble")
+        pre = pre if isinstance(pre, list) else []
         return [] if any("Nenhuma decisão" in l for l in pre) else \
             [f"{name}: envelope sem painel exige preâmbulo 'Nenhuma decisão sua pendente'"]
     qs = ((payload.get("ask_user_question") or payload) or {}).get("questions")
