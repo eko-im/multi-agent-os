@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-11-24
+
 ### Added — `/hitl-digest` scorecard view + selection panel (`synopsis-panel` v0.3.0)
 
 - `skills/synopsis-panel/bin/hitl-scorecard.py` (`render` · `ask` · `parse` · `aggregate` · `lint`) implements `hitl-digest` spec §8 (v2.7.0): BLUF cards with `harness · repo · sessão` origin, AskUserQuestion payload or OMP `ask` HTML form with nothing preselected (timeout, idle auto-resolve, cancel and free text stay pending), multi-session `NEEDS-OPERATOR` aggregation, and spec lint. Reuses the engine's option builder; `/hitl-digest` stays the entry point. Tests: `skills/synopsis-panel/tests/test_hitl_scorecard.py`.
