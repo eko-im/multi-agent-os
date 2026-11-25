@@ -687,6 +687,43 @@ class AggregateLintTest(unittest.TestCase):
         finally:
             tmp.unlink()
 
+    def test_text_parse_accepts_a_lowercase_code_on_the_rebuild_path(self):
+        """Same borderline fixture: a lowercase `--code`/answer must rebuild the same
+        2-card manifest from the code (grammar is case-insensitive, spec §3)."""
+        ds = []
+        for i in (1, 2):
+            d = decision(i, "alta", True)
+            d["rationale"] = "é o mais barato" + " x" * 36
+            d["cost_of_delay"] = "o item fica parado" + " y" * 18
+            ds.append(d)
+        d = doc(*ds)
+        self.assertEqual(sc._identity_from_code(CODE.lower()), sc._identity_from_code(CODE))
+        self.assertEqual(sc._identity_from_code(CODE.upper()), sc._identity_from_code(CODE))
+        t, s8 = sc._identity_from_code(CODE.upper())
+        ref = [c["id"] for c in sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")[1]]
+        self.assertEqual([c["id"] for c in sc.render_with_cards(d, now=t, session=s8.upper(),
+                                                                 layout="compact")[1]], ref)
+        # only the session suffix is case-insensitive; a repo differing in case is a
+        # different origin and stays visible
+        c = sc.normalize(dict(decision(1), origin={"harness": "OMP", "repo": "org/repo",
+                                                    "session": SESSION}))
+        self.assertIn("org/repo", sc.origin_delta(c, {"harness": "OMP", "repo": "Org/Repo",
+                                                     "session": SESSION[-8:]}))
+        self.assertEqual(sc.origin_delta(c, {"harness": "OMP", "repo": "org/repo",
+                                             "session": SESSION[-8:].upper()}), "")
+        tmp = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "hitl_parse_lowercase_test.json"
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")}
+        low = CODE.lower()
+        try:
+            proc = subprocess.run([sys.executable, str(_SCRIPT), "parse", str(tmp), "--source", "text",
+                                   "--layout", "compact", "--code", low, "--answer", f"{low} 1:a 2:a"],
+                                  capture_output=True, text=True, env=env)
+            res = json.loads(proc.stdout)
+            self.assertEqual([i["status"] for i in res["items"]], ["decided", "decided"])
+        finally:
+            tmp.unlink()
+
     def test_lint_uses_the_same_door_fallback_as_normalize(self):
         d = decision(1)                                  # recommended Manter, confidence média
         d["reversible"] = False

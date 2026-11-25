@@ -354,8 +354,12 @@ def origin_delta(c: dict, foot: dict) -> str:
     """The card's origin fields that differ from the footer (harness · repo · sessão).
     Never omitted when they differ: it is what tells N sessions apart (contrato §1)."""
     o = c["origin"]
-    parts = [v for v, f in ((o["harness"], foot["harness"]), (o["repo"], foot["repo"]),
-                            (o["session"][-8:], foot["session"])) if v and v != f]
+    # harness and repo compare exactly (`Org/Repo` ≠ `org/repo`); only the session suffix
+    # is case-insensitive, because a digest code may carry it in any case (spec §3).
+    parts = [v for v, f in ((o["harness"], foot["harness"]), (o["repo"], foot["repo"])) if v and v != f]
+    s, fs = o["session"][-8:], foot["session"]
+    if s and s.casefold() != fs.casefold():
+        parts.append(s)
     if c["extra_origins"]:
         parts.append(f"(+{c['extra_origins']} sessões)")
     return " · ".join(parts)
@@ -576,14 +580,17 @@ def _identity_from_code(code: str | None) -> tuple[int, str] | None:
     """(instant, session suffix) that produced a digest code `K<YYMMDD>-<HHMM>-<s8>`
     (UTC minute, spec §2). Rendering with them reproduces the digest that was shown, with
     the same code, header and footer, whatever the parser's own clock or session."""
-    m = re.fullmatch(r"K(\d{6})-(\d{4})-([0-9A-Za-z]{8})", _s(code))
+    # The answer grammar is case-insensitive (spec §3): `k261124-…` names the same digest.
+    # Session ids are lowercase (UUID); the suffix is canonicalized, and origin_delta
+    # compares sessions case-insensitively, so the rebuilt manifest never changes with case.
+    m = re.fullmatch(r"K(\d{6})-(\d{4})-([0-9A-Za-z]{8})", _s(code).strip(), re.I)
     if not m:
         return None
     try:
         t = dt.datetime.strptime(m.group(1) + m.group(2), "%y%m%d%H%M").replace(tzinfo=dt.timezone.utc)
     except ValueError:
         return None
-    return int(t.timestamp()), m.group(3)
+    return int(t.timestamp()), m.group(3).lower()
 
 
 def parse_text(cards, answer: str, code: str | None, closed=(), resolved=None) -> dict:
