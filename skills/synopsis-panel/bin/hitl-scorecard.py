@@ -403,7 +403,8 @@ def header_lines(shown, parked, nxt, code, now) -> list[str]:
         lines.append(f"Responda: {code} {toks}")
         lines.append(_hint([str(i) for i, c in enumerate(shown, 1) if needs_letter(c)], len(shown)))
     elif shown:
-        lines.append("(informativo, sem número respondível: use o AskUserQuestion)")
+        # Harness-neutral: OMP's native panel is `ask`, Claude Code's is AskUserQuestion.
+        lines.append("(informativo, sem resposta por texto: decida no painel nativo do harness)")
     return lines
 
 

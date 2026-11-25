@@ -208,6 +208,11 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("Responda:", out)
         self.assertIn("sem código", out)
         self.assertIn("• · ⏫ ALTA", out)
+        # harness-neutral: OMP's panel is `ask`, so the footer must not name AskUserQuestion
+        for harness in ("OMP", "Claude Code"):
+            o = sc.render_text(self.doc, now=NOW, session=None, harness=harness)
+            self.assertNotIn("AskUserQuestion", o)
+            self.assertIn("painel nativo", o)
 
     def test_ansi_respects_no_color(self):
         out = sc.render_text(self.doc, now=NOW, session=SESSION)
