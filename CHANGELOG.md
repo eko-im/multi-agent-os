@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.1] - 2026-11-24
+
 ### Fixed — `hitl-scorecard` no-code footer is harness-neutral
 
 - A digest without a root session id said `use o AskUserQuestion`, which is wrong on OMP (its native panel is the `ask` tool). It now reads `decida no painel nativo do harness`. Test: `test_no_root_session_means_no_numbered_digest` covers OMP and Claude Code.
