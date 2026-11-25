@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `/hitl-digest` scorecard view + selection panel (`synopsis-panel` v0.3.0)
+
+- `skills/synopsis-panel/bin/hitl-scorecard.py` (`render` · `ask` · `parse` · `aggregate` · `lint`) implements `hitl-digest` spec §8 (v2.7.0): BLUF cards with `harness · repo · sessão` origin, AskUserQuestion payload or OMP `ask` HTML form with nothing preselected (timeout, idle auto-resolve, cancel and free text stay pending), multi-session `NEEDS-OPERATOR` aggregation, and spec lint. Reuses the engine's option builder; `/hitl-digest` stays the entry point. Tests: `skills/synopsis-panel/tests/test_hitl_scorecard.py`.
+- Compact card (the one that goes in a reply): up to 5 lines in BLUF order (title · `A ✅ <action> — porque <rationale> (<conf> · <pointer>)` · other options · `⌛ cost · ↩️/🚪` · origin only when it differs from the footer). When the body would pass 15 lines, cards drop to 3 lines from the lowest priority up. Nothing is cut with `…`; the lint warns when `title`, `rationale`, `cost_of_delay` or `effect` exceed their line budget, so they are shortened at the source. New schema field `rationale`, required with a recommendation (lint error).
+- A decision needs 2–4 real options: `render`/`ask` refuse one with a single option and `aggregate` lists it under `rejected`. Before, the engine's `Manter pendente` filler turned a one-option card into a phantom letter B.
+- `aggregate` dedupes by (`origin.repo`, `id`) when the decision carries an `id`, and by (`origin.repo`, normalized ask) only on the legacy path (bare `NEEDS-OPERATOR` lines); the session stands in only when the repo is unknown. Two ids with the same ask in one repo stay two cards; the same ask in two repos is two cards.
+- Reversibility is per option: each option carries `reversible` (↩️/🚪 glyph beside it) and `effect`; `cost_of_delay` stays on the card, and a card-level `reversible` (legacy) is every option's default. Lint error when the recommended option is 🚪 and its confidence is not `alta`.
+- The scorecard contract ships with the plugin as SSOT: `skills/synopsis-panel/references/hitl-scorecard.md` (the personal `hitl-digest-spec` §8 keeps a summary). Its canonical example uses synthetic fixtures only (`org/exemplo`, `exemplo:` pointers).
+
+### Fixed — `synopsis-panel` digest code is UTC (spec §2)
+
+- `synopsis-fuse.py` `_digest_code` computed the code minute in host local time; spec §2 requires UTC since 2.5.4. It is now the only generator (UTC) and `hitl-scorecard.py` imports it; the local time appears only in the header's correlation parenthetical (`_digest_head`). Same instant ⇒ same code in both surfaces under any `TZ` (tests in both suites). `commands/hitl-digest.md` updated.
+
+**Activation after merge** (this entry stays under `[Unreleased]`): the live OMP and Claude Code load `maos@vek-claude-plugins`, whose cache is keyed by `.claude-plugin/plugin.json` `version` (1.22.1). Ship it with a separate `chore(release): maos 1.23.0` PR (only `plugin.json` version + a `## [1.23.0]` CHANGELOG section, per `scripts/check-release-coherence.py`), then `scripts/sync-version.sh` for the derived files, then on each machine `claude plugin marketplace update vek-claude-plugins && claude plugin update maos@vek-claude-plugins` and restart the session.
+
 ### Fixed — on-call-shift recovery follow-ups
 
 - `recover_child` now refuses `STALE_CHECKPOINT_IN_FLIGHT` when an item that was in flight at a failed child save is no longer in flight in the new checkpoint and is not recorded as completed in its log. The failed in-flight sets of the same pending entry are unioned for every failed save that advanced the floor (tuple >= the current floor), and an earlier failure never loses items already in the floor, so a reload to an older revision followed by another failed save cannot erase the item. A checkpoint with non-string `in_flight` or logged ids is refused as `CHECKPOINT_UNREADABLE` instead of raising `TypeError`.

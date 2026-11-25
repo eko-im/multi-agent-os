@@ -1,0 +1,827 @@
+"""Deterministic tests for bin/hitl-scorecard.py (hitl-digest spec §8 scorecard + panel).
+
+Runs under `python3 -m unittest` and under pytest. Stdlib only.
+"""
+import copy
+import datetime as dt
+import importlib.util
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import time
+import unittest
+
+_SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "bin" / "hitl-scorecard.py"
+_spec = importlib.util.spec_from_file_location("hitl_scorecard_under_test", _SCRIPT)
+sc = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(sc)
+
+SESSION = "01a20e56-ecbe-7673-8116-76600e63ce53"
+NOW = 1795469400                      # fixed instant (UTC) for deterministic codes
+CODE = "K" + dt.datetime.fromtimestamp(NOW, tz=dt.timezone.utc).strftime("%y%m%d-%H%M") + "-" + SESSION[-8:]
+FUSE = _SCRIPT.parent / "synopsis-fuse.py"
+
+
+def decision(i, urgency="baixa", owner=False, rec="Manter", evidence="spec.md:1", multi=False, n_opts=2):
+    labels = ["Manter", "Mudar", "Adiar", "Arquivar", "Dividir"][:n_opts]
+    return {
+        "id": f"D{i}", "title": f"Decisão número {i}",
+        "origin": {"harness": "OMP", "repo": "org/repo", "session": SESSION},
+        "context": f"contexto da decisão {i}", "ask": f"Qual caminho para o item {i}",
+        "urgency": urgency, "owner_only": owner, "reversible": True,
+        "cost_of_delay": "o item fica parado", "time_to_decide": "2 min", "multi": multi,
+        "options": [{"label": l, "effect": f"efeito {l}", "confidence": "média",
+                     "evidence": evidence if l in (rec if isinstance(rec, list) else [rec]) else ""}
+                    for l in labels],
+        "recommended": rec, "rationale": "é o mais barato",
+    }
+
+
+def doc(*ds):
+    return {"decisions": list(ds), "harness": "OMP", "repo": "org/repo"}
+
+
+def cards(d):
+    shown, _, _ = sc.plan([sc.normalize(x) for x in d["decisions"]])
+    return shown
+
+def long_decision(i, urgency="media"):
+    """Real-world sized card: label + rationale + pointer overflow 80 columns and wrap."""
+    d = decision(i, urgency, True)
+    d["title"] = f"Escopo do HOLD da regra de revisão número {i}"
+    d["options"][0]["label"] = "Manter para todo push/PR"
+    d["options"][0]["evidence"] = "auto-self-harness.md:153"
+    d["options"][1]["label"] = "Escopar só a main"
+    d["recommended"] = "Manter para todo push/PR"
+    d["rationale"] = "protege efeito externo"
+    d["cost_of_delay"] = "push fora de main espera revisor"
+    return d
+
+
+class CompactCapTest(unittest.TestCase):
+    """The 15-line cap is hard: measured after real wrapping, never only warned."""
+
+    def _lines(self, out):
+        return [l for l in out.splitlines() if l.strip()]
+
+    def test_three_and_four_long_cards_never_exceed_the_cap(self):
+        for n in (3, 4):
+            d = doc(*(long_decision(i, "alta" if i == 1 else "media") for i in range(1, n + 1)))
+            out = sc.render_text(d, now=NOW, session=SESSION, layout="compact")
+            self.assertLessEqual(len(self._lines(out)), sc.BODY_MAX, out)
+            self.assertTrue(all(sc.cols(l) <= 80 for l in out.splitlines()))
+            self.assertNotIn("…", out)
+
+    def test_overflow_moves_lowest_priority_card_to_next_digest(self):
+        d = doc(long_decision(1, "alta"), long_decision(2), long_decision(3, "baixa"),
+                long_decision(4, "baixa"))
+        out, shown = sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")
+        self.assertIn("⏭", out)                           # this input must overflow
+        self.assertLessEqual(len(self._lines(out)), sc.BODY_MAX, out)
+        self.assertTrue(all(sc.cols(l) <= 80 for l in out.splitlines()))
+        line = next(l for l in out.splitlines() if l.startswith("Responda:"))
+        n = len(shown)
+        self.assertTrue(out.splitlines()[1].startswith(f"{n} + 0 estac."))
+        self.assertIn(f" {n}:", line)
+        self.assertNotIn(f" {n + 1}:", line)              # moved card is not answerable now
+        moved = [c for c in (long_decision(i) for i in range(1, 5))
+                 if c["id"] not in {s["id"] for s in shown}]
+        self.assertTrue(moved)
+        over = next(l for l in out.splitlines() if l.startswith("⏭"))
+        for c in moved:
+            self.assertEqual(over.count(f" {c['id']}"), 1)  # identified once, by its short id
+            self.assertNotIn(c["title"], out)                # not rendered as a card
+        self.assertIn("1 · ⏫ ALTA", out)                  # urgent card always stays a card
+        # a text answer naming the moved card is not executed
+        res = sc.parse_text(shown, f"{CODE} {n + 1}:A", CODE)
+        self.assertNotIn("decided", [it["status"] for it in res.get("items", [])])
+
+    def test_parked_lines_overflow_before_any_urgent_card(self):
+        urgent_cards = [long_decision(i, "alta") for i in (1, 2, 3)]
+        parked = []
+        for i in (7, 8, 9):
+            p = decision(i)
+            p["parked"] = 1
+            parked.append(p)
+        d = doc(*urgent_cards, *parked)
+        out, shown = sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")
+        self.assertLessEqual(len(self._lines(out)), sc.BODY_MAX, out)
+        self.assertFalse(any(c["id"] in ("D7", "D8", "D9") for c in shown), "a parked item became a card")
+        over = next(l for l in out.splitlines() if l.startswith("⏭"))
+        hidden_urgent = [c["id"] for c in urgent_cards if c["id"] not in {s["id"] for s in shown}]
+        self.assertTrue(hidden_urgent, out)              # this fixture MUST push an urgent card out
+        self.assertNotIn("⏸", out)                       # …and only after every ⏸ line moved
+        # every moved id is either named once or counted in the `+N` tail (never dropped);
+        # the line is measured by the one column function (emoji = 2), so it may count some
+        named = [p for p in ("D7", "D8", "D9", *hidden_urgent) if over.count(f" {p}") == 1]
+        tail = re.search(r" \+(\d+)$", over)
+        self.assertEqual(len(named) + (int(tail.group(1)) if tail else 0), 3 + len(hidden_urgent), over)
+        self.assertTrue(all(p in named for p in hidden_urgent), over)   # urgent ids come first
+        self.assertLessEqual(sc.cols(over), sc.COLS)
+        self.assertIn("1 · ⏫ ALTA", out)
+
+    def test_single_card_over_cap_is_an_error_not_a_cut(self):
+        d = long_decision(1, "alta")
+        d["title"] = " ".join(["palavra"] * 60)
+        d["rationale"] = " ".join(["motivo"] * 60)
+        with self.assertRaises(ValueError):
+            sc.render_text(doc(d), now=NOW, session=SESSION, layout="compact")
+
+
+
+class RenderTest(unittest.TestCase):
+    def setUp(self):
+        self.doc = doc(decision(1, "alta", True), decision(2, "media", True), decision(3))
+
+    def test_code_is_utc_plus_root_s8(self):
+        out = sc.render_text(self.doc, now=NOW, session=SESSION)
+        self.assertIn(f"HITL DIGEST · {CODE} (", out.splitlines()[0])
+
+    def test_compact_fits_attention_contract(self):
+        out = sc.render_text(self.doc, now=NOW, session=SESSION, layout="compact")
+        lines = [l for l in out.splitlines() if l.strip()]
+        self.assertLessEqual(len(lines), 15)
+        self.assertTrue(all(sc.cols(l) <= 80 for l in lines))
+
+    def test_full_lines_fit_80_columns_and_carry_bluf(self):
+        out = sc.render_text(self.doc, now=NOW, session=SESSION, layout="full")
+        self.assertTrue(all(sc.cols(l) <= 80 for l in out.splitlines()))
+        for needle in ("origem: OMP · org/repo", "contexto:", "decisão:", "✅ recomendo A porque",
+                       "↩️ REVERSÍVEL", "⌛ sem resposta:", "⏱ 2 min"):
+            self.assertIn(needle, out)
+        self.assertTrue(out.rstrip().endswith("sessão: " + SESSION[-8:]))
+
+    def test_hint_requires_letter_on_urgent_and_owner_only(self):
+        out = sc.render_text(self.doc, now=NOW, session=SESSION)
+        self.assertIn(f"Responda: {CODE} 1:A 2:A 3:A", out)
+        self.assertIn("(1 e 2 exigem letra · omitido = pendente · - = recomendado nos demais)", out)
+        self.assertNotIn("aceitar A", out)
+
+    def test_dash_accepts_exactly_the_printed_multi_recommendation(self):
+        d = decision(1, rec=["Mudar", "Adiar"], multi=True, n_opts=3)
+        out = sc.render_text(doc(d), now=NOW, session=SESSION)
+        line = next(l for l in out.splitlines() if l.startswith("Responda:"))
+        self.assertIn(" 1:B+C", line)                    # the hint's `-` means this, not A
+        self.assertIn("- = aceitar o recomendado de cada item", out)
+        self.assertNotIn("aceitar A", out)
+        res = sc.parse_text(sc.load_cards(doc(d)), f"{CODE} 1:-", CODE)
+        self.assertEqual(res["items"][0]["status"], "decided")
+        self.assertEqual(sorted(res["items"][0]["letters"]), ["B", "C"])
+
+    def test_needs_operator_rationale_is_imported(self):
+        line = ("NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar ; confidence=alta ; "
+                "evidence=pr:12 ; rationale=checks verdes ; cost-of-not-deciding=PR parado ; "
+                "origin=OMP·org/a·aaaaaaaa1111")
+        res = sc.aggregate([("s.log", line)], {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["decisions"][0]["rationale"], "checks verdes")
+        errs, _ = sc.lint_doc({"decisions": res["decisions"]}, now=NOW, session=SESSION)
+        self.assertFalse(any("rationale" in e for e in errs), errs)
+        out = sc.render_text({"decisions": res["decisions"]}, now=NOW, session=SESSION)
+        self.assertIn("porque checks verdes", out)
+
+    def test_recommendation_without_pointer_has_no_check_mark(self):
+        d = doc(decision(1, evidence=""))
+        out = sc.render_text(d, now=NOW, session=SESSION)
+        self.assertIn(sc.NO_REC, out)
+        self.assertNotIn("✅", out)
+        self.assertIn("(1 exige letra · omitido = pendente)", out)
+        # no letter is suggested for a card the agent could not recommend
+        self.assertIn(f"Responda: {CODE} 1:?", out)
+        self.assertNotIn(f"Responda: {CODE} 1:A", out)
+
+    def test_pasting_the_answer_line_cannot_decide_a_no_rec_card(self):
+        d = doc(decision(1, "alta", True), decision(2, evidence=""))
+        out = sc.render_text(d, now=NOW, session=SESSION)
+        line = next(l for l in out.splitlines() if l.startswith("Responda:"))
+        self.assertIn(" 2:?", line)
+        res = sc.parse_text(sc.load_cards(d), line.split(":", 1)[1].strip(), CODE)
+        self.assertEqual(res["status"], "ok")
+        item2 = res["items"][1]
+        self.assertEqual(item2["status"], "pending")
+        self.assertNotIn("decided", [it["status"] for it in res["items"][1:]])
+
+    def test_no_root_session_means_no_numbered_digest(self):
+        out = sc.render_text(self.doc, now=NOW, session=None)
+        self.assertNotIn("Responda:", out)
+        self.assertIn("sem código", out)
+        self.assertIn("• · ⏫ ALTA", out)
+
+    def test_ansi_respects_no_color(self):
+        out = sc.render_text(self.doc, now=NOW, session=SESSION)
+        old = os.environ.pop("NO_COLOR", None)
+        try:
+            colored = sc.ansi(out)
+            self.assertIn("\x1b[", colored)
+            self.assertIn("ALTA", re.sub(r"\x1b\[[0-9;]*m", "", colored))
+            os.environ["NO_COLOR"] = "1"
+            self.assertEqual(sc.ansi(out), out)
+        finally:
+            os.environ.pop("NO_COLOR", None)
+            if old is not None:
+                os.environ["NO_COLOR"] = old
+
+    def test_compact_is_five_lines_bluf_and_never_cut(self):
+        out = sc.render_text(doc(decision(1, "alta", True)), now=NOW, session=SESSION, layout="compact")
+        lines = out.splitlines()
+        self.assertNotIn("…", out)
+        card = lines[4:-1]
+        self.assertEqual(len(card), 4)                    # origin = footer ⇒ no L5
+        self.assertTrue(card[1].startswith("    A ✅ Manter ↩️ — porque é o mais barato (média · spec.md:1)"))
+        self.assertEqual(card[2], "    B Mudar ↩️")
+        self.assertEqual(card[3], "    ⌛ o item fica parado · ⏱ 2 min · ↩️ REVERSÍVEL")
+
+    def test_door_is_per_option_with_card_level_default(self):
+        d = decision(1, "alta", True)
+        d.pop("reversible")
+        d["options"][1]["reversible"] = False           # B is a one-way door
+        d["options"][0]["reversible"] = True
+        out = sc.render_text(doc(d), now=NOW, session=SESSION, layout="compact")
+        self.assertIn("A ✅ Manter ↩️ —", out)
+        self.assertIn("    B Mudar 🚪", out)
+        self.assertIn("🚪 SEM VOLTA · ↩️ REVERSÍVEL", out)  # legend of the doors present
+        full = sc.render_text(doc(d), now=NOW, session=SESSION, layout="full")
+        self.assertIn("efeito Mudar · 🚪 SEM VOLTA", full)
+        legacy = decision(2)                             # only the card says reversible
+        legacy["reversible"] = False
+        self.assertEqual([o["reversible"] for o in sc.normalize(legacy)["options"]], [False, False])
+        auq = sc.ask_claude(doc(d), now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        self.assertIn("Sem volta.", auq["options"][1]["description"])
+
+    def test_compact_origin_shown_only_when_it_differs_from_footer(self):
+        d = doc(decision(1), decision(2))
+        d["decisions"][1]["origin"] = {"harness": "Codex", "repo": "org/outro", "session": "x" * 8 + "99990000"}
+        out = sc.render_text(d, now=NOW, session=SESSION, layout="compact")
+        self.assertIn("Codex · org/outro · 99990000", out)
+        self.assertEqual(out.count("org/repo"), 1)        # only the footer
+
+    def test_compact_degrades_lowest_priority_card_first(self):
+        d = doc(decision(1, "alta", True), decision(2, "media", True), decision(3))
+        for x in d["decisions"]:
+            x["origin"] = dict(x["origin"], repo=f"org/r{x['id']}")       # 5-line cards
+        out = sc.render_text(d, now=NOW, session=SESSION, layout="compact")
+        body = out.splitlines()
+        self.assertLessEqual(len(body), 15)
+        self.assertNotIn("…", out)
+        starts = [i for i, l in enumerate(body) if re.match(r"\d · ", l)] + [len(body) - 1]
+        sizes = [b - a for a, b in zip(starts, starts[1:])]
+        self.assertEqual(sorted(sizes, reverse=True), sizes)          # 3rd card shrinks first
+        for r in ("org/rD1", "org/rD2", "org/rD3"):
+            self.assertIn(r, out)                                       # origin never dropped
+
+
+class CodeTimezoneTest(unittest.TestCase):
+    """spec §2: one code generator (synopsis-fuse `_digest_code`), in UTC. The same instant
+    gives the same code in both surfaces whatever the host zone; local time only in `( )`."""
+
+    def _env(self, tz):
+        env = {k: v for k, v in os.environ.items() if k not in (
+            "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "PI_SESSION_ID", "PI_SESSION_FILE",
+            "MAOS_SELF_SESSION_ID", "CLAUDE_SESSION_ID")}
+        env["TZ"] = tz
+        return env
+
+    def test_same_instant_same_code_in_both_surfaces_outside_utc(self):
+        self.assertIs(sc.fuse._digest_code, sc.fuse._digest_code)
+        self.assertFalse(hasattr(sc, "digest_code"))      # no duplicate generator
+        now = 1793060820                                    # 2026-10-27 00:27 UTC = 21:27 -03 the day before
+        with tempfile_dir() as tmp:
+            dj = pathlib.Path(tmp, "d.json")
+            dj.write_text(json.dumps(doc(decision(1))), encoding="utf-8")
+            hj = pathlib.Path(tmp, "h.json")
+            hj.write_text(json.dumps([{"id": "H-0001", "sev": "🟡 NORMAL", "tipo": "negocio",
+                                       "decidir": "x", "session_id": SESSION}]), encoding="utf-8")
+            codes, heads = [], []
+            for tz in ("America/Sao_Paulo", "UTC"):
+                card = subprocess.run([sys.executable, str(_SCRIPT), "ask", str(dj), "--target", "claude",
+                                       "--session", SESSION, "--now", str(now)],
+                                      capture_output=True, text=True, env=self._env(tz), check=True)
+                auq = subprocess.run([sys.executable, str(FUSE), "--hitl-only", "--compass-json", "-",
+                                      "--hitl-json", str(hj), "--scope", "all", "--format", "ask-user-question",
+                                      "--session-id", SESSION, "--now", str(now)], input="{}",
+                                     capture_output=True, text=True, env=self._env(tz), check=True)
+                a, b = json.loads(card.stdout), json.loads(auq.stdout)
+                codes += [a["code"], b["code"]]
+                heads.append(b["preamble"][0])
+        self.assertEqual(set(codes), {"K261027-0027-" + SESSION[-8:]})
+        self.assertIn("(21:27 -03)", heads[0])
+        self.assertIn("(00:27 +00)", heads[1])
+
+
+class tempfile_dir:
+    def __enter__(self):
+        import tempfile
+        self._d = tempfile.TemporaryDirectory()
+        return self._d.name
+
+    def __exit__(self, *exc):
+        self._d.cleanup()
+
+
+
+class PlanTest(unittest.TestCase):
+    def test_fourth_card_only_for_urgent_and_never_more_than_four(self):
+        d = doc(*[decision(i, "alta", True) for i in range(1, 6)], decision(6))
+        shown, parked, nxt = sc.plan([sc.normalize(x) for x in d["decisions"]])
+        self.assertEqual(len(shown), 4)
+        self.assertEqual([c["id"] for c in parked], ["D6"])   # only the non-urgent item parks
+        self.assertEqual([c["urgency"] for c in nxt], ["alta"])  # ⏫/👤 overflow goes to ⏭, never ⏸
+
+    def test_three_cards_then_at_most_three_parked(self):
+        d = doc(*[decision(i) for i in range(1, 9)])
+        shown, parked, nxt = sc.plan([sc.normalize(x) for x in d["decisions"]])
+        self.assertEqual((len(shown), len(parked), len(nxt)), (3, 3, 2))
+
+    def test_order_owner_urgent_first_then_unblocks(self):
+        a, b, c = decision(1), decision(2, "alta", True), decision(3)
+        c["unblocks"] = 5
+        shown = cards(doc(a, b, c))
+        self.assertEqual([x["id"] for x in shown], ["D2", "D3", "D1"])
+
+
+class AskTest(unittest.TestCase):
+    def test_empty_queue_opens_no_panel(self):
+        empty = {"decisions": [], "harness": "OMP", "repo": "org/repo"}
+        p = sc.ask_claude(empty, now=NOW, session=SESSION)
+        self.assertIsNone(p["ask_user_question"])
+        self.assertIn("Nenhuma decisão", p["preamble"][0])
+        self.assertEqual(sc.lint_auq(p), [])                       # explicit empty envelope: valid
+        self.assertTrue(sc.lint_auq({"ask_user_question": {"questions": []}}))  # still invalid
+        self.assertTrue(sc.lint_auq({"ask_user_question": None, "preamble": []}))
+        html_out = sc.ask_omp(empty, now=NOW, session=SESSION)
+        self.assertNotIn("<form", html_out)
+        self.assertNotIn("confirm", html_out)
+
+    def test_rejected_only_aggregate_opens_no_panel_but_reports_rejects(self):
+        line = ("NEEDS-OPERATOR: Só uma opção ; rec=fazer ; confidence=alta ; "
+                "cost-of-not-deciding=nada ; origin=OMP·org/a·aaaaaaaa1111")
+        res = sc.aggregate([("s.log", line)], {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["decisions"], [])
+        self.assertEqual(len(res["rejected"]), 1)
+        p = sc.ask_claude(res, now=NOW, session=SESSION)          # the full aggregate, not a slice
+        self.assertIsNone(p["ask_user_question"])
+        pre = " ".join(p["preamble"])
+        self.assertIn("Nenhuma decisão válida; 1 item(ns) rejeitado(s)", pre)
+        self.assertIn("Só uma opção", pre)
+        self.assertNotIn("✅", pre)                                # never reads as nothing pending
+        self.assertEqual(len(p["rejected"]), 1)
+        self.assertEqual(sc.lint_auq(p), [])
+        html_out = sc.ask_omp(res, now=NOW, session=SESSION)
+        self.assertIn("1 item(ns) rejeitado(s)", html_out)
+        self.assertNotIn("<form", html_out)
+
+    def test_many_long_and_malformed_rejects_stay_bounded_and_escaped(self):
+        rej = [{"ask": "<script>alert(1)</script> " + "x" * 300, "reason": "y" * 300}
+               for _ in range(20)]
+        doc_ = {"decisions": [], "rejected": rej}
+        p = sc.ask_claude(doc_, now=NOW, session=SESSION)
+        self.assertTrue(all(sc.cols(l) <= 80 for l in p["preamble"]), p["preamble"])
+        self.assertIn("+19 outros", " ".join(p["preamble"]))
+        self.assertEqual(len(p["rejected"]), 20)                   # full list kept structured
+        html_out = sc.ask_omp(doc_, now=NOW, session=SESSION)
+        self.assertNotIn("<script>", html_out)
+        self.assertIn("&lt;script&gt;", html_out)
+        bad = {"decisions": [], "rejected": ["bad", None]}
+        p = sc.ask_claude(bad, now=NOW, session=SESSION)           # non-dict items: no crash
+        self.assertIn("2 item(ns) rejeitado(s)", " ".join(p["preamble"]))
+        self.assertIn("<p>", sc.ask_omp({"decisions": [], "rejected": "oops"}, now=NOW, session=SESSION))
+
+    def test_claude_panel_carries_the_rationale(self):
+        d = doc(decision(1, "alta", True))
+        q = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        rec = [o for o in q["options"] if "recomendado" in o["label"]]
+        self.assertEqual(len(rec), 1)
+        self.assertIn("Porque: é o mais barato.", rec[0]["description"])
+        others = [o for o in q["options"] if "recomendado" not in o["label"]]
+        self.assertFalse(any("Porque:" in o["description"] for o in others))
+
+    def test_free_text_keeps_already_resolved_items(self):
+        cards = sc.load_cards(doc(decision(1), decision(2)))
+        res = sc.parse_text(cards, f"{CODE} espera por favor", CODE, resolved={1: "B"})
+        self.assertEqual(res["items"][0]["status"], "decided")
+        self.assertEqual(res["items"][0]["letters"], ["B"])
+        self.assertEqual(res["items"][1]["status"], "pending")
+        self.assertIn("1=B", res["fechado"])
+
+    def test_claude_payload_respects_tool_limits(self):
+        d = doc(*[decision(i, "alta", True, n_opts=4) for i in range(1, 6)])
+        qs = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"]
+        self.assertTrue(1 <= len(qs) <= 4)
+        for q in qs:
+            self.assertTrue(2 <= len(q["options"]) <= 4)
+            self.assertLessEqual(len(q["header"]), 12)
+            self.assertIsInstance(q["multiSelect"], bool)
+        self.assertEqual(sc.lint_auq({"questions": qs}), [])
+
+    def test_recommended_first_with_label_and_never_preselected(self):
+        d = doc(decision(1, rec="Mudar"))
+        q = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        self.assertEqual(q["options"][0]["label"], "Mudar (recomendado)")
+        self.assertNotIn("default", json.dumps(q))
+
+    def test_lint_auq_rejects_out_of_bounds(self):
+        bad = {"questions": [{"question": "x?", "header": "header longo demais",
+                              "options": [{"label": "só"}], "multiSelect": "no"}]}
+        errs = sc.lint_auq(bad)
+        self.assertEqual(len(errs), 3)
+
+    def test_single_real_option_is_refused_never_padded(self):
+        d = doc(decision(1, n_opts=1))
+        for fn in (lambda: sc.render_text(d, now=NOW, session=SESSION),
+                   lambda: sc.ask_claude(d, now=NOW, session=SESSION),
+                   lambda: sc.ask_omp(d, now=NOW, session=SESSION)):
+            with self.assertRaises(sc.InputError):
+                fn()
+        errs, _ = sc.lint_doc(d, now=NOW, session=SESSION)
+        self.assertTrue(any("2–4 opções (tem 1)" in e for e in errs))
+        res = sc.aggregate([("s.log", "NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; confidence=alta ; "
+                                      "cost-of-not-deciding=PR parado ; origin=OMP·org/a·aaaaaaaa1111")],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["decisions"], [])
+        self.assertEqual(len(res["rejected"]), 1)
+        self.assertNotIn("Manter pendente", json.dumps(res, ensure_ascii=False))
+
+    def test_omp_form_has_no_preselect_and_a_confirmation_gate(self):
+        d = doc(decision(1, "alta", True), decision(2, multi=True, rec=["Manter", "Mudar"], n_opts=3))
+        form = sc.ask_omp(d, now=NOW, session=SESSION)
+        self.assertNotRegex(form, r"\b(checked|selected)\b")
+        self.assertIn('type="checkbox" name="d2"', form)
+        self.assertIn('type="radio" name="d1"', form)
+        self.assertIn('name="confirm"', form)
+        self.assertEqual(sc.lint_html(form), [])
+        self.assertEqual(len(sc.lint_html(form.replace('value="A">', 'value="A" checked>'))), 1)
+
+    def test_recommended_b_keeps_letter_label_description_aligned(self):
+        """Bot finding (zip after `_card_options` reorders): the source recommends its 2nd
+        option (B in source order). normalize() makes the recommended option letter A on
+        every surface (spec 1.1.0: recommended is always A), so `_card_options` moving it to
+        index 0 is a no-op and AUQ index k == card letter k. Checked byte by byte: label,
+        description and the letter parse_claude returns belong to the same option, and the
+        text digest and the OMP form use the same letter."""
+        for multi, rec in ((False, "Mudar"), (True, ["Mudar"])):
+            d = doc(decision(1, rec=rec, multi=multi, n_opts=3))
+            c = cards(d)[0]
+            q = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+            self.assertEqual(len(q["options"]), len(c["options"]))
+            for k, (o, src) in enumerate(zip(q["options"], c["options"])):
+                self.assertEqual(src["letter"], sc.LETTERS[k])
+                self.assertEqual(o["label"], src["label"] + (sc.REC if src["recommended"] else ""))
+                self.assertTrue(o["description"].startswith(f"efeito {src['label']}."))
+                res = sc.parse_claude([c], {"answers": {q["question"]: o["label"]}}, CODE)
+                self.assertEqual((res["items"][0]["letters"], res["items"][0]["labels"]),
+                                 ([src["letter"]], [src["label"]]))
+            want = next(o["letter"] for o in c["options"] if o["label"] == "Mudar")
+            self.assertEqual(want, "B" if multi else "A")       # multi keeps source order
+            form = sc.ask_omp(d, now=NOW, session=SESSION)
+            self.assertIn(f'value="{want}"> ✅ {want} — Mudar (recomendado)', form)
+            txt = sc.render_text(d, now=NOW, session=SESSION)
+            self.assertRegex(txt, rf"(?m)^    {want} ✅ Mudar → efeito Mudar")
+
+    def test_same_ask_distinct_ids_get_distinct_questions_and_answers(self):
+        base = decision(1)
+        d = doc(dict(copy.deepcopy(base), id="D-A"), dict(copy.deepcopy(base), id="D-B"))
+        qs = sc.ask_claude(d, now=NOW, session=SESSION)["ask_user_question"]["questions"]
+        self.assertNotEqual(qs[0]["question"], qs[1]["question"])
+        self.assertTrue(qs[0]["question"].startswith("1 · D-A — "))
+        self.assertTrue(qs[1]["question"].startswith("2 · D-B — "))
+        res = sc.parse_claude(cards(d), {"answers": {qs[0]["question"]: qs[0]["options"][1]["label"]}}, CODE)
+        self.assertEqual([(i["id"], i["status"], i["letters"]) for i in res["items"]],
+                         [("D-A", "decided", ["B"]), ("D-B", "pending", [])])
+
+    def test_multi_two_recommended_long_labels_stay_unique(self):
+        d = decision(1, multi=True, n_opts=2)
+        stem = "Keep the following archived deployment environment unchanged "
+        for o, tail in zip(d["options"], ("alpha", "beta")):
+            o["label"], o["evidence"] = stem + tail, "spec.md:1"
+        d["recommended"] = [o["label"] for o in d["options"]]
+        dd = doc(d)
+        q = sc.ask_claude(dd, now=NOW, session=SESSION)["ask_user_question"]["questions"][0]
+        labels = [o["label"] for o in q["options"]]
+        self.assertEqual(len(set(labels)), 2)
+        self.assertTrue(all(l.endswith(sc.REC) and len(l) <= sc.fuse.AUQ_LABEL_MAX for l in labels))
+        self.assertEqual(sc.lint_auq({"questions": [q]}), [])
+        res = sc.parse_claude(cards(dd), {"answers": {q["question"]: labels[1]}}, CODE)
+        self.assertEqual(res["items"][0]["letters"], ["B"])
+
+
+class ParseTextTest(unittest.TestCase):
+    def setUp(self):
+        self.cards = cards(doc(decision(1, "alta", True), decision(2), decision(3, evidence="")))
+
+    def st(self, res):
+        return [i["status"] for i in res["items"]]
+
+    def test_valid_answer_and_fechado_line(self):
+        res = sc.parse_text(self.cards, f"{CODE} 1:B 2:- 3:a", CODE)
+        self.assertEqual(self.st(res), ["decided"] * 3)
+        self.assertEqual(res["fechado"], f"{CODE} fechado: 1=B 2=A 3=A")
+
+    def test_dash_refused_on_owner_only_and_no_recommendation(self):
+        res = sc.parse_text(self.cards, f"{CODE} 1:- 2:- 3:-", CODE)
+        self.assertEqual(self.st(res), ["pending", "decided", "pending"])
+
+    def test_whole_answer_rejections(self):
+        self.assertEqual(sc.parse_text(self.cards, "1:A", CODE)["status"], "rejected")
+        other = CODE[:-8] + "deadbeef"
+        self.assertEqual(sc.parse_text(self.cards, f"{other} 1:A", CODE)["status"], "rejected")
+        self.assertEqual(sc.parse_text(self.cards, f"{CODE} 1:A", CODE, closed=[CODE])["status"], "rejected")
+        self.assertEqual(sc.parse_text(self.cards, f"{CODE} 1:A", None)["status"], "rejected")
+
+    def test_item_level_rejections(self):
+        res = sc.parse_text(self.cards, f"{CODE} 1:A 1:B 2:Z 7:A", CODE)
+        self.assertEqual(self.st(res), ["pending", "pending", "pending"])
+        self.assertEqual(res["rejected_tokens"][0]["n"], 7)
+
+    def test_free_text_decides_nothing_and_case_is_ignored(self):
+        self.assertEqual(self.st(sc.parse_text(self.cards, f"{CODE} sim", CODE)), ["pending"] * 3)
+        res = sc.parse_text(self.cards, f"{CODE.lower()}.1:b", CODE)
+        self.assertEqual(self.st(res), ["decided", "pending", "pending"])
+
+    def test_already_resolved_is_not_reexecuted(self):
+        res = sc.parse_text(self.cards, f"{CODE} 1:A", CODE, resolved={1: "B"})
+        self.assertEqual(res["items"][0]["status"], "rejected")
+        self.assertIn("já resolvido: B", res["items"][0]["note"])
+
+
+class ParsePanelTest(unittest.TestCase):
+    def setUp(self):
+        self.doc = doc(decision(1, "alta", True), decision(2, multi=True, rec=["Manter", "Mudar"], n_opts=3))
+        self.cards = cards(self.doc)
+        self.qs = sc.ask_claude(self.doc, now=NOW, session=SESSION)["ask_user_question"]["questions"]
+
+    def test_claude_answers_map_to_letters(self):
+        res = sc.parse_claude(self.cards, {"answers": {
+            self.qs[0]["question"]: self.qs[0]["options"][1]["label"],
+            self.qs[1]["question"]: ", ".join(o["label"] for o in self.qs[1]["options"][:2])}}, CODE)
+        self.assertEqual([(i["status"], i["letters"]) for i in res["items"]],
+                         [("decided", ["B"]), ("decided", ["A", "B"])])
+
+    def test_claude_idle_auto_resolve_is_expired_not_consent(self):
+        res = sc.parse_claude(self.cards, {"answers": {self.qs[0]["question"]: self.qs[0]["options"][0]["label"]},
+                                           "afkTimeoutMs": 120000}, CODE)
+        self.assertEqual({i["status"] for i in res["items"]}, {"expired"})
+
+    def test_claude_unanswered_and_other_text_stay_pending(self):
+        res = sc.parse_claude(self.cards, {"answers": {self.qs[1]["question"]: "outra coisa"},
+                                           "annotations": {self.qs[0]["question"]: {"unanswered": "skipped"}}}, CODE)
+        self.assertEqual([i["status"] for i in res["items"]], ["pending", "pending"])
+
+    def test_omp_requires_explicit_confirmation(self):
+        vals = {"d1": "A", "d2": ["A", "C"]}
+        self.assertEqual({i["status"] for i in sc.parse_omp(self.cards, vals, CODE)["items"]}, {"pending"})
+        res = sc.parse_omp(self.cards, dict(vals, confirm="sim"), CODE)
+        self.assertEqual([i["letters"] for i in res["items"]], [["A"], ["A", "C"]])
+
+    def test_omp_timeout_is_expired(self):
+        res = sc.parse_omp(self.cards, {"values": {"d1": "A", "confirm": "sim"}, "timedOut": True}, CODE)
+        self.assertEqual({i["status"] for i in res["items"]}, {"expired"})
+
+    def test_panel_parsers_apply_closed_and_resolved_guards(self):
+        claude = {"answers": {self.qs[0]["question"]: self.qs[0]["options"][0]["label"]}}
+        omp = {"d1": "A", "confirm": "sim"}
+        for fn, data in ((sc.parse_claude, claude), (sc.parse_omp, omp)):
+            self.assertEqual(fn(self.cards, data, CODE, closed=[CODE.lower()])["status"], "rejected")
+            res = fn(self.cards, data, CODE, resolved={1: "B"})
+            self.assertEqual((res["items"][0]["status"], res["items"][0]["note"]), ("rejected", "já resolvido: B"))
+            res = fn(self.cards, {"answers": {}} if fn is sc.parse_claude else {"confirm": "sim"}, CODE,
+                     resolved={1: "B"})
+            self.assertEqual((res["items"][0]["status"], res["items"][0]["letters"]), ("decided", ["B"]))
+
+
+class AggregateLintTest(unittest.TestCase):
+    def test_needs_operator_lines_dedupe_and_order(self):
+        a = "NEEDS-OPERATOR: Ratificar a regra X ; rec=ratificar ; alt=pedir ajustes ; confidence=alta ; cost-of-not-deciding=PR parado ; urgency=alta ; owner=sim ; origin=Claude Code·org/a·aaaaaaaa1111"
+        b = "NEEDS-OPERATOR: Arquivar o plano Y ; rec=arquivar ; alt=manter ; confidence=média ; cost-of-not-deciding=fila ; origin=Codex·org/b·bbbbbbbb2222"
+        res = sc.aggregate([("s1.log", a + "\n" + b), ("s2.log", a.replace("aaaaaaaa1111", "cccccccc3333"))],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["deduped"], 1)
+        self.assertEqual(res["queue"]["cards"][0], "Ratificar a regra X")
+        self.assertEqual(len(res["decisions"][0]["origins"]), 2)
+        out = sc.render_text(res, now=NOW, session=SESSION)
+        self.assertIn("(+1 sessões)", out)
+        self.assertNotIn("✅", out)                       # bare lines carry no evidence pointer
+
+    def test_same_ask_in_two_repos_is_two_cards(self):
+        line = ("NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar ; confidence=alta ; "
+                "cost-of-not-deciding=PR parado ; origin=OMP·{repo}·{s}")
+        res = sc.aggregate([("s1.log", line.format(repo="org/a", s="aaaaaaaa1111")),
+                            ("s2.log", line.format(repo="org/b", s="bbbbbbbb2222"))],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["deduped"], 0)
+        self.assertEqual(len(res["queue"]["cards"]), 2)
+        self.assertEqual({d["origin"]["repo"] for d in res["decisions"]}, {"org/a", "org/b"})
+
+    def test_distinct_ids_same_ask_same_repo_are_two_cards(self):
+        base = decision(1, "alta", True)
+        a = dict(copy.deepcopy(base), id="D-A")
+        b = dict(copy.deepcopy(base), id="D-B")
+        same = dict(copy.deepcopy(base), id="D-A")
+        b["origin"] = dict(a["origin"])
+        same["origin"] = dict(a["origin"], session="zzzzzzzz9999")
+        res = sc.aggregate([("x.json", json.dumps({"decisions": [a, b, same]}))],
+                           {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(res["deduped"], 1)               # same id, same repo → merged
+        self.assertEqual(len(res["queue"]["cards"]), 2)   # distinct ids → two cards
+
+    def test_lint_clean_and_dirty(self):
+        good = doc(decision(1, "alta", True), decision(2))
+        self.assertEqual(sc.lint_doc(good, now=NOW, session=SESSION)[0], [])
+        bad = copy.deepcopy(good)
+        bad["decisions"][0]["options"] = bad["decisions"][0]["options"][:1]
+        bad["decisions"][1]["origin"] = {}
+        bad["decisions"][1]["recommended"] = "Inexistente"
+        errs, _ = sc.lint_doc(bad, now=NOW, session=SESSION)
+        self.assertTrue(any("2–4 opções" in e for e in errs))
+        self.assertTrue(any("origin sem" in e for e in errs))
+        self.assertTrue(any("não é uma opção" in e for e in errs))
+        _, warns = sc.lint_doc(doc(decision(1, evidence="")), now=NOW, session=SESSION)
+        self.assertTrue(any("sem ponteiro" in w for w in warns))
+        no_why = copy.deepcopy(good)
+        no_why["decisions"][0].pop("rationale")
+        errs, _ = sc.lint_doc(no_why, now=NOW, session=SESSION)
+        self.assertTrue(any("sem rationale" in e for e in errs))
+        long = doc(decision(1))
+        long["decisions"][0]["cost_of_delay"] = "x " * 45
+        _, warns = sc.lint_doc(long, now=NOW, session=SESSION)
+        self.assertTrue(any("cost_of_delay passa do orçamento" in w for w in warns))
+
+    def test_lint_refuses_one_way_recommendation_without_high_confidence(self):
+        d = decision(1, "alta", True)                    # recommended Manter, confidence média
+        d["options"][0]["reversible"] = False
+        errs, _ = sc.lint_doc(doc(d), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA com confiança 'média'" in e for e in errs))
+        legacy = decision(2)                             # card-level door is the default
+        legacy["reversible"] = False
+        errs, _ = sc.lint_doc(doc(legacy), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA" in e for e in errs))
+        strong = copy.deepcopy(d)
+        strong["options"][0]["confidence"] = "alta"
+        self.assertEqual(sc.lint_doc(doc(strong), now=NOW, session=SESSION)[0], [])
+        none = copy.deepcopy(d)
+        none["recommended"] = None
+        none.pop("rationale")
+        self.assertEqual(sc.lint_doc(doc(none), now=NOW, session=SESSION)[0], [])
+        one_way_alt = decision(3)                        # 🚪 on a NON-recommended option is fine
+        one_way_alt["options"][1]["reversible"] = False
+        self.assertEqual(sc.lint_doc(doc(one_way_alt), now=NOW, session=SESSION)[0], [])
+
+    def test_malformed_json_source_is_rejected_and_others_go_on(self):
+        line = "NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar ; origin=OMP·org/a·aaaaaaaa1111"
+        res = sc.aggregate([("bad.json", "{nope"), ("ok.log", line)], {"harness": "", "repo": "", "session": ""})
+        self.assertEqual(len(res["decisions"]), 1)
+        self.assertEqual(res["rejected"][0]["source"], "bad.json")
+        self.assertIn("JSON inválido", res["rejected"][0]["reason"])
+
+    def test_unknown_repo_scopes_bare_lines_to_their_own_source(self):
+        line = "NEEDS-OPERATOR: Mergear o PR ; rec=mergear ; alt=esperar"
+        none = {"harness": "", "repo": "", "session": ""}
+        res = sc.aggregate([("session1.log", line), ("session2.log", line)], none)
+        self.assertEqual(res["deduped"], 0)
+        self.assertEqual({d["origin"]["session"] for d in res["decisions"]}, {"session1", "session2"})
+        res = sc.aggregate([("s.log", line + "\n" + line)], none)    # same source: still merges
+        self.assertEqual(res["deduped"], 1)
+
+    def test_overflow_line_fits_80_columns_by_the_one_measure(self):
+        self.assertIs(sc.cols, sc.fuse._cols)
+        for n in (5, 40, 200):
+            line = sc.fuse._overflow_line([{"sev": "URGENTE", "id": f"D{i:03d}"} for i in range(n)])
+            self.assertLessEqual(sc.cols(line), 80, line)
+            shown = len(re.findall(r"D\d{3}", line))
+            hidden = int(re.search(r"\+(\d+)$", line).group(1)) if shown < n else 0
+            self.assertEqual(shown + hidden, n)
+
+    def test_local_time_offset_format(self):
+        old = os.environ.get("TZ")
+        try:
+            for tz, want in (("Asia/Kolkata", "03:00 +0530"), ("America/Sao_Paulo", "18:30 -03"),
+                             ("UTC", "21:30 +00")):
+                os.environ["TZ"] = tz
+                time.tzset()
+                self.assertEqual(sc.fuse._local_time(1795469400), want)
+        finally:
+            if old is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old
+            time.tzset()
+
+    def test_code_case_is_normalized_on_both_sides(self):
+        cs = cards(doc(decision(1)))
+        for code, answer in ((CODE.lower(), f"{CODE} 1:A"), (CODE, f"{CODE.lower()} 1:A"),
+                             (CODE.lower(), f"{CODE.lower()} 1:A")):
+            self.assertEqual(sc.parse_text(cs, answer, code)["items"][0]["status"], "decided")
+
+    def test_one_way_option_in_multi_card_is_refused(self):
+        d = decision(1, multi=True, rec=["Manter"], n_opts=3)
+        d["options"][2]["reversible"] = False                # not recommended, still refused
+        errs, _ = sc.lint_doc(doc(d), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA em card multi" in e for e in errs))
+        for fn in (lambda: sc.render_text(doc(d), now=NOW, session=SESSION),
+                   lambda: sc.ask_claude(doc(d), now=NOW, session=SESSION),
+                   lambda: sc.ask_omp(doc(d), now=NOW, session=SESSION)):
+            with self.assertRaises(sc.InputError):
+                fn()
+        inherited = decision(2, multi=True, rec=["Manter"])
+        inherited["reversible"] = False
+        self.assertTrue(any("SEM VOLTA em card multi" in e
+                            for e in sc.lint_doc(doc(inherited), now=NOW, session=SESSION)[0]))
+
+    def test_text_parse_uses_the_layout_that_was_shown(self):
+        d = doc(long_decision(1, "alta"), long_decision(2), long_decision(3, "baixa"))
+        tmp = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "hitl_parse_layout_test.json"
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        try:
+            full_n = len(sc.render_with_cards(d, now=NOW, session=SESSION)[1])
+            compact_n = len(sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")[1])
+            self.assertGreater(full_n, compact_n)            # fixture: compact moves a card to ⏭
+            base = [sys.executable, str(_SCRIPT), "parse", str(tmp), "--source", "text", "--code", CODE,
+                    "--answer", f"{CODE} {full_n}:B", "--now", str(NOW), "--session", SESSION]
+            run = lambda *x: subprocess.run(base + list(x), capture_output=True, text=True)
+            res = json.loads(run("--layout", "full").stdout)
+            self.assertEqual(res["items"][full_n - 1]["status"], "decided")
+            res = json.loads(run("--layout", "compact").stdout)
+            self.assertEqual(res["rejected_tokens"][0]["n"], full_n)
+            self.assertEqual(run().returncode, 2)            # layout never assumed
+        finally:
+            tmp.unlink()
+
+    def test_text_parse_rebuilds_manifest_from_the_code_not_the_environment(self):
+        """Borderline fit: with the root session the footer is short and 2 cards fit;
+        a parser without a session would rebuild a 1-card manifest and reject `2:A`."""
+        ds = []
+        for i in (1, 2):
+            d = decision(i, "alta", True)
+            d["rationale"] = "é o mais barato" + " x" * 36
+            d["cost_of_delay"] = "o item fica parado" + " y" * 18
+            ds.append(d)
+        d = doc(*ds)
+        shown = sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")[1]
+        self.assertEqual(len(shown), 2)
+        self.assertEqual(len(sc.render_with_cards(d, now=NOW, session=None, layout="compact")[1]), 1)
+        self.assertEqual(sc._identity_from_code(CODE), (NOW - NOW % 60, SESSION[-8:]))
+        tmp = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "hitl_parse_identity_test.json"
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")}
+        try:
+            proc = subprocess.run([sys.executable, str(_SCRIPT), "parse", str(tmp), "--source", "text",
+                                   "--layout", "compact", "--code", CODE, "--answer", f"{CODE} 1:A 2:A"],
+                                  capture_output=True, text=True, env=env)
+            res = json.loads(proc.stdout)
+            self.assertEqual([i["status"] for i in res["items"]], ["decided", "decided"])
+        finally:
+            tmp.unlink()
+
+    def test_text_parse_accepts_a_lowercase_code_on_the_rebuild_path(self):
+        """Same borderline fixture: a lowercase `--code`/answer must rebuild the same
+        2-card manifest from the code (grammar is case-insensitive, spec §3)."""
+        ds = []
+        for i in (1, 2):
+            d = decision(i, "alta", True)
+            d["rationale"] = "é o mais barato" + " x" * 36
+            d["cost_of_delay"] = "o item fica parado" + " y" * 18
+            ds.append(d)
+        d = doc(*ds)
+        self.assertEqual(sc._identity_from_code(CODE.lower()), sc._identity_from_code(CODE))
+        self.assertEqual(sc._identity_from_code(CODE.upper()), sc._identity_from_code(CODE))
+        t, s8 = sc._identity_from_code(CODE.upper())
+        ref = [c["id"] for c in sc.render_with_cards(d, now=NOW, session=SESSION, layout="compact")[1]]
+        self.assertEqual([c["id"] for c in sc.render_with_cards(d, now=t, session=s8.upper(),
+                                                                 layout="compact")[1]], ref)
+        # only the session suffix is case-insensitive; a repo differing in case is a
+        # different origin and stays visible
+        c = sc.normalize(dict(decision(1), origin={"harness": "OMP", "repo": "org/repo",
+                                                    "session": SESSION}))
+        self.assertIn("org/repo", sc.origin_delta(c, {"harness": "OMP", "repo": "Org/Repo",
+                                                     "session": SESSION[-8:]}))
+        self.assertEqual(sc.origin_delta(c, {"harness": "OMP", "repo": "org/repo",
+                                             "session": SESSION[-8:].upper()}), "")
+        tmp = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "hitl_parse_lowercase_test.json"
+        tmp.write_text(json.dumps(d), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")}
+        low = CODE.lower()
+        try:
+            proc = subprocess.run([sys.executable, str(_SCRIPT), "parse", str(tmp), "--source", "text",
+                                   "--layout", "compact", "--code", low, "--answer", f"{low} 1:a 2:a"],
+                                  capture_output=True, text=True, env=env)
+            res = json.loads(proc.stdout)
+            self.assertEqual([i["status"] for i in res["items"]], ["decided", "decided"])
+        finally:
+            tmp.unlink()
+
+    def test_lint_uses_the_same_door_fallback_as_normalize(self):
+        d = decision(1)                                  # recommended Manter, confidence média
+        d["reversible"] = False
+        d["options"][0]["reversible"] = None             # null inherits the card default
+        self.assertIs(sc.normalize(d)["options"][0]["reversible"], False)
+        errs, _ = sc.lint_doc(doc(d), now=NOW, session=SESSION)
+        self.assertTrue(any("SEM VOLTA com confiança 'média'" in e for e in errs))
+
+    def test_lint_text_flags_width_and_dash_offer(self):
+        errs = sc.lint_text("x" * 81 + f"\nResponda: {CODE} 1:-\n")
+        self.assertEqual(len(errs), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

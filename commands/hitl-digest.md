@@ -278,8 +278,11 @@ Regras do payload (cada uma vem do spec, nenhuma é nova):
   (credencial · gasto · irreversível · envio · negócio) + `Manter pendente`. Nunca inventadas por item.
 - `(recomendado)` só na opção estruturada com `recommended: true` **e** `evidence` textual não vazia após remover espaços (§3: sem ponteiro de evidência não há recomendação). Ela vem primeiro. Sem ela, o preâmbulo diz
   `sem recomendação: falta ponteiro de evidência`.
-- O preâmbulo traz o cabeçalho com o código `K<YYMMDD>-<HHMM>-<s8>` (data e hora locais da máquina; sem id de sessão raiz, sem
-  código), a linha de contagem, uma linha `· … aberta no AskUserQuestion` por card (registro durável,
+- O preâmbulo traz o cabeçalho `══ 🟠 HITL DIGEST · K<YYMMDD>-<HHMM>-<s8> (<local>) ══`: data e
+  minuto do código em **UTC** (spec §2, desde a 2.5.4; gerador único `_digest_code`, que o
+  `hitl-scorecard.py` importa); a hora local do mesmo instante só no parêntese de correlação,
+  omitido se a linha passar de 80 colunas. Sem id de sessão raiz, sem código. Depois vêm a linha
+  de contagem, uma linha `· … aberta no AskUserQuestion` por card (registro durável,
   sem letras e sem `Responda:`), o `⏭` e `harness · repo · sessão`. Cada linha cabe em 80 colunas.
 - **Fatia vazia, ledger cheio ⇒ o preâmbulo diz o tamanho do ledger.** Quando a fatia desta
   conversa não tem nenhum card, o preâmbulo acrescenta `0 of N ledger items are this
@@ -287,7 +290,7 @@ Regras do payload (cada uma vem do spec, nenhuma é nova):
   (`--scope all` mostra o ledger inteiro). A linha `nenhuma decisão pendente` (que é da spec)
   continua lá — o que muda é que ela **nunca é lida sozinha**: "0 decisions" sem o total do
   ledger é o "0 = não existe" que o DoD proíbe.
-- Determinístico: mesma entrada + `--now` + `--session-id` + mesmo fuso local ⇒ mesmo payload. Timestamps dos envelopes de máquina continuam em UTC.
+- Determinístico: mesma entrada + `--now` + `--session-id` ⇒ mesmo código em qualquer fuso; só o `(<local>)` do cabeçalho depende do fuso local. Timestamps dos envelopes de máquina continuam em UTC.
 
 ```bash
 echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \
@@ -297,6 +300,29 @@ echo '{}' | python3 "$FUSE" --hitl-only --compass-json - --hitl-md "$LEDGER" \
 O agente imprime o `preamble` como texto e, se o payload não for nulo, chama `AskUserQuestion`
 com `ask_user_question.questions`. Se a pergunta expirar sem resposta, no próximo digest passe
 `--consumer human-deferred` para usar o texto em vez de abrir a ferramenta novamente (§0).
+
+## Modo scorecard + painel (decisões de N sessões)
+
+Para decisões que chegam como `NEEDS-OPERATOR:` ou JSON `hitl-scorecard/v1` (não do
+ledger), o mesmo skill traz `bin/hitl-scorecard.py` (contrato canônico no plugin:
+`skills/synopsis-panel/references/hitl-scorecard.md`; resumo em `hitl-digest` §8). Ele reusa o
+construtor de opções do motor acima; a regra de uma só superfície de resposta (§0) vale igual.
+
+```bash
+SC="$(dirname "$FUSE")/hitl-scorecard.py"
+python3 "$SC" aggregate s1.log s2.json > queue.json          # N sessões → fila
+python3 "$SC" render queue.json --layout compact              # resposta (≤15 linhas)
+python3 "$SC" render queue.json --layout full > card.txt      # detalhe em arquivo
+python3 "$SC" ask queue.json --target claude                  # payload AskUserQuestion
+python3 "$SC" ask queue.json --target omp > form.html         # <form> do ask do OMP
+python3 "$SC" parse queue.json --source text --layout compact --code "$CODE" --answer "$CODE 1:A 2:-"
+python3 "$SC" lint queue.json                                 # regras da spec
+```
+
+Nada vem pré-selecionado em nenhuma superfície. O `ask` do OMP envia os valores atuais
+no timeout, então o formulário não marca nada e exige a caixa `confirm`. Timeout,
+`afkTimeoutMs` do AskUserQuestion, cancelamento, texto livre e formulário sem `confirm`
+são **pendentes**: o card volta no próximo digest.
 
 ## Examples
 
@@ -309,6 +335,7 @@ com `ask_user_question.questions`. Se a pergunta expirar sem resposta, no próxi
 /hitl-digest --with-pendencies --scope repo    # pendências do repo + os HITL anexados
 /hitl-digest --format json                     # envelope JSON p/ outro agente consumir
 /hitl-digest --format ask-user-question        # cards prontos p/ a ferramenta AskUserQuestion
+/hitl-digest scorecard                         # cards BLUF + painel (hitl-scorecard.py)
 ```
 
 ## Fronteiras (o que este command NÃO faz)
