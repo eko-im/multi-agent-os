@@ -6,9 +6,11 @@ Executable form: `../bin/shift_engine.py`. When this text and the engine disagre
 ## 1. Persisted state
 
 One JSON document per shift (`../templates/shift-state.schema.json`, schema id
-`on-call-shift/state@2`; a `state@1` file from v0.2.0 is migrated on load, and a v0.2.0 engine
-refuses `state@2`). Write it atomically (temporary file, fsync, rename) before and after every
-transition, so a crash leaves the last good state.
+`on-call-shift/state@2`; a `state@1` file from v0.2.0 is migrated on load. A v0.2.0 engine's
+`load()` refuses `state@2`, but its `load_checked()` checks no schema: after a rollback to
+v0.2.0, open a new shift instead of resuming a `state@2` file). Write it atomically
+(temporary file, fsync, rename) before and after every transition, so a crash leaves the last
+good state.
 
 | Field | Rule |
 |---|---|

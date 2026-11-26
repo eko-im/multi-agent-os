@@ -388,7 +388,7 @@ Work loop (postmortem night-20261125; `test_92`–`test_116`; 112–114 are in `
 111. A heartbeat never fires after the deadline (`HEARTBEAT_AFTER_DEADLINE`); one armed past it counts as not armed.
 112. A spend freeze that arrives after `POSTFLIGHT` survives `reopen_admission` and relief; relief lifts only the holder's own `POSTFLIGHT`.
 113. `select_next` tells the next turn to lift its own `POSTFLIGHT` freeze (`reopen_admission`), never one with a child pending or past the cutoff.
-114. A migrated load is saved at once (`migrated`: the hash chain holds, the legacy bytes stay in `.prev`); the schema id is `state@2`, so a v0.2.0 engine refuses a v0.3.0 file.
+114. A migrated load is saved at once (`migrated`: the hash chain holds, the legacy bytes stay in `.prev`); the schema id is `state@2`, so a v0.2.0 engine's `load()` refuses a v0.3.0 file (its `load_checked()` checks no schema: after a rollback, open a new shift).
 115. An overflowing number or a non-string currency fails closed; a tick with an unreadable reading is applied whole (and freezes), never half.
 116. The deadline is epoch seconds, UTC (a millisecond epoch is refused; the log echoes `deadline_utc`); the scenario ranges in this file are current.
 

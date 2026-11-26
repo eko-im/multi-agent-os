@@ -19,7 +19,8 @@ import os
 import tempfile
 
 # state@2 (v0.3.0) adds budget.money/deadline, heartbeat and stop. A v0.2.0 engine's load()
-# refuses it; load()/load_checked() here migrate a state@1 (v0.2.0) file.
+# refuses it (its load_checked() checks no schema: after a rollback, open a new shift);
+# load()/load_checked() here migrate a state@1 (v0.2.0) file.
 SCHEMA = "on-call-shift/state@2"
 LEGACY_SCHEMAS = ("on-call-shift/state@1",)
 # A deadline at or above this is a millisecond epoch, not seconds (year 5138 in seconds).

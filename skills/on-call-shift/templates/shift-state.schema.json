@@ -48,7 +48,7 @@
   "properties": {
     "schema": {
       "const": "on-call-shift/state@2",
-      "description": "state@2 = v0.3.0 (budget.money/deadline, heartbeat, stop); a state@1 (v0.2.0) file is migrated on load; a v0.2.0 engine refuses state@2"
+      "description": "state@2 = v0.3.0 (budget.money/deadline, heartbeat, stop); a state@1 (v0.2.0) file is migrated on load; a v0.2.0 engine's load() refuses state@2 (its load_checked() checks no schema: after a rollback open a new shift)"
     },
     "shift_id": {
       "type": "string",
