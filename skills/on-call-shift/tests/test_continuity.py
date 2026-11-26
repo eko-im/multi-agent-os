@@ -877,5 +877,74 @@ class OwnTeam(unittest.TestCase):
         self.assertEqual(busy, before)
 
 
+class WorkLoopContinuity(unittest.TestCase):
+    """Postmortem night-20261125: continuity must not end the work loop on its own."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, "shift.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def deadline_shift(self, deadline=1100):
+        return se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
+                             backlog=None, capacity=2, budget={"deadline": deadline},
+                             holder="agent-1", supervisor_target=SUP, now=1000,
+                             lease_secs=LEASE,
+                             capabilities={"heartbeat_transport": "omp:background-job"})
+
+    def test_100_the_holder_lifts_its_own_postflight_freeze_on_its_next_turn(self):
+        state = shift()
+        co.postflight(state, "agent-1", 1001, generation=1)
+        self.assertEqual(state["admission"]["reason"], "POSTFLIGHT")
+        self.assertTrue(co.reopen_admission(state, self.path, "agent-1", 1002,
+                                            generation=1)["reopened"])
+        self.assertEqual(state["admission"], {"open": True, "reason": None})
+        late = self.deadline_shift()
+        co.postflight(late, "agent-1", 1001, generation=1)
+        self.assertEqual(co.reopen_admission(late, self.path, "agent-1", 1100,
+                                             generation=1)["reason"], "DEADLINE_REACHED")
+        self.assertFalse(late["admission"]["open"])
+        for reason in ("PREFLIGHT_INCONSISTENT", "SPEND_CAP_REACHED", "DEADLINE_REACHED"):
+            other = shift()
+            other["admission"] = {"open": False, "reason": reason}
+            self.assertFalse(co.reopen_admission(other, self.path, "agent-1", 1002,
+                                                 generation=1)["reopened"], reason)
+            self.assertEqual(other["admission"]["reason"], reason)
+
+    def test_101_preflight_handoff_and_diagnosis_name_the_cutoff_and_the_heartbeat(self):
+        state = self.deadline_shift()
+        found = co.preflight(state, "agent-1", 1001, generation=1)["findings"]
+        self.assertEqual((found["budget_left"], found["cutoff"], found["heartbeat"]),
+                         (None, None, "not_armed"))
+        se.arm_heartbeat(state, "agent-1", 1001, generation=1, transport="omp:background-job",
+                         job_ref="bg_1", fires_at=1100, bound_target=SUP)
+        self.assertEqual(co.preflight(state, "agent-1", 1002,
+                                      generation=1)["findings"]["heartbeat"], "armed")
+        self.assertIn("- heartbeat: armed until 1100",
+                      co.render_handoff(state, now=1002, stale_after_secs=300))
+        self.assertEqual(co.preflight(state, "agent-1", 1100, generation=1)["action"],
+                         "close_at_cutoff")
+        se.close_at_cutoff(state, "agent-1", 1100, generation=1)
+        self.assertIn("- stop: cutoff DEADLINE_REACHED",
+                      co.render_handoff(state, now=1100, stale_after_secs=300))
+        diag = co.diagnose(state, now=1100)
+        self.assertEqual(diag["stop"], {"kind": "cutoff", "reason": "DEADLINE_REACHED"})
+        self.assertEqual(diag["heartbeat"], {"armed": False, "fires_at": 1100})
+
+    def test_102_load_checked_migrates_a_v0_2_0_file(self):
+        legacy = shift()
+        for key in ("heartbeat", "stop"):
+            legacy.pop(key, None)
+        legacy["budget"] = {"limit": 5, "spent": 0}
+        co.autosave(legacy, self.path)
+        state, revision = co.load_checked(self.path)
+        self.assertEqual(revision, "current")
+        self.assertEqual(sorted(state), sorted(shift()))
+        self.assertEqual(state["budget"]["money"], None)
+        self.assertIsNone(state["stop"])
+
+
 if __name__ == "__main__":
     unittest.main()

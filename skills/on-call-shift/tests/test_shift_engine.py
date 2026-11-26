@@ -583,6 +583,12 @@ class ReviewThreadInvariants(unittest.TestCase):
             "assess_effect": lambda s, a, g: se.assess_effect(s, a, "op", {}, 1001, generation=g),
             "raise_incident": lambda s, a, g: se.raise_incident(s, a, "inc", 1001, generation=g),
             "decide_route": lambda s, a, g: se.decide_route(s, a, "d", {}, 1001, generation=g),
+            "start_item": lambda s, a, g: se.start_item(s, a, "fix-login-timeout", backlog, 1001,
+                                                        generation=g),
+            "record_spend": lambda s, a, g: se.record_spend(s, a, 1.0, 1001, generation=g),
+            "arm_heartbeat": lambda s, a, g: se.arm_heartbeat(
+                s, a, 1001, generation=g, transport="omp:background-job", job_ref="bg_1",
+                fires_at=1100, bound_target=SUPERVISOR),
         }
         for name, call in calls.items():
             for actor, gen, code in (("agent-1", None, "GENERATION_REQUIRED"),
@@ -1057,6 +1063,318 @@ class ContractEdges(unittest.TestCase):
             se.open_shift(shift_id="s", principal="", scope="x", backlog=None, capacity=1,
                           budget=1, holder="a", supervisor_target="t", now=0, lease_secs=1)
         self.assertEqual(err.exception.code, "MISSING_FIELD")
+
+
+OMP_SESSION = "omp:session-1"
+DEADLINE = 1000 + 4 * LEASE
+
+
+def given_backlog():
+    """The principal's explicit list, normalized like any connector (night 2026-11-25 shape)."""
+    return se.normalize_backlog([{"connector": "operator-backlog", "kind": "operator",
+                                  "status": "ok", "items": [
+        {"ref": "org/a#41", "intent_key": "a-41",
+         "gate": {"kind": "approval", "by": "owner-1", "state": "pending"}},
+        {"ref": "org/b#517", "intent_key": "b-517", "gut": 9},
+        {"ref": "org/b#516", "intent_key": "b-516", "gut": 7},
+        {"ref": "org/c#423", "intent_key": "c-423", "in_flight_by": "agent-other"},
+        {"ref": "org/d#8", "intent_key": "d-8", "gut": 3}]}])
+
+
+def night_shift(**over):
+    """Intake of the night that delivered 0 items: given list, USD + deadline, OMP host."""
+    args = dict(shift_id="night-1", principal="owner-1",
+                scope=["org/a", "org/b", "org/c", "org/d"], backlog="file://opening.md#2",
+                capacity=2, budget={"currency": "USD", "amount": 50, "freeze_at": 40,
+                                    "deadline": DEADLINE},
+                holder="agent-1", supervisor_target=OMP_SESSION, now=1000, lease_secs=LEASE,
+                capabilities={"heartbeat_transport": "omp:background-job"})
+    args.update(over)
+    return se.open_shift(**args)
+
+
+def arm(state, now, fires_at, job_ref="bg_1", bound_target=OMP_SESSION):
+    return se.arm_heartbeat(state, "agent-1", now, generation=state["generation"],
+                            transport="omp:background-job", job_ref=job_ref,
+                            fires_at=fires_at, bound_target=bound_target)
+
+
+class WorkLoop(unittest.TestCase):
+    """Postmortem night-20261125: the shift opened, then nothing was worked until morning."""
+
+    def test_92_given_backlog_items_start_in_flight_with_the_adopt_checks(self):  # H3
+        backlog = given_backlog()
+        state = night_shift()
+        se.record_spend(state, "agent-1", 149.15, 1000, generation=1)
+        pick = se.select_next(state, backlog, "agent-1", 1001, generation=1)
+        self.assertEqual((pick["action"], pick["intent_key"]), ("start", "b-517"))
+        self.assertEqual({s["intent_key"]: s["why"] for s in pick["skipped"]},
+                         {"a-41": "HUMAN_GATE", "c-423": "IN_FLIGHT_BY_OTHER"})
+        state, started = se.start_item(state, "agent-1", "b-517", backlog, 1002, generation=1)
+        state, again = se.start_item(state, "agent-1", "b-517", backlog, 1003, generation=1)
+        self.assertEqual((started, again), (True, False))  # a replay adds nothing
+        self.assertEqual(state["in_flight"], ["b-517"])
+        self.assertEqual(state["adopted"]["b-517"]["via"], "backlog")
+        for key, code in (("a-41", "HUMAN_GATE"), ("c-423", "IN_FLIGHT_BY_OTHER"),
+                          ("made-up", "UNKNOWN_ITEM")):
+            before = se.snapshot(state)
+            with self.assertRaises(se.ShiftError) as err:
+                se.start_item(state, "agent-1", key, backlog, 1004, generation=1)
+            self.assertEqual(err.exception.code, code)
+            self.assertEqual(state, before)
+        se.start_item(state, "agent-1", "b-516", backlog, 1005, generation=1)
+        with self.assertRaises(se.ShiftError) as err:
+            se.start_item(state, "agent-1", "d-8", backlog, 1006, generation=1)
+        self.assertEqual(err.exception.code, "CAPACITY_FULL")
+        with self.assertRaises(se.ShiftError) as err:  # adoption stays for "no list given"
+            se.adopt(state, "agent-1", "d-8", backlog, 1006, generation=1)
+        self.assertEqual(err.exception.code, "BACKLOG_GIVEN")
+        with self.assertRaises(se.ShiftError) as err:
+            se.start_item(new_shift(), "agent-1", "fix-login-timeout", demo_backlog(), 1001,
+                          generation=1)
+        self.assertEqual(err.exception.code, "NO_BACKLOG_GIVEN")
+
+    def test_93_money_budget_is_a_measured_delta_and_freezes_at_the_threshold(self):  # H4
+        backlog = given_backlog()
+        state = night_shift()
+        self.assertEqual(se.select_next(state, backlog, "agent-1", 1001, generation=1)["reason"],
+                         "SPEND_NOT_MEASURED")  # fail closed until a baseline exists
+        with self.assertRaises(se.ShiftError) as err:
+            se.start_item(state, "agent-1", "b-517", backlog, 1001, generation=1)
+        self.assertEqual(err.exception.code, "SPEND_NOT_MEASURED")
+        out = se.record_spend(state, "agent-1", 149.15, 1002, generation=1)
+        self.assertEqual((out["recorded"], out["spent"]), (True, 0))
+        self.assertEqual(state["budget"]["money"]["baseline"], 149.15)
+        se.start_item(state, "agent-1", "b-517", backlog, 1003, generation=1)
+        self.assertEqual(state["budget"]["spent"], 1)  # the adoption count is still kept
+        self.assertAlmostEqual(se.record_spend(state, "agent-1", 160.32, 1004,
+                                               generation=1)["spent"], 11.17)
+        self.assertTrue(state["admission"]["open"])
+        out = se.record_spend(state, "agent-1", 189.15, 1005, generation=1)  # +40 = threshold
+        self.assertEqual(out["cutoff"], "SPEND_CAP_REACHED")
+        self.assertEqual(state["admission"], {"open": False, "reason": "SPEND_CAP_REACHED"})
+        with self.assertRaises(se.ShiftError) as err:
+            se.start_item(state, "agent-1", "b-516", backlog, 1006, generation=1)
+        self.assertEqual(err.exception.code, "ADMISSION_FROZEN")
+        self.assertEqual(se.close_at_cutoff(state, "agent-1", 1007, generation=1)["reason"],
+                         "SPEND_CAP_REACHED")
+        # a meter that goes backwards is another source: fail closed, never a refund
+        other = night_shift()
+        se.record_spend(other, "agent-1", 149.15, 1001, generation=1)
+        out = se.record_spend(other, "agent-1", 12.0, 1002, generation=1)
+        self.assertEqual((out["recorded"], out["reason"]),
+                         (False, "SPEND_MEASUREMENT_INCONSISTENT"))
+        self.assertEqual(other["admission"]["reason"], "SPEND_MEASUREMENT_INCONSISTENT")
+        # a measurement older than one lease is stale: no new work on it
+        stale = night_shift()
+        se.record_spend(stale, "agent-1", 149.15, 1001, generation=1)
+        se.renew_lease(stale, "agent-1", 1500, generation=1)
+        self.assertEqual(se.select_next(stale, backlog, "agent-1", 1602, generation=1)["reason"],
+                         "SPEND_MEASUREMENT_STALE")
+        with self.assertRaises(se.ShiftError) as err:
+            se.record_spend(new_shift(), "agent-1", 1.0, 1001, generation=1)
+        self.assertEqual(err.exception.code, "NO_MONEY_BUDGET")
+
+    def test_94_deadline_stops_new_work_and_the_holder_closes_at_cutoff(self):  # H4 + H5
+        backlog = given_backlog()
+        state = night_shift(lease_secs=4 * LEASE)  # the lease reaches the deadline
+        se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+        se.start_item(state, "agent-1", "b-517", backlog, 1002, generation=1)
+        before = se.snapshot(state)
+        with self.assertRaises(se.ShiftError) as err:
+            se.close_at_cutoff(state, "agent-1", 1003, generation=1)
+        self.assertEqual(err.exception.code, "NOT_AT_CUTOFF")  # an early end is the principal's
+        self.assertEqual(state, before)
+        se.renew_lease(state, "agent-1", DEADLINE - 100, generation=1)
+        se.record_spend(state, "agent-1", 150.0, DEADLINE - 50, generation=1)
+        self.assertEqual(se.select_next(state, backlog, "agent-1", DEADLINE,
+                                        generation=1)["reason"], "DEADLINE_REACHED")
+        with self.assertRaises(se.ShiftError) as err:
+            se.start_item(state, "agent-1", "b-516", backlog, DEADLINE, generation=1)
+        self.assertEqual(err.exception.code, "DEADLINE_REACHED")
+        se.apply_tick(state, "agent-1", "bg_9", DEADLINE + 1, generation=1)
+        self.assertEqual(state["admission"], {"open": False, "reason": "DEADLINE_REACHED"})
+        for actor, gen, code in (("agent-1", None, "GENERATION_REQUIRED"),
+                                 ("agent-1", 0, "STALE_GENERATION"),
+                                 ("agent-2", 1, "NOT_THE_HOLDER")):
+            with self.assertRaises(se.ShiftError) as err:
+                se.close_at_cutoff(state, actor, DEADLINE + 5, generation=gen)
+            self.assertEqual(err.exception.code, code)
+        out = se.close_at_cutoff(state, "agent-1", DEADLINE + 5, generation=1)
+        self.assertEqual(out, {"closed": True, "reason": "DEADLINE_REACHED",
+                               "in_flight_left": ["b-517"]})
+        self.assertEqual(state["status"], se.STOPPED)
+        self.assertEqual(state["stop"], {"kind": "cutoff", "by": "agent-1",
+                                         "reason": "DEADLINE_REACHED", "at": DEADLINE + 5,
+                                         "in_flight_left": ["b-517"]})
+        self.assertFalse(se.lease_valid(state, "agent-1", DEADLINE + 5))
+        with self.assertRaises(se.ShiftError) as err:
+            se.close_at_cutoff(state, "agent-1", DEADLINE + 6, generation=1)
+        self.assertEqual(err.exception.code, "SHIFT_NOT_ACTIVE")
+        # the lease lapsed overnight: at the deadline its last holder still closes, only it
+        lapsed = night_shift()
+        self.assertFalse(se.lease_valid(lapsed, "agent-1", DEADLINE))
+        self.assertTrue(se.close_at_cutoff(lapsed, "agent-1", DEADLINE, generation=1)["closed"])
+        # a principal stop or revocation stays distinct from a cutoff
+        for revoke, kind in ((False, "principal_stop"), (True, "principal_revoke")):
+            ended = night_shift()
+            se.stop_shift(ended, "owner-1", 1001, revoke=revoke)
+            self.assertEqual((ended["stop"]["kind"], ended["stop"]["by"]), (kind, "owner-1"))
+
+    def test_95_a_new_tick_renews_the_lease_a_replay_does_not(self):  # H2
+        state = new_shift()
+        se.apply_tick(state, "agent-1", "hb-1", 1500, generation=1)
+        self.assertEqual(state["lease"]["expires_at"], 1500 + LEASE)
+        se.apply_tick(state, "agent-1", "hb-1", 1700, generation=1)  # replay: no effect
+        self.assertEqual(state["lease"]["expires_at"], 1500 + LEASE)
+        with self.assertRaises(se.ShiftError) as err:  # an expired lease is never revived
+            se.apply_tick(state, "agent-1", "hb-2", 1500 + LEASE, generation=1)
+        self.assertEqual(err.exception.code, "LEASE_INVALID")
+
+    def test_96_yield_gate_dispatch_first_then_heartbeat_then_idle(self):  # H1 + H2
+        backlog = given_backlog()
+        state = night_shift()
+        se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+        gate = se.may_yield(state, "agent-1", 1001, generation=1, eligible=True)
+        self.assertEqual((gate["yield"], gate["next"]), (False, "dispatch"))
+        se.start_item(state, "agent-1", "b-517", backlog, 1002, generation=1)
+        se.start_item(state, "agent-1", "b-516", backlog, 1003, generation=1)
+        gate = se.may_yield(state, "agent-1", 1004, generation=1, eligible=False)
+        self.assertEqual((gate["yield"], gate["reason"], gate["next"], gate["fire_by"]),
+                         (False, "NO_WAKEUP_ARMED", "arm_heartbeat", 1004 + LEASE / 2))
+        for fires_at, code in ((1004, "HEARTBEAT_NOT_IN_FUTURE"),
+                               (1004 + LEASE / 2 + 1, "HEARTBEAT_AFTER_HALF_LEASE")):
+            before = se.snapshot(state)
+            with self.assertRaises(se.ShiftError) as err:
+                arm(state, 1004, fires_at)
+            self.assertEqual(err.exception.code, code)
+            self.assertEqual(state, before)
+        arm(state, 1004, 1300)
+        self.assertEqual(state["wakeup"]["mode"], "SUPPORTED")  # bound to the exact supervisor
+        gate = se.may_yield(state, "agent-1", 1005, generation=1, eligible=False)
+        self.assertEqual((gate["yield"], gate["reason"], gate["until"]),
+                         (True, "HEARTBEAT_ARMED", 1300))
+        self.assertEqual(se.may_yield(state, "agent-1", 1005, generation=1,
+                                      eligible=True)["next"], "dispatch")  # work beats idling
+        # the heartbeat fires: its tick consumes it, renews the lease and re-measures spend
+        se.apply_tick(state, "agent-1", "bg_1", 1300, generation=1, spend_total=151.0)
+        self.assertIsNone(state["heartbeat"]["job_ref"])
+        self.assertEqual(state["lease"]["expires_at"], 1300 + LEASE)
+        self.assertAlmostEqual(state["budget"]["money"]["spent"], 1.85)
+        self.assertEqual(se.may_yield(state, "agent-1", 1301, generation=1,
+                                      eligible=False)["next"], "arm_heartbeat")
+        # an unmeasured money budget is measured before any yield, so no wake can stall on it
+        self.assertEqual(se.may_yield(night_shift(), "agent-1", 1001, generation=1,
+                                      eligible=False)["next"], "record_spend")
+        # near the deadline the next wake is due no later than the deadline itself
+        soon = night_shift(budget={"currency": "USD", "amount": 50, "deadline": 1200,
+                                   "baseline": 149.15})
+        self.assertEqual(se.may_yield(soon, "agent-1", 1001, generation=1,
+                                      eligible=False)["fire_by"], 1200)
+        self.assertEqual(se.may_yield(soon, "agent-1", 1200, generation=1,
+                                      eligible=True)["next"], "close_at_cutoff")
+        se.close_at_cutoff(soon, "agent-1", 1200, generation=1)
+        self.assertEqual(se.may_yield(soon, "agent-1", 1201, generation=1,
+                                      eligible=True)["reason"], "SHIFT_ENDED")
+        # bound elsewhere: the holder still wakes, the supervisor wakeup stays DEGRADED
+        elsewhere = night_shift()
+        se.record_spend(elsewhere, "agent-1", 149.15, 1001, generation=1)
+        arm(elsewhere, 1001, 1100, bound_target="omp:other-session")
+        self.assertEqual(elsewhere["wakeup"]["reason"], "BOUND_TARGET_MISMATCH")
+        self.assertTrue(se.may_yield(elsewhere, "agent-1", 1002, generation=1,
+                                     eligible=False)["yield"])
+        # a heartbeat never downgrades a wakeup the host already bound to the supervisor
+        bound = night_shift(capabilities={"wakeup_transport": "pager",
+                                          "bound_target": OMP_SESSION,
+                                          "heartbeat_transport": "omp:background-job"})
+        arm(bound, 1001, 1100, bound_target="omp:other-session")
+        self.assertEqual((bound["wakeup"]["mode"], bound["wakeup"]["transport"]),
+                         ("SUPPORTED", "pager"))
+        # a host with no self-wakeup may yield, but says so and runs postflight
+        bare = night_shift(capabilities=None)
+        se.record_spend(bare, "agent-1", 149.15, 1001, generation=1)
+        self.assertEqual(se.may_yield(bare, "agent-1", 1001, generation=1, eligible=False),
+                         {"yield": True, "reason": "NO_HOST_WAKEUP", "next": "postflight"})
+        self.assertEqual(se.may_yield(state, "agent-1", 1301, generation=0,
+                                      eligible=True)["reason"], "FENCED")
+
+    def test_97_one_call_intake_takes_the_principal_s_shapes(self):  # H6
+        state = night_shift()
+        self.assertEqual(state["scope"], ["org/a", "org/b", "org/c", "org/d"])
+        self.assertEqual(state["budget"], {
+            "limit": None, "spent": 0, "deadline": DEADLINE,
+            "money": {"currency": "USD", "limit": 50.0, "freeze_at": 40.0, "baseline": None,
+                      "spent": 0.0, "measured_at": None, "source": None}})
+        self.assertEqual(new_shift()["budget"],
+                         {"limit": 5, "spent": 0, "money": None, "deadline": None})
+        for bad, code in ((dict(backlog=[]), "BAD_BACKLOG"), (dict(backlog=""), "BAD_BACKLOG"),
+                          (dict(scope=[]), "MISSING_FIELD"),
+                          (dict(scope=["org/a", ""]), "MISSING_FIELD"),
+                          (dict(budget={}), "MISSING_FIELD"),
+                          (dict(budget={"currency": "USD"}), "MISSING_FIELD"),
+                          (dict(budget={"amount": 50}), "MISSING_FIELD"),
+                          (dict(budget={"currency": "USD", "amount": 50, "freeze_at": 60}),
+                           "BAD_BUDGET")):
+            with self.assertRaises(se.ShiftError, msg=str(bad)) as err:
+                night_shift(**bad)
+            self.assertEqual(err.exception.code, code, str(bad))
+        measured = night_shift(budget={"currency": "USD", "amount": 50, "baseline": 149.15,
+                                       "deadline": DEADLINE})
+        self.assertEqual(measured["budget"]["money"]["measured_at"], 1000)  # taken at open
+        self.assertEqual(se.select_next(measured, given_backlog(), "agent-1", 1001,
+                                        generation=1)["action"], "start")
+
+    def test_98_load_migrates_a_v0_2_0_state_file(self):
+        legacy = new_shift()
+        for key in ("heartbeat", "stop"):
+            legacy.pop(key, None)
+        legacy["budget"] = {"limit": 5, "spent": 0}
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "state.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(legacy, handle)
+            state = se.load(path)
+        self.assertEqual(sorted(state), sorted(new_shift()))
+        self.assertEqual(state["budget"], {"limit": 5, "spent": 0, "money": None,
+                                           "deadline": None})
+        self.assertIsNone(state["stop"])
+        self.assertIsNone(state["heartbeat"]["job_ref"])
+
+    def test_99_incident_replay_the_loop_works_the_night_and_closes_at_cutoff(self):
+        """Same intake as night-20261125 (0 items, lease lapsed after 1 h, shift left ACTIVE)."""
+        backlog = given_backlog()
+        deadline = 11 * 3600
+        state = night_shift(now=0, lease_secs=3600, budget={
+            "currency": "USD", "amount": 50, "freeze_at": 40, "deadline": deadline})
+        se.record_spend(state, "agent-1", 149.15, 1, generation=1)
+        now, total, worked, wakes = 2, 149.15, [], 0
+        for _ in range(500):
+            pick = se.select_next(state, backlog, "agent-1", now, generation=1)
+            if pick["action"] == "start":
+                se.start_item(state, "agent-1", pick["intent_key"], backlog, now, generation=1)
+                worked.append(pick["intent_key"])
+                continue
+            gate = se.may_yield(state, "agent-1", now, generation=1, eligible=False)
+            if gate["next"] == "close_at_cutoff":
+                se.close_at_cutoff(state, "agent-1", now, generation=1)
+                break
+            if gate["next"] == "arm_heartbeat":
+                wakes += 1
+                arm(state, now, gate["fire_by"], job_ref=f"bg_{wakes}")
+                continue
+            self.assertEqual(gate["reason"], "HEARTBEAT_ARMED")
+            now, total = gate["until"], total + 0.5  # the host wakes the holder; a wake costs
+            se.apply_tick(state, "agent-1", f"bg_{wakes}", now, generation=1, spend_total=total)
+            for key in list(state["in_flight"]):  # workers finished; a distinct judge reviewed
+                se.complete_item(state, "agent-1", key, author="worker", reviewer="judge",
+                                 now=now, generation=1)
+        else:
+            self.fail("the loop never reached the cutoff")
+        self.assertEqual(sorted(worked), ["b-516", "b-517", "d-8"])
+        self.assertEqual((state["status"], state["stop"]["kind"], state["stop"]["reason"]),
+                         (se.STOPPED, "cutoff", "DEADLINE_REACHED"))
+        self.assertEqual(wakes, 22)  # one heartbeat per half lease until the deadline
+        self.assertLess(state["budget"]["money"]["spent"], 40)
 
 
 if __name__ == "__main__":
