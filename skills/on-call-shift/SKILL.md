@@ -84,7 +84,9 @@ its lease lapsed after one. The holder runs this loop; `may_yield` is its only e
    message. First, at the cutoff (`cutoff_reason`, or preflight answering `close_at_cutoff`),
    `close_at_cutoff` before anything else: it needs no lease, so an overdue wake after a
    suspended host still closes. Otherwise `apply_tick(event_id, spend_total=…)` renews the
-   lease, consumes the heartbeat, records spend and freezes admission at the cutoff; then
+   lease, consumes the heartbeat, records spend (omit `spend_total` on a wake that does not
+   measure; `None` means the ledger could not be read and freezes like `record_spend(None)`)
+   and freezes admission at the cutoff; then
    collect results (`complete_item`, `deliver`), `select_next`, dispatch, and ask `may_yield`.
    When `select_next` answers `reopen_admission` (the holder's own `POSTFLIGHT` freeze from its
    last turn), call `continuity.reopen_admission(state, path, …)` first, then select again.
@@ -364,7 +366,7 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 83. A valid recovery after restart reopens once and keeps the item.
 84. The save counter never goes back; an equal count is not newer.
 
-Work loop (postmortem night-20261125; `test_92`–`test_116`; 112–114 are in `tests/test_continuity.py`):
+Work loop (postmortem night-20261125; `test_92`–`test_117`; 112–114 are in `tests/test_continuity.py`):
 
 92. Items of a given list start in flight (`start_item`) with the adopt checks; adoption stays closed.
 93. A money cap is a measured delta from a baseline; no fresh measurement → no new work; admission freezes at the threshold; a reading that goes down freezes it.
@@ -391,6 +393,7 @@ Work loop (postmortem night-20261125; `test_92`–`test_116`; 112–114 are in `
 114. A migrated load is saved at once (`migrated`: the hash chain holds, the legacy bytes stay in `.prev`); the schema id is `state@2`, so a v0.2.0 engine's `load()` refuses a v0.3.0 file (its `load_checked()` checks no schema: after a rollback, open a new shift).
 115. An overflowing number or a non-string currency fails closed; a tick with an unreadable reading is applied whole (and freezes), never half.
 116. The deadline is epoch seconds, UTC (a millisecond epoch is refused; the log echoes `deadline_utc`); the scenario ranges in this file are current.
+117. A tick whose ledger could not be read (`spend_total=None`) freezes like `record_spend(None)`; a wake that does not measure omits it.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
@@ -416,7 +419,7 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
-| 0.3.0 | 2026-11-26 | Postmortem night-20261125 (v0.2.0 opened a shift and delivered 0 items in 11 h). Mandatory work loop with `may_yield` as the only exit; OMP host adapter (background job = wakeup, async `sleep` ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session); `start_item` for a given list; money budget measured as a delta plus deadline with automatic freeze; holder `close_at_cutoff` (`stop.kind=cutoff`); lease renewed on tick and on arming; one-call intake (scope list, typed backlog, budget dict); POSTFLIGHT freeze liftable on the next turn; `load`/`load_checked` migrate v0.2.0 files. Independent-verdict fixes: an unexplained or unreadable spend reading makes the meter `SPEND_UNMEASURABLE` (sticky, a degraded exit) until the principal's `rebaseline_spend`, which keeps the spend counted, and a new holder re-baselines on its own ledger; `capabilities` is an intake field; `HEARTBEAT_AFTER_DEADLINE`; a later safety freeze replaces `POSTFLIGHT` and relief lifts only `POSTFLIGHT`; `select_next` answers `reopen_admission`; `load_checked` saves a migrated file; schema id `state@2` (a v0.2.0 engine refuses it); deadline in epoch seconds, UTC. Scenarios 92–116. |
+| 0.3.0 | 2026-11-26 | Postmortem night-20261125 (v0.2.0 opened a shift and delivered 0 items in 11 h). Mandatory work loop with `may_yield` as the only exit; OMP host adapter (background job = wakeup, async `sleep` ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session); `start_item` for a given list; money budget measured as a delta plus deadline with automatic freeze; holder `close_at_cutoff` (`stop.kind=cutoff`); lease renewed on tick and on arming; one-call intake (scope list, typed backlog, budget dict); POSTFLIGHT freeze liftable on the next turn; `load`/`load_checked` migrate v0.2.0 files. Independent-verdict fixes: an unexplained or unreadable spend reading makes the meter `SPEND_UNMEASURABLE` (sticky, a degraded exit) until the principal's `rebaseline_spend`, which keeps the spend counted, and a new holder re-baselines on its own ledger; `capabilities` is an intake field; `HEARTBEAT_AFTER_DEADLINE`; a later safety freeze replaces `POSTFLIGHT` and relief lifts only `POSTFLIGHT`; `select_next` answers `reopen_admission`; `load_checked` saves a migrated file; schema id `state@2` (a v0.2.0 engine's `load()` refuses it); deadline in epoch seconds, UTC; `apply_tick(spend_total=None)` freezes like `record_spend(None)`. Scenarios 92–117. |
 | 0.2.0 | 2026-11-23 | Continuity: autosave per transition (children too), handoff derived from the snapshot, preflight/postflight, diagnosis, a separate logic-only watchdog (nonce + ACK, timeout, one per scope, logical fencing, disposable-only stop). Conflict resolver. Judge fixes: holder never grants a human gate; every connector gate kept; delivery dedupe over all sent results; linked keys merge; digest echo. 72 numbered scenarios. Own team and own tools: admission, drain, idempotent retirement, shared resources parked. |
 | 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 46 numbered scenarios. |
 | 0.1.0 | 2026-11-23 | Genesis via `agentic-tool-forge`; name by `anima` (`on-call-shift`, runner-up `shift-handoff` rejected as covering only the end of a shift). Reference engine plus 23 acceptance scenarios (13 shift + UDV, blast radius, holder loss), stdlib only. |

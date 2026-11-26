@@ -309,16 +309,22 @@ def classify_wakeup(capabilities, supervisor_target=None):
             "always_on_claim": False}
 
 
-def apply_tick(state, actor, event_id, now, *, generation, spend_total=None):
+# A wake that does not measure spend omits `spend_total`; None is a reading that failed.
+_OMITTED = object()
+
+
+def apply_tick(state, actor, event_id, now, *, generation, spend_total=_OMITTED):
     """A tick is evidence the clock ran and the holder is alive. It notifies nobody. A new tick
     renews the lease, consumes the heartbeat it came from, records the spend the host measured
-    (`spend_total`, a running total) and freezes admission at the cutoff. A replayed id has no
-    effect. Everything is validated before the first change, so a tick is never half applied:
-    a reading that is not a number freezes admission like any inconsistent reading."""
+    (`spend_total`, a running total: omit it when this wake does not measure; None means the
+    ledger could not be read and freezes like record_spend(None)) and freezes admission at the
+    cutoff. A replayed id has no effect. Everything is validated before the first change, so a
+    tick is never half applied: a reading that is not a number freezes admission like any
+    inconsistent reading."""
     _require_holder(state, actor, now, generation)
-    if spend_total is not None and not state["budget"]["money"]:
+    if spend_total is not _OMITTED and not state["budget"]["money"]:
         raise ShiftError("NO_MONEY_BUDGET", "the principal gave no money cap")
-    reading = None if spend_total is None else _reading(spend_total)
+    reading = None if spend_total is _OMITTED else _reading(spend_total)
     if event_id in state["processed_events"]:
         return state, None
     state["processed_events"].append(event_id)

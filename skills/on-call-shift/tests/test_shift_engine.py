@@ -1443,6 +1443,25 @@ class WorkLoopReviewFindings(unittest.TestCase):
         se.record_spend(ok, "agent-1", 149.15, 1001, generation=1)
         self.assertTrue(admit(ok)["admitted"])
 
+    def test_117_an_unreadable_ledger_on_a_tick_freezes_an_omitted_reading_does_not(self):
+        # codex @8bca8951: spend_total=None is a failed reading, as in record_spend(None)
+        state = night_shift()
+        money = state["budget"]["money"]
+        se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+        se.apply_tick(state, "agent-1", "t1", 1100, generation=1)  # this wake did not measure
+        self.assertEqual((state["admission"]["open"], money["measured_at"]), (True, 1001))
+        se.apply_tick(state, "agent-1", "t2", 1200, generation=1, spend_total=None)
+        self.assertEqual((state["admission"]["reason"], money["inconsistent_at"],
+                          state["cursor"]["last_event_id"]),
+                         ("SPEND_MEASUREMENT_INCONSISTENT", 1200, "t2"))  # applied whole
+        self.assertEqual(se.may_yield(state, "agent-1", 1201, generation=1,
+                                      eligible=False)["reason"], "SPEND_UNMEASURABLE")
+        plain = night_shift(budget=5)  # no money cap: any reading is refused, like record_spend
+        with self.assertRaises(se.ShiftError) as err:
+            se.apply_tick(plain, "agent-1", "t1", 1001, generation=1, spend_total=None)
+        self.assertEqual(err.exception.code, "NO_MONEY_BUDGET")
+        self.assertIsNotNone(se.apply_tick(plain, "agent-1", "t1", 1001, generation=1)[1])
+
 
 class VerdictFindings(unittest.TestCase):
     """Independent verdict on PR #618 @ced0d710 (findings P1-1 .. P3-8), each pinned here."""
