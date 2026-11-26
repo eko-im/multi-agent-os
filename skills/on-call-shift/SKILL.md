@@ -79,9 +79,12 @@ its lease lapsed after one. The holder runs this loop; `may_yield` is its only e
    `adopt` (no list) until it says `wait`. Hand each item to its executor in this turn (an
    async subagent or job); the holder coordinates and keeps the state.
 2. **Every wake is one iteration**: a heartbeat, a subagent or job completion, or a human
-   message. `apply_tick(event_id, spend_total=…)` renews the lease, consumes the heartbeat,
-   records spend and freezes admission at the cutoff; then collect results (`complete_item`,
-   `deliver`), `select_next`, dispatch, and ask `may_yield`.
+   message. First, at the cutoff (`cutoff_reason`, or preflight answering `close_at_cutoff`),
+   `close_at_cutoff` before anything else: it needs no lease, so an overdue wake after a
+   suspended host still closes. Otherwise `apply_tick(event_id, spend_total=…)` renews the
+   lease, consumes the heartbeat, records spend and freezes admission at the cutoff; then
+   collect results (`complete_item`, `deliver`), `select_next`, dispatch, and ask `may_yield`.
+   Relief or takeover drops the previous holder's heartbeat: the new holder arms its own.
 3. **Exit gate.** `may_yield(eligible=<select_next offered an item>)`, then do its `next`:
 
    | `next` | Do |
@@ -368,6 +371,11 @@ Work loop (postmortem night-20261125; `test_92`–`test_102`):
 100. The holder lifts its own POSTFLIGHT freeze on its next turn; never a cutoff or another freeze.
 101. Preflight, handoff and diagnosis name the cutoff and the heartbeat.
 102. `load_checked` migrates a v0.2.0 file.
+103. Non-numeric or non-finite budget terms and spend readings fail closed with a contract error.
+104. Relief and takeover drop the previous holder's heartbeat.
+105. Team admission respects frozen admission and an unmeasured money cap.
+106. Postflight never masks an earlier freeze, so its reopen cannot lift a safety freeze.
+107. An overdue wake past the cutoff is routed to `close_at_cutoff`, with no lease needed.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.

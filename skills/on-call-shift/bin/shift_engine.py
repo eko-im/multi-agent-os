@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import tempfile
 
@@ -52,35 +53,57 @@ def _check_scope(scope):
     raise ShiftError("MISSING_FIELD", "scope")
 
 
+def _number(value, field, *, count=False):
+    """A finite number from the intake, or a contract error naming the field (never a raw
+    ValueError, TypeError or NaN)."""
+    try:
+        number = int(value) if count else float(value)
+    except (TypeError, ValueError):
+        raise ShiftError("BAD_BUDGET", field) from None
+    if not math.isfinite(number) or number < 0:
+        raise ShiftError("BAD_BUDGET", field)
+    return number
+
+
 def _new_budget(budget, now):
     """An int is a count of adoptions (the v0.2 shape). A dict carries the principal's own
     terms, any of: "adoptions"; a money cap ("currency", "amount", optional "freeze_at" below
     it, optional "baseline" measured at open, optional "source"); a "deadline" (epoch).
     Money is measured as a delta from the baseline, never assumed. Nothing is guessed."""
     if not isinstance(budget, dict):
-        if budget is None or int(budget) < 0:
+        if budget is None:
             raise ShiftError("MISSING_FIELD", "budget")
-        return {"limit": int(budget), "spent": 0, "money": None, "deadline": None}
+        try:
+            limit = int(budget)
+        except (TypeError, ValueError):
+            raise ShiftError("MISSING_FIELD", "budget") from None
+        if limit < 0:
+            raise ShiftError("MISSING_FIELD", "budget")
+        return {"limit": limit, "spent": 0, "money": None, "deadline": None}
     adoptions, deadline, money = budget.get("adoptions"), budget.get("deadline"), None
-    if adoptions is not None and int(adoptions) < 0:
-        raise ShiftError("BAD_BUDGET", "adoptions")
+    if adoptions is not None:
+        adoptions = _number(adoptions, "adoptions", count=True)
+    if deadline is not None:
+        deadline = _number(deadline, "deadline")
     if budget.get("currency") is not None or budget.get("amount") is not None:
         if not budget.get("currency"):
             raise ShiftError("MISSING_FIELD", "budget.currency")
         if budget.get("amount") is None:
             raise ShiftError("MISSING_FIELD", "budget.amount")
-        amount = float(budget["amount"])
-        freeze_at = float(budget.get("freeze_at", amount))
+        amount = _number(budget["amount"], "amount")
+        freeze_at = amount if budget.get("freeze_at") is None else _number(budget["freeze_at"],
+                                                                            "freeze_at")
         if not 0 < freeze_at <= amount:
             raise ShiftError("BAD_BUDGET", "0 < freeze_at <= amount")
         baseline = budget.get("baseline")
         money = {"currency": budget["currency"], "limit": amount, "freeze_at": freeze_at,
-                 "baseline": None if baseline is None else float(baseline), "spent": 0.0,
+                 "baseline": None if baseline is None else _number(baseline, "baseline"),
+                 "spent": 0.0,
                  "measured_at": None if baseline is None else now,
                  "source": budget.get("source")}
     if adoptions is None and money is None and deadline is None:
         raise ShiftError("MISSING_FIELD", "budget")
-    return {"limit": None if adoptions is None else int(adoptions), "spent": 0,
+    return {"limit": adoptions, "spent": 0,
             "money": money, "deadline": deadline}
 
 
@@ -181,9 +204,12 @@ def save(state, path):
 
 
 def migrate(state):
-    """Bring a v0.2.0 state file to the current shape: additive and idempotent."""
-    if not isinstance(state, dict) or not isinstance(state.get("budget"), dict):
-        raise ShiftError("SCHEMA_MISMATCH", "not an on-call-shift state")
+    """Bring a v0.2.0 state file to the current shape: additive and idempotent. Anything that
+    is not an on-call-shift state of this schema is refused, never migrated."""
+    if (not isinstance(state, dict) or state.get("schema") != SCHEMA
+            or not isinstance(state.get("budget"), dict)):
+        raise ShiftError("SCHEMA_MISMATCH", str(state.get("schema") if isinstance(state, dict)
+                                                else type(state).__name__))
     state["budget"].setdefault("money", None)
     state["budget"].setdefault("deadline", None)
     state.setdefault("heartbeat", _heartbeat(None))
@@ -194,8 +220,6 @@ def migrate(state):
 def load(path):
     with open(path, encoding="utf-8") as handle:
         state = json.load(handle)
-    if state.get("schema") != SCHEMA:
-        raise ShiftError("SCHEMA_MISMATCH", str(state.get("schema")))
     return migrate(state)
 
 
@@ -333,7 +357,15 @@ def _freeze_at_cutoff(state, now):
 
 def _record_spend(state, measured_total, now, source=None):
     money = state["budget"]["money"]
-    total = float(measured_total)
+    try:
+        total = float(measured_total)
+    except (TypeError, ValueError):
+        total = math.nan
+    if not math.isfinite(total) or total < 0:
+        # NaN, infinity or a negative running total is not a measurement. Fail closed.
+        _freeze(state, "SPEND_MEASUREMENT_INCONSISTENT")
+        return {"recorded": False, "reason": "SPEND_MEASUREMENT_INCONSISTENT",
+                "spent": money["spent"]}
     if money["baseline"] is None:  # the first reading is the baseline: spend is a delta
         money.update(baseline=total, spent=0.0, measured_at=now)
     else:
@@ -768,6 +800,8 @@ def accept_handoff(state, ack, now):
     state["handoff"] = None
     # A policy armed in the previous generation no longer applies to the new holder.
     state["continuity"] = _continuity(_live_policy(state))
+    # The outgoing holder's heartbeat wakes the outgoing session, not the successor's.
+    state["heartbeat"] = _heartbeat({"heartbeat_transport": state["heartbeat"]["transport"]})
     return {"relieved": True, "reason": None}
 
 
@@ -1082,9 +1116,10 @@ def admit_member(state, actor, member_id, *, role, scope, risk, cost, now, gener
     limit = state["budget"]["limit"]
     if limit is not None and state["budget"]["spent"] + int(cost) > limit:
         return {"admitted": False, "reason": "BUDGET_EXCEEDED"}
-    cutoff = cutoff_reason(state, now)
-    if cutoff:
-        return {"admitted": False, "reason": cutoff}
+    blocked = ("ADMISSION_FROZEN" if not state["admission"]["open"]
+               else cutoff_reason(state, now) or _spend_block(state, now))
+    if blocked:
+        return {"admitted": False, "reason": blocked}
     active = [m for m in team["members"].values() if m["status"] != "retired"]
     if len(active) >= team["seats"]:
         return {"admitted": False, "reason": "SEATS_FULL"}
@@ -1245,6 +1280,8 @@ def take_over(state, claimant, now, nonce=None):
     state["status"] = ACTIVE
     state["handoff"] = None
     state["continuity"] = _continuity(None)  # nobody armed for the new generation yet
+    # A heartbeat armed by the lost holder would wake the lost session: never the claimant's.
+    state["heartbeat"] = _heartbeat({"heartbeat_transport": state["heartbeat"]["transport"]})
     state["log"].append({"at": now, "event": "taken_over", "from": previous, "to": claimant,
                          "generation": state["generation"], "nonce": policy["nonce"]})
     return {"taken_over": True, "reason": None, "generation": state["generation"],

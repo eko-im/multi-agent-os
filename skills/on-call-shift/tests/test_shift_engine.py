@@ -1377,5 +1377,66 @@ class WorkLoop(unittest.TestCase):
         self.assertLess(state["budget"]["money"]["spent"], 40)
 
 
+class WorkLoopReviewFindings(unittest.TestCase):
+    """PR #618 bot findings (amazon-q, codex, graphify), each fixed and pinned here."""
+
+    def test_103_bad_numbers_and_readings_fail_closed_with_a_contract_error(self):
+        for budget in ("five", {"adoptions": "x"}, {"currency": "USD", "amount": "lots"},
+                       {"currency": "USD", "amount": float("nan")},
+                       {"deadline": float("inf")}):
+            with self.assertRaises(se.ShiftError, msg=str(budget)):
+                night_shift(budget=budget)
+        same = night_shift(budget={"currency": "USD", "amount": 50, "freeze_at": None})
+        self.assertEqual(same["budget"]["money"]["freeze_at"], 50.0)  # None = the amount
+        for bad in (float("nan"), float("inf"), -1.0, "n/a"):
+            state = night_shift()
+            se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+            out = se.record_spend(state, "agent-1", bad, 1002, generation=1)
+            self.assertEqual((out["recorded"], out["reason"]),
+                             (False, "SPEND_MEASUREMENT_INCONSISTENT"), str(bad))
+            self.assertEqual(state["admission"]["reason"], "SPEND_MEASUREMENT_INCONSISTENT")
+            self.assertEqual(state["budget"]["money"]["spent"], 0.0)
+        legacy = new_shift()
+        legacy["schema"] = "other/state@9"
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "state.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(legacy, handle)
+            with self.assertRaises(se.ShiftError) as err:
+                se.load(path)
+        self.assertEqual(err.exception.code, "SCHEMA_MISMATCH")
+
+    def test_104_relief_and_takeover_drop_the_previous_holder_s_heartbeat(self):
+        state = night_shift()
+        se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+        arm(state, 1001, 1200)
+        se.propose_handoff(state, "agent-1", "agent-2", 1002, generation=1)
+        se.accept_handoff(state, {"kind": "handoff_ack", "from": "agent-2", "generation": 1,
+                                  "cursor_seq": 0, "in_flight": [], "gates": []}, 1003)
+        self.assertEqual(state["heartbeat"]["job_ref"], None)
+        self.assertEqual(state["heartbeat"]["transport"], "omp:background-job")
+        self.assertEqual(se.may_yield(state, "agent-2", 1004, generation=2,
+                                      eligible=False)["next"], "arm_heartbeat")
+        lost = night_shift(successor_policy={"pre_authorized": "agent-2"})
+        se.record_spend(lost, "agent-1", 149.15, 1001, generation=1)
+        arm(lost, 1001, 1200)
+        self.assertTrue(se.take_over(lost, "agent-2", 1001 + LEASE + 1)["taken_over"])
+        self.assertIsNone(lost["heartbeat"]["job_ref"])
+
+    def test_105_team_admission_respects_frozen_admission_and_unmeasured_spend(self):
+        def admit(state):
+            return se.admit_member(state, "agent-1", "m1", role="executor",
+                                   scope=state["scope"], risk="low", cost=0, now=1002,
+                                   generation=1)
+        self.assertEqual(admit(night_shift())["reason"], "SPEND_NOT_MEASURED")
+        frozen = night_shift()
+        se.record_spend(frozen, "agent-1", 149.15, 1001, generation=1)
+        frozen["admission"] = {"open": False, "reason": "PREFLIGHT_INCONSISTENT"}
+        self.assertEqual(admit(frozen)["reason"], "ADMISSION_FROZEN")
+        ok = night_shift()
+        se.record_spend(ok, "agent-1", 149.15, 1001, generation=1)
+        self.assertTrue(admit(ok)["admitted"])
+
+
 if __name__ == "__main__":
     unittest.main()

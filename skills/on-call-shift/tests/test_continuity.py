@@ -946,5 +946,41 @@ class WorkLoopContinuity(unittest.TestCase):
         self.assertIsNone(state["stop"])
 
 
+class WorkLoopReviewFindings(unittest.TestCase):
+    """PR #618 bot findings on continuity, each fixed and pinned here."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, "shift.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_106_postflight_never_masks_an_earlier_freeze(self):
+        state = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
+                              backlog=None, capacity=2,
+                              budget={"currency": "USD", "amount": 50}, holder="agent-1",
+                              supervisor_target=SUP, now=1000, lease_secs=LEASE)
+        se.record_spend(state, "agent-1", 10.0, 1001, generation=1)
+        se.record_spend(state, "agent-1", 5.0, 1002, generation=1)  # goes down
+        co.postflight(state, "agent-1", 1003, generation=1)
+        self.assertEqual(state["admission"]["reason"], "SPEND_MEASUREMENT_INCONSISTENT")
+        self.assertFalse(co.reopen_admission(state, self.path, "agent-1", 1004,
+                                             generation=1)["reopened"])
+
+    def test_107_an_overdue_wake_past_the_cutoff_is_routed_to_close(self):
+        state = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
+                              backlog=None, capacity=2, budget={"deadline": 5000},
+                              holder="agent-1", supervisor_target=SUP, now=1000,
+                              lease_secs=LEASE)
+        late = co.preflight(state, "agent-1", 6000, generation=1)  # lease lapsed at 1600
+        self.assertEqual(late["action"], "close_at_cutoff")
+        self.assertEqual(co.preflight(state, "agent-9", 6000, generation=1)["action"],
+                         "observe_only")
+        self.assertEqual(co.preflight(state, "agent-1", 2000, generation=1)["action"],
+                         "observe_only")  # lapsed, but no cutoff yet: nothing to close
+        self.assertTrue(se.close_at_cutoff(state, "agent-1", 6000, generation=1)["closed"])
+
+
 if __name__ == "__main__":
     unittest.main()

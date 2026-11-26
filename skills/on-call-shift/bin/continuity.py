@@ -292,6 +292,12 @@ def preflight(state, actor, now, *, generation, saved_sha=None, watchdog=None,
         se._require_holder(state, actor, now, generation)
         findings["identity"] = "ok"
     except se.ShiftError as err:
+        cutoff = se.cutoff_reason(state, now)
+        if (err.code == "LEASE_INVALID" and cutoff and actor == state["holder"]
+                and state["status"] in (se.ACTIVE, se.HANDOFF_PENDING)):
+            # An overdue wake (suspended host) past the cutoff: close first, it needs no lease.
+            return {"action": "close_at_cutoff", "findings": {"identity": err.code,
+                                                              "cutoff": cutoff}}
         return {"action": "observe_only", "findings": {"identity": err.code}}
     findings["lease_left_secs"] = state["lease"]["expires_at"] - now
     budget = state["budget"]
@@ -344,9 +350,11 @@ def preflight(state, actor, now, *, generation, saved_sha=None, watchdog=None,
 
 def postflight(state, actor, now, *, generation, successor=None, ack=None):
     """End of turn: stop new admissions, report what is open, and hand off only on an ACK.
-    Without a valid ACK the turn ends WITHOUT relief, and says so."""
+    Without a valid ACK the turn ends WITHOUT relief, and says so. An earlier freeze reason
+    (spend, preflight, persistence, cutoff) is kept: POSTFLIGHT never masks it."""
     se._require_holder(state, actor, now, generation)
-    state["admission"] = {"open": False, "reason": "POSTFLIGHT"}
+    if state["admission"]["open"]:
+        state["admission"] = {"open": False, "reason": "POSTFLIGHT"}
     report = {
         "snapshot_sha256": snapshot_sha(state),
         "cursor_seq": state["cursor"]["seq"],
