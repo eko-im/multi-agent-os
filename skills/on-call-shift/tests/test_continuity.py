@@ -901,6 +901,7 @@ class WorkLoopContinuity(unittest.TestCase):
         self.assertTrue(co.reopen_admission(state, self.path, "agent-1", 1002,
                                             generation=1)["reopened"])
         self.assertEqual(state["admission"], {"open": True, "reason": None})
+        self.assertEqual(state["save_seq"], json.loads(read(self.path))["save_seq"])  # no reuse
         late = self.deadline_shift()
         co.postflight(late, "agent-1", 1001, generation=1)
         self.assertEqual(co.reopen_admission(late, self.path, "agent-1", 1100,

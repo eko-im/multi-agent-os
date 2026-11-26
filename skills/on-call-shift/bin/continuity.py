@@ -89,6 +89,7 @@ def reopen_admission(state, path, actor, now, *, generation, writer=None):
     if any(v.get("pending") for v in state["children"].values()):
         return {"reopened": False, "reason": "CHILD_FAILURE_PENDING"}
     saved = autosave(trial, path, writer=writer)
+    state["save_seq"] = trial["save_seq"]  # the attempt used a number: never reuse it
     if not saved["saved"]:
         return {"reopened": False, "reason": "PERSISTENCE_FAILED"}
     state["admission"] = {"open": True, "reason": None}
