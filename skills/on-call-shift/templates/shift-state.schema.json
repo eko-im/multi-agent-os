@@ -41,7 +41,9 @@
     "children",
     "conflict_log",
     "team",
-    "save_seq"
+    "save_seq",
+    "heartbeat",
+    "stop"
   ],
   "properties": {
     "schema": {
@@ -56,15 +58,28 @@
       "minLength": 1
     },
     "scope": {
-      "type": "string",
-      "minLength": 1
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
     },
     "backlog": {
       "type": [
         "string",
         "null"
       ],
-      "description": "explicit work list reference; null = none given"
+      "minLength": 1,
+      "description": "reference to the principal's explicit list (path#section, URL, query): its items start with start_item; null ONLY when no list was given (then adopt)"
     },
     "backlog_exhausted": {
       "type": "boolean"
@@ -77,16 +92,81 @@
       "type": "object",
       "required": [
         "limit",
-        "spent"
+        "spent",
+        "money",
+        "deadline"
       ],
       "properties": {
         "limit": {
-          "type": "integer",
-          "minimum": 0
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "maximum items taken (adoptions + started); null = not capped by count"
         },
         "spent": {
           "type": "integer",
           "minimum": 0
+        },
+        "money": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "money cap measured as a delta from a baseline reading; admission freezes at freeze_at",
+          "required": [
+            "currency",
+            "limit",
+            "freeze_at",
+            "baseline",
+            "spent",
+            "measured_at",
+            "source"
+          ],
+          "properties": {
+            "currency": {
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "freeze_at": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "baseline": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "spent": {
+              "type": "number",
+              "minimum": 0
+            },
+            "measured_at": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "deadline": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "epoch; at or after it no new work starts and the holder closes at cutoff"
         }
       }
     },
@@ -164,7 +244,8 @@
       }
     },
     "adopted": {
-      "type": "object"
+      "type": "object",
+      "description": "every item taken into the shift: intent key -> {refs, at, via backlog (start_item, the principal's list) | adoption (adopt, found in trackers)}"
     },
     "in_flight": {
       "type": "array",
@@ -395,7 +476,7 @@
           ]
         }
       },
-      "description": "closed on persistence failure, preflight freeze, fencing or postflight; new adoption is refused while closed"
+      "description": "closed on persistence failure, preflight freeze, fencing, postflight, the cutoff (DEADLINE_REACHED, SPEND_CAP_REACHED) or an inconsistent spend reading; no new item starts while closed"
     },
     "children": {
       "type": "object",
@@ -434,6 +515,91 @@
       "type": "integer",
       "minimum": 0,
       "description": "monotonic count of save attempts (failed ones too); a checkpoint with a lower or equal value than a failed save cannot recover it"
+    },
+    "heartbeat": {
+      "type": "object",
+      "description": "the holder's own scheduled wakeup (OMP: a background job whose completion starts a follow-up turn); armed at most half a lease ahead, consumed by the tick it produces",
+      "required": [
+        "transport",
+        "job_ref",
+        "armed_at",
+        "fires_at",
+        "bound_target"
+      ],
+      "properties": {
+        "transport": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "armed_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "fires_at": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bound_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "stop": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "how the shift ended; null while it runs",
+      "required": [
+        "kind",
+        "by",
+        "reason",
+        "at",
+        "in_flight_left"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "cutoff",
+            "principal_stop",
+            "principal_revoke"
+          ]
+        },
+        "by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "number"
+        },
+        "in_flight_left": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

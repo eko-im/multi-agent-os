@@ -2,8 +2,10 @@
 name: on-call-shift
 description: |
   Hold an on-call shift as one accountable holder: assume it with a principal, scope, backlog,
-  capacity and budget; keep a persisted lease and cursor; watch with the host's existing timer;
-  work one eligible item at a time; and hand off only when an identified successor acknowledges
+  capacity and budget (items, money measured as a delta, deadline); keep a persisted lease and
+  cursor; run a work loop that dispatches in the same turn as the intake, never ends a turn
+  while eligible work, budget and time remain, and idles only with a host wakeup armed (OMP: a
+  background job); close at the principal's cutoff; and hand off only when an identified successor acknowledges
   the cursor, in-flight work and open gates. When no backlog was given or it is exhausted, read
   every authorized tracker (issue trackers and pull requests), merge the same intent across them,
   respect owners and RACI/DARCI, and adopt one eligible item or wait with a stated reason. Keeps
@@ -17,11 +19,11 @@ description: |
 allowed-tools: "Read Write Edit Bash Grep Glob"
 compatibility: "Portable Agent Skills core. Host-neutral: every runtime maps timer, wakeup, tracker connectors and identity through an adapter that declares its capabilities; a missing capability fails closed or reports DEGRADED. No vendor runtime is required."
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
   scope: AAIF cross-vendor
   family: orchestration-convergence
   cross_link_slug: on-call-shift
-  dogfood_status: unit-scenarios-only  # 13 scenarios pass on the reference engine; no live shift yet
+  dogfood_status: unit-scenarios-only  # engine scenarios pass; live night-20261125 (v0.2.0) delivered 0 items -> v0.3.0 work loop; no live v0.3.0 shift yet
 ---
 
 # On-Call Shift
@@ -52,10 +54,10 @@ irreversible actions · cross-org · spend) is a hard gate: wait and report, nev
 | Field | Meaning |
 |---|---|
 | `principal` | who owns the shift and may stop or revoke it |
-| `scope` | accounts, organizations, repos and trackers the shift may touch |
-| `backlog` | an explicit work list, or empty (then adoption rules apply) |
+| `scope` | accounts, organizations, repos and trackers the shift may touch (one string or a list) |
+| `backlog` | a reference to the principal's explicit list (path#section, URL, query); its items start with `start_item`. `null` only when no list was given (then adoption rules apply) |
 | `capacity` | maximum items in flight at once |
-| `budget` | maximum adoptions, cost or time for the shift |
+| `budget` | the principal's terms: a count of items (`adoptions`), a money cap (`currency`, `amount`, optional `freeze_at` and `baseline`) measured as a delta from a baseline, and/or a `deadline`; a bare integer is a count of items |
 | `holder` | the one agent or person holding the lease |
 | `supervisor_target` | the exact address that a notification or wakeup must reach |
 | `mantras` | the principal's working mantras; optional |
@@ -64,6 +66,54 @@ irreversible actions · cross-org · spend) is a hard gate: wait and report, nev
 Missing field → refuse to open the shift and name it. Absent `mantras` → use the defaults
 **"change the decision when the evidence changes"** and **"a verifiable increment beats an
 announced plan"**. An explicit list is stored verbatim and never merged with the defaults.
+Every field present → one `open_shift` call, then the work loop starts in the same turn.
+
+## Work loop (mandatory)
+
+Opening the shift is not the work. On night 2026-11-25 a v0.2.0 shift opened, reported
+`DEGRADED`, deferred everything to "your next turn" and delivered 0 items in 11 hours, while
+its lease lapsed after one. The holder runs this loop; `may_yield` is its only exit.
+
+1. **Same turn as the intake.** Open once (no re-open ceremony), save, take the spend baseline
+   (`record_spend`, or `baseline` at open), then `select_next` → `start_item` (given list) or
+   `adopt` (no list) until it says `wait`. Hand each item to its executor in this turn (an
+   async subagent or job); the holder coordinates and keeps the state.
+2. **Every wake is one iteration**: a heartbeat, a subagent or job completion, or a human
+   message. `apply_tick(event_id, spend_total=…)` renews the lease, consumes the heartbeat,
+   records spend and freezes admission at the cutoff; then collect results (`complete_item`,
+   `deliver`), `select_next`, dispatch, and ask `may_yield`.
+3. **Exit gate.** `may_yield(eligible=<select_next offered an item>)`, then do its `next`:
+
+   | `next` | Do |
+   |---|---|
+   | `dispatch` | start the offered item; ask again |
+   | `record_spend` | measure the money ledger; ask again |
+   | `arm_heartbeat` | arm the host self-wakeup to fire by `fire_by` (at most half a lease ahead, never after the deadline), record it with `arm_heartbeat`, ask again |
+   | `close_at_cutoff` | `close_at_cutoff`, report what is left in flight, end the turn |
+   | `postflight` (`NO_HOST_WAKEUP`) | `postflight`; report DEGRADED, unobserved until the next turn, with the in-flight list |
+   | none (`yield: true`) | end the turn: `HEARTBEAT_ARMED`, `SHIFT_ENDED`, `FENCED` or `LEASE_EXPIRED` |
+
+   Never end a turn while admission is open, budget and time remain and an item is eligible.
+   Never end a turn with the shift `ACTIVE` and no wakeup armed on a host that has one.
+4. **A heartbeat is not busy-work.** One armed at a time, at most every half lease; a wake with
+   nothing eligible only ticks, re-measures and re-arms. Its cost counts against the money
+   budget. It resumes the holder's own session; it never launches sessions or agents and never
+   works around caps.
+5. **Cutoff.** At the deadline or the spend threshold no new item starts and the holder closes
+   (`close_at_cutoff`: `STOPPED`, `stop.kind=cutoff`, reason, in-flight list), even after its
+   lease lapsed. Ending earlier stays the principal's (`stop_shift`). Set `freeze_at` below
+   `amount` to leave room for work in flight; past the cutoff, cancel what still runs through
+   the host and list it.
+
+### Host adapters
+
+| Host | Wakeup transport | Heartbeat | Declare |
+|---|---|---|---|
+| OMP (oh-my-pi) | a background job (`bash` with `async: true`, an async `task`, `eval`) still pending when the turn ends: OMP waits it out and its result starts a follow-up turn in the same session (OMP RPC docs, "Yield vs settled") | `bash` running `sleep N`, `async: true`, `timeout` above N, N ≤ `lease_secs/2` (the tool clamps `timeout` to 3600); its job id is `job_ref`, its completion is the tick | `capabilities={"heartbeat_transport": "omp:background-job"}`; with `supervisor_target` and `bound_target` both `omp:<session-id>` (the supervisor reads that chat) the armed heartbeat is `SUPPORTED` |
+| any other host | not verified | none | nothing; the shift is `DEGRADED` and `may_yield` answers `NO_HOST_WAKEUP` |
+
+A subagent completion also wakes an OMP holder but has no bounded time, so a heartbeat stays
+armed while subagents run. Add a host row only after a live dogfood proves it.
 
 ## The shift, step by step
 
@@ -73,13 +123,15 @@ announced plan"**. An explicit list is stored verbatim and never merged with the
 2. **Declare the watch.** Ask the host adapter which capabilities it really exposes (timer,
    wakeup transport, bound target). Record `SUPPORTED` only when a wakeup transport is bound to
    the exact supervisor. Otherwise record `DEGRADED` with the reason and the recovery route.
-   Reuse the host's existing timer or heartbeat; never install a second one and never use a
-   timer to launch sessions or agents, or to get around caps.
+   The heartbeat is the host's own self-wakeup for the holder's session (Work loop, Host
+   adapters): one armed at a time; never a second timer, never one that launches sessions or
+   agents, never one that gets around caps.
    **Wakeup limits.** The existing timer only observes: it records a tick. It wakes nobody,
    notifies nobody and resumes nothing. A wakeup exists only when the host proves one to the
-   exact supervisor. This skill never claims 24/7 or "always on" coverage; between real
-   wakeups or human turns, the shift is unobserved and says so.
-3. **Work.** Run the given backlog through `ooda-loop` (one decision per item). For each item
+   exact supervisor. This skill never claims 24/7 or "always on" coverage; with no wakeup
+   armed, the shift is unobserved until the next turn and says so.
+3. **Work.** Normalize the given list with `normalize_backlog` (one `operator-backlog`
+   connector) and start its items with `start_item` (same checks as `adopt`); run each through `ooda-loop` (one decision per item). For each item
    keep: objective/DoD, owner, recipient, deadline, next step, evidence, and an independent
    reviewer when the change is material. Use 5 Whys and Ishikawa to separate competing causes
    and name a test that tells them apart; use 5W2H when an action needs coordination.
@@ -140,7 +192,8 @@ announced plan"**. An explicit list is stored verbatim and never merged with the
    successor whose ACK echoes the cursor, the in-flight items and the open gates. A heartbeat is
    not an ACK and silence is not relief: on timeout the outgoing holder keeps the shift. Only
    the principal may stop or revoke without relief; the stop record lists what was left in
-   flight. If the holder dies (its lease lapses) and the principal armed a successor for the
+   flight. At the principal's own cutoff (deadline or spend threshold given at intake) the
+   holder closes with `close_at_cutoff`, distinct from a stop. If the holder dies (its lease lapses) and the principal armed a successor for the
    current generation, that successor alone takes over once, with no ACK from the dead holder
    and a new generation (fencing token). The arming is consumed: one authorization, one
    succession. A second expiry needs a new arming by the principal in the new generation, else
@@ -166,13 +219,15 @@ satisfaction to unknown.
 |---|---|
 | Tested (synthetic, no network, no model) | yes |
 | Watchdog installed | no: no supervisor with proven identity, authorization and revocation |
-| Wakeup live | no: `NO_BOUND_NOTIFICATION_TRANSPORT`; the existing timer only observes |
+| Wakeup live | OMP: yes while a heartbeat job is armed (follow-up turn in the holder's session); other hosts: not verified, `DEGRADED` |
 
 - Autosave after every transition (children too: pointer + hash in the parent). A failed
   save rolls back and freezes admission; it is never reported as saved. A failed child save
   freezes the parent until `recover_child` accepts a new checkpoint from that same child.
 - The handoff is derived from the snapshot, never hand-written; the previous revision stays.
-- Preflight and postflight every turn, with one graded action; missing metrics are `unknown`.
+- Preflight every wake, with one graded action (`close_at_cutoff` at the cutoff); missing
+  metrics are `unknown`. Postflight only on the last turn (cutoff, handoff, or a host with no
+  wakeup); its `POSTFLIGHT` freeze is lifted by `reopen_admission` on the holder's next turn.
 - A separate watchdog greets with a nonce and waits for an ACK with a timeout. Silence alone
   is only suspicion. Fencing removes the lease; it signals no process. Real process stop is
   out of scope; tests stop only their own disposable child, re-verified at that moment.
@@ -300,6 +355,20 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 83. A valid recovery after restart reopens once and keeps the item.
 84. The save counter never goes back; an equal count is not newer.
 
+Work loop (postmortem night-20261125; `test_92`–`test_102`):
+
+92. Items of a given list start in flight (`start_item`) with the adopt checks; adoption stays closed.
+93. A money cap is a measured delta from a baseline; no fresh measurement → no new work; admission freezes at the threshold; a reading that goes down freezes it.
+94. At the deadline no new item starts; the holder closes at cutoff even after its lease lapsed, only at the cutoff; a principal stop stays distinct.
+95. A new tick renews the lease; a replay does not; an expired lease is never revived.
+96. `may_yield`: dispatch first, then measure, then arm a heartbeat (≤ half a lease, ≤ the deadline), then idle; a host with no wakeup yields DEGRADED.
+97. One-call intake: scope as a list, backlog as a reference, budget as the principal's terms.
+98. A v0.2.0 state file loads migrated.
+99. Incident replay: the same intake works the eligible items all night and closes at the deadline.
+100. The holder lifts its own POSTFLIGHT freeze on its next turn; never a cutoff or another freeze.
+101. Preflight, handoff and diagnosis name the cutoff and the heartbeat.
+102. `load_checked` migrates a v0.2.0 file.
+
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
 - `references/backlog-adoption.md` — connectors, normalization, RACI/DARCI, selection, waiting.
@@ -324,6 +393,7 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
+| 0.3.0 | 2026-11-26 | Postmortem night-20261125 (v0.2.0 opened a shift and delivered 0 items in 11 h). Mandatory work loop with `may_yield` as the only exit; OMP host adapter (background job = wakeup, async `sleep` ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session); `start_item` for a given list; money budget measured as a delta plus deadline with automatic freeze; holder `close_at_cutoff` (`stop.kind=cutoff`); lease renewed on tick and on arming; one-call intake (scope list, typed backlog, budget dict); POSTFLIGHT freeze liftable on the next turn; `load`/`load_checked` migrate v0.2.0 files. Scenarios 92–102. |
 | 0.2.0 | 2026-11-23 | Continuity: autosave per transition (children too), handoff derived from the snapshot, preflight/postflight, diagnosis, a separate logic-only watchdog (nonce + ACK, timeout, one per scope, logical fencing, disposable-only stop). Conflict resolver. Judge fixes: holder never grants a human gate; every connector gate kept; delivery dedupe over all sent results; linked keys merge; digest echo. 72 numbered scenarios. Own team and own tools: admission, drain, idempotent retirement, shared resources parked. |
 | 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 46 numbered scenarios. |
 | 0.1.0 | 2026-11-23 | Genesis via `agentic-tool-forge`; name by `anima` (`on-call-shift`, runner-up `shift-handoff` rejected as covering only the end of a shift). Reference engine plus 23 acceptance scenarios (13 shift + UDV, blast radius, holder loss), stdlib only. |

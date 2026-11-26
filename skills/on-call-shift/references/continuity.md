@@ -9,7 +9,7 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
 |---|---|---|
 | Tested | yes | synthetic scenarios, no network, no model, no timer |
 | Watchdog installed | no | no native supervisor with proven identity, authorization and revocation; installing one would add a second writer/signaller with no owner |
-| Wakeup live | no | without a bound notification transport (`NO_BOUND_NOTIFICATION_TRANSPORT`) nothing can wake an ended session; an existing timer only observes |
+| Wakeup live | OMP only | a background job pending at the end of a turn starts a follow-up turn in the holder's session; the armed heartbeat is that job. Other hosts: not verified, so `DEGRADED`; an existing timer only observes |
 
 ## Autosave
 
@@ -56,11 +56,15 @@ than the caller's threshold. `write_handoff` writes it to a stable path and keep
 Preflight at every wake checks identity and generation, lease time left, budget, in-flight
 work, the clock (time going backwards), the saved hash against the current state, progress
 since the last preflight, the watchdog greeting, and host metrics only if the adapter supplies
-them (else `unknown`). It returns one graded action: `observe` → `reduce` → `freeze` →
-`save` → `propose_handoff`. It never diagnoses mental states.
+them (else `unknown`), the cutoff and whether a heartbeat is armed. It returns one graded
+action: `observe` → `reduce` → `freeze` → `save` → `close_at_cutoff` → `propose_handoff`. It
+never diagnoses mental states.
 
-Postflight closes admission, reports hash, cursor, in-flight work, gates, events and UDV, and
-hands off only on the successor's ACK; without one the turn ends without relief, and says so.
+Postflight closes admission (`POSTFLIGHT`), reports hash, cursor, in-flight work, gates, events
+and UDV, and hands off only on the successor's ACK; without one the turn ends without relief,
+and says so. Run it only on the last turn (cutoff, handoff, or a host with no wakeup): a
+holder that wakes again lifts its own `POSTFLIGHT` freeze with `reopen_admission`, which never
+lifts a cutoff or any other freeze.
 
 ## Watchdog (logic only)
 

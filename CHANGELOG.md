@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `on-call-shift` 0.3.0: the shift now works (postmortem night-20261125)
+
+- Incident: a v0.2.0 night shift (explicit backlog, US$ 50 cap, 09:00 deadline, OMP host) opened, reported `DEGRADED`, deferred all work to "your next turn" and delivered 0 items in 11 h; its 1 h lease lapsed and the state stayed `ACTIVE`. Root causes, each confirmed against source: no work loop; OMP's real wakeup (a pending background job starts a follow-up turn) not modelled and the recovery text pointed to "the next human turn"; no engine path from a given backlog to in-flight work (`adopt` raised `BACKLOG_GIVEN`); `budget` counted adoptions only; the holder could not close at the cutoff; intake types friction; a per-turn `postflight` would have frozen admission for good.
+- `SKILL.md` gets a mandatory **Work loop** (dispatch in the intake turn; every wake = `apply_tick` → results → `select_next` → dispatch → `may_yield`; never end a turn while eligible work, budget and time remain; idle only with a wakeup armed) and a **Host adapters** table (OMP: background job = wakeup, async `sleep N` with N ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session; other hosts unverified → `DEGRADED`).
+- Engine: `start_item` (given list → in flight, same checks as `adopt`); money budget `{currency, amount, freeze_at, baseline}` measured as a delta (`record_spend`, `apply_tick(spend_total=)`) plus `deadline`, with automatic admission freeze (`SPEND_CAP_REACHED`, `DEADLINE_REACHED`, fail-closed `SPEND_NOT_MEASURED` / `SPEND_MEASUREMENT_STALE` / `SPEND_MEASUREMENT_INCONSISTENT`); `arm_heartbeat` and `may_yield` (the loop's only exit); holder `close_at_cutoff` (`STOPPED`, `stop.kind=cutoff`, allowed after the lease lapsed, never before the cutoff); a new tick and arming renew the lease; `open_shift` takes `scope` as a list, refuses an empty `backlog` and takes the budget as the principal's terms. Continuity: `reopen_admission` lifts the holder's own `POSTFLIGHT` freeze (never a cutoff); preflight, handoff and diagnosis show the cutoff and the heartbeat.
+- Compatibility: additive state fields (`budget.money`, `budget.deadline`, `heartbeat`, `stop`); `load()` and `load_checked()` migrate v0.2.0 files (the incident's own `state.json` validates after migration). Tests: 98 → 109 (`test_92`–`test_102`, plus the new mutators in `test_31`); the new ones fail on the previous engine.
+
 ## [1.23.1] - 2026-11-24
 
 ### Fixed — `hitl-scorecard` no-code footer is harness-neutral

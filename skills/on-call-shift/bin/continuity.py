@@ -75,10 +75,15 @@ def transition(state, path, fn, *args, writer=None, **kwargs):
 
 
 def reopen_admission(state, path, actor, now, *, generation, writer=None):
-    """Recovery: admission reopens only after a save that reads back correctly."""
+    """Recovery: admission reopens only after a save that reads back correctly. It lifts a
+    persistence failure, or the holder's own end-of-turn POSTFLIGHT freeze on its next turn;
+    never a cutoff, a preflight inconsistency or a spend-measurement freeze."""
     se._require_holder(state, actor, now, generation)
-    if state["admission"]["reason"] != "PERSISTENCE_FAILED":
+    if state["admission"]["reason"] not in ("PERSISTENCE_FAILED", "POSTFLIGHT"):
         return {"reopened": False, "reason": "NOT_FROZEN_BY_PERSISTENCE"}
+    cutoff = se.cutoff_reason(state, now)
+    if cutoff:
+        return {"reopened": False, "reason": cutoff}
     trial = copy.deepcopy(state)
     trial["admission"] = {"open": True, "reason": None}
     if any(v.get("pending") for v in state["children"].values()):
@@ -91,19 +96,20 @@ def reopen_admission(state, path, actor, now, *, generation, writer=None):
 
 
 def load_checked(path):
-    """Load the newest revision whose hash matches; fall back to `.prev`; else fail."""
+    """Load the newest revision whose hash matches; fall back to `.prev`; else fail. A v0.2.0
+    file is migrated to the current shape (se.migrate)."""
     try:
         with open(path, "rb") as handle:
             data = handle.read()
         with open(path + ".sha256", "rb") as handle:
             expected = handle.read().decode().strip()
         if hashlib.sha256(data).hexdigest() == expected:
-            return json.loads(data), "current"
+            return se.migrate(json.loads(data)), "current"
     except (OSError, ValueError):
         pass
     try:
         with open(path + ".prev", "rb") as handle:
-            return json.loads(handle.read()), "previous"
+            return se.migrate(json.loads(handle.read())), "previous"
     except (OSError, ValueError):
         raise se.ShiftError("NO_VALID_CHECKPOINT", path)
 
@@ -217,6 +223,11 @@ def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, no
 
 # --------------------------------------------------------------------------- handoff
 
+def _heartbeat_armed(state, now):
+    heartbeat = state["heartbeat"]
+    return heartbeat["job_ref"] is not None and now < heartbeat["fires_at"]
+
+
 def render_handoff(state, *, now, stale_after_secs):
     """Handoff-as-prompt derived from the snapshot only. Same state -> same text."""
     sha = snapshot_sha(state)
@@ -234,6 +245,11 @@ def render_handoff(state, *, now, stale_after_secs):
         f"- data: {'STALE' if stale else 'fresh'} (last transition at {last})",
         f"- admission: {'open' if state['admission']['open'] else 'frozen ' + str(state['admission']['reason'])}",
         f"- wakeup: {state['wakeup']['mode']} {state['wakeup']['reason'] or ''}".rstrip(),
+        "- heartbeat: " + (f"armed until {state['heartbeat']['fires_at']} "
+                           f"({state['heartbeat']['job_ref']})"
+                           if _heartbeat_armed(state, now) else "not armed"),
+        "- stop: " + (f"{state['stop']['kind']} {state['stop']['reason'] or ''}".rstrip()
+                      if state["stop"] else "none"),
         f"- continuity: {state['continuity']['mode']} {state['continuity']['reason'] or ''}".rstrip(),
         f"- in_flight: {', '.join(sorted(state['in_flight'])) or 'none'}",
         f"- gates: {', '.join(sorted(state['gates'])) or 'none'}",
@@ -279,7 +295,10 @@ def preflight(state, actor, now, *, generation, saved_sha=None, watchdog=None,
         return {"action": "observe_only", "findings": {"identity": err.code}}
     findings["lease_left_secs"] = state["lease"]["expires_at"] - now
     budget = state["budget"]
-    findings["budget_left"] = budget["limit"] - budget["spent"]
+    findings["budget_left"] = (None if budget["limit"] is None
+                               else budget["limit"] - budget["spent"])
+    findings["cutoff"] = se.cutoff_reason(state, now)
+    findings["heartbeat"] = "armed" if _heartbeat_armed(state, now) else "not_armed"
     findings["in_flight"] = len(state["in_flight"])
     last = max([e.get("at", 0) for e in state["log"]] or [0])
     findings["clock"] = "BACKWARDS" if now < last else "ok"
@@ -305,7 +324,10 @@ def preflight(state, actor, now, *, generation, saved_sha=None, watchdog=None,
     # graded action, strongest finding wins
     if findings["clock"] == "BACKWARDS" or findings["saved_sha"] == "DIVERGED":
         action = "freeze"
-    elif findings["lease_left_secs"] <= 0 or findings["budget_left"] <= 0:
+    elif findings["cutoff"]:
+        action = "close_at_cutoff"
+    elif findings["lease_left_secs"] <= 0 or (findings["budget_left"] is not None
+                                              and findings["budget_left"] <= 0):
         action = "propose_handoff"
     elif not state["admission"]["open"]:
         action = "save"
@@ -365,5 +387,17 @@ def diagnose(state, *, now):
         "udv_pending_reasons": sorted({se.udv_status(state, k)["pending"] or "DONE"
                                        for k in state["deliveries"]}),
         "incident_open": bool(state.get("incident")),
-        "budget": dict(state["budget"]),
+        "budget": _budget_view(state["budget"]),
+        "heartbeat": {"armed": _heartbeat_armed(state, now),
+                      "fires_at": state["heartbeat"]["fires_at"]},
+        "stop": ({"kind": state["stop"]["kind"], "reason": state["stop"]["reason"]}
+                 if state["stop"] else None),
     }
+
+
+def _budget_view(budget):
+    """Numbers only: the spend source (a file path or ledger name) stays out of a diagnosis."""
+    money = budget.get("money")
+    return {"limit": budget["limit"], "spent": budget["spent"], "deadline": budget["deadline"],
+            "money": None if not money else {k: money[k] for k in (
+                "currency", "limit", "freeze_at", "spent", "measured_at")}}
