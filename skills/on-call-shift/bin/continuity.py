@@ -96,16 +96,24 @@ def reopen_admission(state, path, actor, now, *, generation, writer=None):
     return {"reopened": True, "reason": None, "sha256": saved["sha256"]}
 
 
-def load_checked(path):
-    """Load the newest revision whose hash matches; fall back to `.prev`; else fail. A v0.2.0
-    file is migrated to the current shape (se.migrate)."""
+def load_checked(path, *, writer=None):
+    """Load the newest revision whose hash matches; fall back to `.prev`; else fail. A file the
+    migration changes (a state@1 / v0.2.0 file) is saved at once, so the sidecar hash matches
+    the state returned and the next preflight sees no DIVERGED; that revision is reported as
+    "migrated" (the legacy bytes stay in `.prev`), or "migrated_unsaved" when the save failed
+    (admission then frozen PERSISTENCE_FAILED, like any failed save)."""
     try:
         with open(path, "rb") as handle:
             data = handle.read()
         with open(path + ".sha256", "rb") as handle:
             expected = handle.read().decode().strip()
         if hashlib.sha256(data).hexdigest() == expected:
-            return se.migrate(json.loads(data)), "current"
+            raw = json.loads(data)
+            state = se.migrate(copy.deepcopy(raw))
+            if state == raw:
+                return state, "current"
+            saved = autosave(state, path, writer=writer)
+            return state, "migrated" if saved["saved"] else "migrated_unsaved"
     except (OSError, ValueError):
         pass
     try:
@@ -225,8 +233,7 @@ def recover_child(parent, actor, child_id, *, child_path, claimed_sha, cause, no
 # --------------------------------------------------------------------------- handoff
 
 def _heartbeat_armed(state, now):
-    heartbeat = state["heartbeat"]
-    return heartbeat["job_ref"] is not None and now < heartbeat["fires_at"]
+    return se.heartbeat_armed(state, now)
 
 
 def render_handoff(state, *, now, stale_after_secs):
@@ -371,8 +378,12 @@ def postflight(state, actor, now, *, generation, successor=None, ack=None):
     if ack is None:
         return dict(report, relief="AWAITING_SUCCESSOR_ACK")
     out = se.accept_handoff(state, ack, now)
-    if out["relieved"]:
-        state["admission"] = {"open": True, "reason": None}  # new holder admits
+    if (out["relieved"] and state["admission"]["reason"] == "POSTFLIGHT"
+            and not se.cutoff_reason(state, now)
+            and not any(v.get("pending") for v in state["children"].values())):
+        # the new holder lifts the outgoing holder's own end-of-turn freeze; a safety freeze
+        # (spend, preflight, persistence, cutoff) stays for the new holder to resolve
+        state["admission"] = {"open": True, "reason": None}
     return dict(report, relief="RELIEVED" if out["relieved"] else out["reason"])
 
 
@@ -409,4 +420,4 @@ def _budget_view(budget):
     money = budget.get("money")
     return {"limit": budget["limit"], "spent": budget["spent"], "deadline": budget["deadline"],
             "money": None if not money else {k: money[k] for k in (
-                "currency", "limit", "freeze_at", "spent", "measured_at")}}
+                "currency", "limit", "freeze_at", "spent", "measured_at", "inconsistent_at")}}

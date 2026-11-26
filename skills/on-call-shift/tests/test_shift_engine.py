@@ -6,6 +6,7 @@ Each test name starts with its scenario number from SKILL.md "Acceptance scenari
 import json
 import os
 import sys
+import re
 import tempfile
 import unittest
 
@@ -1294,7 +1295,8 @@ class WorkLoop(unittest.TestCase):
         bare = night_shift(capabilities=None)
         se.record_spend(bare, "agent-1", 149.15, 1001, generation=1)
         self.assertEqual(se.may_yield(bare, "agent-1", 1001, generation=1, eligible=False),
-                         {"yield": True, "reason": "NO_HOST_WAKEUP", "next": "postflight"})
+                         {"yield": True, "reason": "NO_HOST_WAKEUP", "next": "postflight",
+                          "fire_by": 1001 + LEASE / 2})
         self.assertEqual(se.may_yield(state, "agent-1", 1301, generation=0,
                                       eligible=True)["reason"], "FENCED")
 
@@ -1304,7 +1306,8 @@ class WorkLoop(unittest.TestCase):
         self.assertEqual(state["budget"], {
             "limit": None, "spent": 0, "deadline": DEADLINE,
             "money": {"currency": "USD", "limit": 50.0, "freeze_at": 40.0, "baseline": None,
-                      "spent": 0.0, "measured_at": None, "source": None}})
+                      "spent": 0.0, "measured_at": None, "source": None,
+                      "inconsistent_at": None}})
         self.assertEqual(new_shift()["budget"],
                          {"limit": 5, "spent": 0, "money": None, "deadline": None})
         for bad, code in ((dict(backlog=[]), "BAD_BACKLOG"), (dict(backlog=""), "BAD_BACKLOG"),
@@ -1416,6 +1419,9 @@ class WorkLoopReviewFindings(unittest.TestCase):
         self.assertEqual(state["heartbeat"]["job_ref"], None)
         self.assertEqual(state["heartbeat"]["transport"], "omp:background-job")
         self.assertEqual(se.may_yield(state, "agent-2", 1004, generation=2,
+                                      eligible=False)["next"], "record_spend")  # its own ledger
+        se.record_spend(state, "agent-2", 2.0, 1004, generation=2)
+        self.assertEqual(se.may_yield(state, "agent-2", 1004, generation=2,
                                       eligible=False)["next"], "arm_heartbeat")
         lost = night_shift(successor_policy={"pre_authorized": "agent-2"})
         se.record_spend(lost, "agent-1", 149.15, 1001, generation=1)
@@ -1436,6 +1442,138 @@ class WorkLoopReviewFindings(unittest.TestCase):
         ok = night_shift()
         se.record_spend(ok, "agent-1", 149.15, 1001, generation=1)
         self.assertTrue(admit(ok)["admitted"])
+
+
+class VerdictFindings(unittest.TestCase):
+    """Independent verdict on PR #618 @ced0d710 (findings P1-1 .. P3-8), each pinned here."""
+
+    def test_108_an_unmeasurable_meter_is_a_degraded_exit_never_a_spin(self):  # P1-1
+        state = night_shift()
+        se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+        se.apply_tick(state, "agent-1", "t1", 1500, generation=1)  # lease renewed, no reading
+        arm(state, 1650, 1900)
+        # stale meter, nothing eligible, heartbeat armed: yield, the wake re-measures
+        self.assertEqual(se.may_yield(state, "agent-1", 1700, generation=1,
+                                      eligible=False)["reason"], "HEARTBEAT_ARMED")
+        self.assertEqual(se.may_yield(state, "agent-1", 1700, generation=1,
+                                      eligible=True)["next"], "record_spend")
+        out = se.record_spend(state, "agent-1", 100.0, 1701, generation=1)  # goes down
+        self.assertEqual(out["reason"], "SPEND_MEASUREMENT_INCONSISTENT")
+        for now in (1702, 1702 + LEASE // 2):
+            gate = se.may_yield(state, "agent-1", now, generation=1, eligible=False)
+            self.assertEqual((gate["yield"], gate["reason"], gate["next"]),
+                             (True, "SPEND_UNMEASURABLE", "report_degraded"))
+        self.assertEqual(se.record_spend(state, "agent-1", 200.0, 1703, generation=1)["reason"],
+                         "SPEND_UNMEASURABLE")  # sticky until the principal re-baselines
+        self.assertEqual(se.select_next(state, given_backlog(), "agent-1", 1704,
+                                        generation=1)["reason"], "ADMISSION_FROZEN")
+
+    def test_109_principal_rebaseline_and_a_new_holder_keep_the_spend_counted(self):  # P1-1
+        state = night_shift()
+        se.record_spend(state, "agent-1", 100.0, 1001, generation=1)
+        se.record_spend(state, "agent-1", 110.0, 1002, generation=1)  # spent 10
+        se.record_spend(state, "agent-1", 5.0, 1003, generation=1)  # meter reset: unmeasurable
+        for by, gen, reason in (("agent-1", 1, "NOT_AUTHORIZED_TO_REBASELINE"),
+                                ("owner-1", 0, "STALE_GENERATION")):
+            self.assertEqual(se.rebaseline_spend(state, by, 5.0, 1004, generation=gen)["reason"],
+                             reason)
+        self.assertEqual(se.rebaseline_spend(state, "owner-1", float("nan"), 1004,
+                                             generation=1)["reason"],
+                         "SPEND_MEASUREMENT_INCONSISTENT")
+        out = se.rebaseline_spend(state, "owner-1", 5.0, 1004, generation=1)
+        self.assertEqual((out["rebaselined"], out["spent"]), (True, 10.0))  # never a refund
+        self.assertEqual(state["admission"], {"open": True, "reason": None})
+        self.assertEqual(se.record_spend(state, "agent-1", 20.0, 1005, generation=1)["spent"],
+                         25.0)
+        se.propose_handoff(state, "agent-1", "agent-2", 1006, generation=1)
+        se.accept_handoff(state, {"kind": "handoff_ack", "from": "agent-2", "generation": 1,
+                                  "cursor_seq": 0, "in_flight": [], "gates": []}, 1007)
+        self.assertEqual(se.select_next(state, given_backlog(), "agent-2", 1008,
+                                        generation=2)["reason"], "SPEND_NOT_MEASURED")
+        self.assertEqual(se.record_spend(state, "agent-2", 3.0, 1008, generation=2)["spent"],
+                         25.0)  # its own ledger: re-baselined, spend kept
+        self.assertEqual(se.record_spend(state, "agent-2", 8.0, 1009, generation=2)["spent"],
+                         30.0)
+        lost = night_shift(successor_policy={"pre_authorized": "agent-2"})
+        se.record_spend(lost, "agent-1", 100.0, 1001, generation=1)
+        se.record_spend(lost, "agent-1", 104.0, 1002, generation=1)
+        self.assertTrue(se.take_over(lost, "agent-2", 1000 + LEASE + 3)["taken_over"])
+        self.assertEqual(se.record_spend(lost, "agent-2", 1.0, 1000 + LEASE + 4,
+                                         generation=2)["spent"], 4.0)
+        self.assertEqual(se.record_spend(lost, "agent-2", 2.5, 1000 + LEASE + 5,
+                                         generation=2)["spent"], 5.5)
+
+    def test_110_the_skill_tells_an_omp_holder_to_declare_its_wakeup(self):  # P1-2
+        with open(os.path.join(HERE, "..", "SKILL.md"), encoding="utf-8") as handle:
+            text = handle.read()
+        inputs = text.split("## Inputs", 1)[1].split("## Work loop", 1)[0]
+        loop = text.split("## Work loop", 1)[1].split("### Host adapters", 1)[0]
+        self.assertIn("| `capabilities` |", inputs)
+        self.assertIn('capabilities={"heartbeat_transport": "omp:background-job"}', loop)
+        self.assertIn("never postflight", loop)
+        bare = night_shift(capabilities=None)  # an OMP holder that forgot to declare it
+        se.record_spend(bare, "agent-1", 149.15, 1001, generation=1)
+        gate = se.may_yield(bare, "agent-1", 1001, generation=1, eligible=False)
+        self.assertEqual((gate["reason"], gate["fire_by"]), ("NO_HOST_WAKEUP", 1001 + LEASE / 2))
+        arm(bare, 1001, gate["fire_by"])
+        self.assertEqual(se.may_yield(bare, "agent-1", 1002, generation=1,
+                                      eligible=False)["reason"], "HEARTBEAT_ARMED")
+
+    def test_111_a_heartbeat_never_fires_after_the_deadline(self):  # P2-3
+        state = night_shift(budget={"currency": "USD", "amount": 50, "baseline": 149.15,
+                                    "deadline": 1100})
+        before = se.snapshot(state)
+        with self.assertRaises(se.ShiftError) as err:
+            arm(state, 1001, 1200)
+        self.assertEqual(err.exception.code, "HEARTBEAT_AFTER_DEADLINE")
+        self.assertEqual(state, before)
+        arm(state, 1001, 1100)  # the deadline itself is the last wake
+        self.assertEqual(se.may_yield(state, "agent-1", 1002, generation=1,
+                                      eligible=False)["until"], 1100)
+        state["heartbeat"]["fires_at"] = 1250  # armed past the deadline (pre-fix state)
+        self.assertFalse(se.heartbeat_armed(state, 1002))
+        gate = se.may_yield(state, "agent-1", 1002, generation=1, eligible=False)
+        self.assertEqual((gate["next"], gate["fire_by"]), ("arm_heartbeat", 1100))
+
+    def test_115_overflow_and_bad_currency_fail_closed_and_a_tick_is_never_half_applied(self):
+        # P3-7
+        for budget in (float("inf"), {"adoptions": float("inf")},
+                       {"currency": "USD", "amount": 10 ** 400}, {"deadline": 10 ** 400},
+                       {"currency": 1, "amount": 50}, {"currency": " ", "amount": 50}):
+            with self.assertRaises(se.ShiftError, msg=str(budget)[:60]):
+                night_shift(budget=budget)
+        state = night_shift()
+        se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
+        arm(state, 1001, 1300)
+        se.apply_tick(state, "agent-1", "bg_1", 1300, generation=1, spend_total=10 ** 400)
+        self.assertEqual((state["cursor"]["last_event_id"], state["heartbeat"]["job_ref"],
+                          state["lease"]["expires_at"]), ("bg_1", None, 1300 + LEASE))
+        self.assertEqual((state["budget"]["money"]["inconsistent_at"],
+                          state["admission"]["reason"]),
+                         (1300, "SPEND_MEASUREMENT_INCONSISTENT"))
+        self.assertEqual(se.apply_tick(state, "agent-1", "bg_1", 1301, generation=1,
+                                       spend_total=152.0), (state, None))  # replay: no effect
+
+    def test_116_the_deadline_is_epoch_seconds_utc_and_the_scenario_ranges_are_current(self):
+        # P3-8
+        with self.assertRaises(se.ShiftError) as err:
+            night_shift(budget={"deadline": 1795694400 * 1000})  # milliseconds
+        self.assertEqual(err.exception.code, "BAD_BUDGET")
+        state = night_shift(budget={"deadline": 1795694400})
+        self.assertEqual(state["log"][0]["deadline_utc"], "2026-11-26T12:00:00Z")
+        with open(os.path.join(HERE, "..", "SKILL.md"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("epoch seconds, UTC", text)
+        numbers = set()
+        for name in ("test_shift_engine.py", "test_continuity.py"):
+            with open(os.path.join(HERE, name), encoding="utf-8") as handle:
+                numbers |= {int(n) for n in re.findall(r"def test_(\d+)_", handle.read())}
+        top = max(numbers)
+        self.assertIn(f"`test_92`–`test_{top}`", text)
+        self.assertIn(f"Scenarios 92–{top}", text)
+        listed = {int(line.split(".", 1)[0]) for line in text.splitlines()
+                  if re.match(r"^\d+\. ", line)}
+        self.assertLessEqual(set(range(92, top + 1)), listed)
 
 
 if __name__ == "__main__":

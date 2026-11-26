@@ -19,7 +19,11 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
 - A failed save rolls the in-memory state back to before the transition and closes admission
   (`PERSISTENCE_FAILED`). It is never reported as saved. `reopen_admission` reopens only after a
   save that reads back correctly.
-- `load_checked` loads the newest revision whose hash matches, else `.prev`, else fails.
+- `load_checked` loads the newest revision whose hash matches, else `.prev`, else fails. A
+  `state@1` (v0.2.0) file is migrated and saved at once (`migrated`; the legacy bytes stay in
+  `.prev`), so the sidecar hash matches the state returned and the next preflight sees no
+  `DIVERGED`; a failed save there is `migrated_unsaved` with admission frozen
+  (`PERSISTENCE_FAILED`).
 - Children keep their own checkpoint (`checkpoint_child`); the parent stores only a pointer, the
   hash and whether it was received. A child save failure closes the parent's admission.
 - Recovery (`recover_child`): the parent holder (lease + current generation) reads the new child
@@ -63,8 +67,10 @@ never diagnoses mental states.
 Postflight closes admission (`POSTFLIGHT`), reports hash, cursor, in-flight work, gates, events
 and UDV, and hands off only on the successor's ACK; without one the turn ends without relief,
 and says so. Run it only on the last turn (cutoff, handoff, or a host with no wakeup): a
-holder that wakes again lifts its own `POSTFLIGHT` freeze with `reopen_admission`, which never
-lifts a cutoff or any other freeze.
+holder that wakes again lifts its own `POSTFLIGHT` freeze with `reopen_admission` (its
+`select_next` answers `reopen_admission`), which never lifts a cutoff or any other freeze. A
+later safety freeze (spend, cutoff) replaces `POSTFLIGHT`, so neither that reopen nor a relief
+can lift it; relief reopens only a `POSTFLIGHT` freeze.
 
 ## Watchdog (logic only)
 

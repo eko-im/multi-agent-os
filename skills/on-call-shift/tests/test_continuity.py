@@ -941,7 +941,7 @@ class WorkLoopContinuity(unittest.TestCase):
         legacy["budget"] = {"limit": 5, "spent": 0}
         co.autosave(legacy, self.path)
         state, revision = co.load_checked(self.path)
-        self.assertEqual(revision, "current")
+        self.assertEqual(revision, "migrated")
         self.assertEqual(sorted(state), sorted(shift()))
         self.assertEqual(state["budget"]["money"], None)
         self.assertIsNone(state["stop"])
@@ -981,6 +981,108 @@ class WorkLoopReviewFindings(unittest.TestCase):
         self.assertEqual(co.preflight(state, "agent-1", 2000, generation=1)["action"],
                          "observe_only")  # lapsed, but no cutoff yet: nothing to close
         self.assertTrue(se.close_at_cutoff(state, "agent-1", 6000, generation=1)["closed"])
+
+
+class VerdictFindings(unittest.TestCase):
+    """Independent verdict on PR #618 @ced0d710: the continuity findings (P2-4 .. P2-6)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, "shift.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def money_shift(self):
+        state = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
+                              backlog=None, capacity=2,
+                              budget={"currency": "USD", "amount": 50}, holder="agent-1",
+                              supervisor_target=SUP, now=1000, lease_secs=LEASE)
+        se.record_spend(state, "agent-1", 10.0, 1001, generation=1)  # baseline
+        se.record_spend(state, "agent-1", 12.0, 1001, generation=1)  # spent 2
+        return state
+
+    def test_112_a_spend_freeze_after_postflight_survives_reopen_and_relief(self):  # P2-4
+        state = self.money_shift()
+        co.postflight(state, "agent-1", 1002, generation=1)
+        se.record_spend(state, "agent-1", 5.0, 1003, generation=1)  # goes down after POSTFLIGHT
+        frozen = {"open": False, "reason": "SPEND_MEASUREMENT_INCONSISTENT"}
+        self.assertEqual(state["admission"], frozen)
+        self.assertFalse(co.reopen_admission(state, self.path, "agent-1", 1004,
+                                             generation=1)["reopened"])
+        ack = {"kind": "handoff_ack", "from": "agent-2", "generation": 1,
+               "cursor_seq": state["cursor"]["seq"], "in_flight": [], "gates": []}
+        self.assertEqual(co.postflight(state, "agent-1", 1005, generation=1,
+                                       successor="agent-2", ack=ack)["relief"], "RELIEVED")
+        self.assertEqual(state["admission"], frozen)  # the new holder inherits the freeze
+        self.assertEqual(se.select_next(state, backlog(), "agent-2", 1006,
+                                        generation=2)["reason"], "ADMISSION_FROZEN")
+        self.assertTrue(se.rebaseline_spend(state, "owner-1", 3.0, 1007,
+                                            generation=2)["rebaselined"])
+        self.assertEqual(state["budget"]["money"]["spent"], 2.0)  # kept, never refunded
+        self.assertEqual(se.select_next(state, backlog(), "agent-2", 1008,
+                                        generation=2)["action"], "adopt")
+        clean = self.money_shift()  # the holder's own POSTFLIGHT freeze over a sound meter
+        co.postflight(clean, "agent-1", 1002, generation=1)
+        ack["cursor_seq"] = clean["cursor"]["seq"]
+        self.assertEqual(co.postflight(clean, "agent-1", 1003, generation=1,
+                                       successor="agent-2", ack=ack)["relief"], "RELIEVED")
+        self.assertEqual(clean["admission"], {"open": True, "reason": None})
+
+    def test_113_the_next_turn_is_told_to_lift_its_own_postflight_freeze(self):  # P2-5
+        state = shift()
+        co.postflight(state, "agent-1", 1001, generation=1)
+        self.assertEqual(se.select_next(state, backlog(), "agent-1", 1002, generation=1),
+                         {"action": "reopen_admission", "reason": "POSTFLIGHT"})
+        self.assertTrue(co.reopen_admission(state, self.path, "agent-1", 1002,
+                                            generation=1)["reopened"])
+        self.assertEqual(se.select_next(state, backlog(), "agent-1", 1003,
+                                        generation=1)["action"], "adopt")
+        pending = shift()  # a child failure hides behind POSTFLIGHT: reopen would refuse it
+        co.postflight(pending, "agent-1", 1001, generation=1)
+        co.checkpoint_child(pending, "child-1", shift(), os.path.join(self.tmp.name, "c.json"),
+                            writer=failing_writer)
+        late = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
+                             backlog=None, capacity=2, budget={"deadline": 1100},
+                             holder="agent-1", supervisor_target=SUP, now=1000,
+                             lease_secs=LEASE)
+        co.postflight(late, "agent-1", 1001, generation=1)
+        for frozen, now in ((pending, 1002), (late, 1100)):
+            out = se.select_next(frozen, backlog(), "agent-1", now, generation=1)
+            self.assertEqual((out["action"], out["reason"]), ("wait", "ADMISSION_FROZEN"))
+        with open(os.path.join(HERE, "..", "SKILL.md"), encoding="utf-8") as handle:
+            loop = handle.read().split("## Work loop", 1)[1].split("### Host adapters", 1)[0]
+        self.assertIn("answers `reopen_admission`", loop)
+        self.assertIn("continuity.reopen_admission(state, path", loop)
+
+    def test_114_a_migrated_load_keeps_the_hash_chain_and_moves_the_schema_id(self):  # P2-6
+        legacy = shift()
+        for key in ("heartbeat", "stop"):
+            legacy.pop(key, None)
+        legacy["budget"] = {"limit": 5, "spent": 0}
+        legacy["schema"] = "on-call-shift/state@1"  # a v0.2.0 file
+        co.autosave(legacy, self.path)
+        state, revision = co.load_checked(self.path)
+        self.assertEqual((revision, state["schema"]), ("migrated", "on-call-shift/state@2"))
+        sidecar = read(self.path + ".sha256").strip()
+        self.assertEqual(sidecar, co.snapshot_sha(state))
+        found = co.preflight(state, "agent-1", 1001, generation=1, saved_sha=sidecar)
+        self.assertEqual((found["findings"]["saved_sha"], state["admission"]["open"]),
+                         ("match", True))
+        self.assertEqual(json.loads(read(self.path + ".prev"))["schema"],
+                         "on-call-shift/state@1")  # the legacy bytes are kept
+        self.assertEqual(co.load_checked(self.path), (state, "current"))
+        co.autosave(legacy, self.path)
+        unsaved, revision = co.load_checked(self.path, writer=failing_writer)
+        self.assertEqual((revision, unsaved["admission"]["reason"]),
+                         ("migrated_unsaved", "PERSISTENCE_FAILED"))
+        # a v0.2.0 engine's load() accepts only state@1, so it refuses a v0.3.0 file
+        self.assertEqual((se.SCHEMA, se.LEGACY_SCHEMAS),
+                         ("on-call-shift/state@2", ("on-call-shift/state@1",)))
+        for schema in ("on-call-shift/state@3", None):
+            with self.assertRaises(se.ShiftError) as err:
+                se.migrate(dict(shift(), schema=schema))
+            self.assertEqual(err.exception.code, "SCHEMA_MISMATCH")
 
 
 if __name__ == "__main__":

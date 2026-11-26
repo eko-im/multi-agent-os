@@ -12,12 +12,18 @@ handoff) and references/backlog-adoption.md (connectors, normalization, RACI/DAR
 from __future__ import annotations
 
 import copy
+import datetime
 import json
 import math
 import os
 import tempfile
 
-SCHEMA = "on-call-shift/state@1"
+# state@2 (v0.3.0) adds budget.money/deadline, heartbeat and stop. A v0.2.0 engine's load()
+# refuses it; load()/load_checked() here migrate a state@1 (v0.2.0) file.
+SCHEMA = "on-call-shift/state@2"
+LEGACY_SCHEMAS = ("on-call-shift/state@1",)
+# A deadline at or above this is a millisecond epoch, not seconds (year 5138 in seconds).
+DEADLINE_MAX_EPOCH_SECS = 1e11
 
 # Operator mantras used only when the operator gave none. An explicit list is kept verbatim.
 DEFAULT_MANTRAS = (
@@ -55,27 +61,34 @@ def _check_scope(scope):
 
 def _number(value, field, *, count=False):
     """A finite number from the intake, or a contract error naming the field (never a raw
-    ValueError, TypeError or NaN)."""
+    ValueError, TypeError, OverflowError or NaN)."""
     try:
         number = int(value) if count else float(value)
-    except (TypeError, ValueError):
+        finite = math.isfinite(number)  # an int too large for a float overflows here
+    except (TypeError, ValueError, OverflowError):
         raise ShiftError("BAD_BUDGET", field) from None
-    if not math.isfinite(number) or number < 0:
+    if not finite or number < 0:
         raise ShiftError("BAD_BUDGET", field)
     return number
+
+
+def _utc(epoch_secs):
+    return datetime.datetime.fromtimestamp(epoch_secs, tz=datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
 
 
 def _new_budget(budget, now):
     """An int is a count of adoptions (the v0.2 shape). A dict carries the principal's own
     terms, any of: "adoptions"; a money cap ("currency", "amount", optional "freeze_at" below
-    it, optional "baseline" measured at open, optional "source"); a "deadline" (epoch).
+    it, optional "baseline" measured at open, optional "source"); a "deadline" in epoch
+    seconds, UTC (a millisecond epoch is refused).
     Money is measured as a delta from the baseline, never assumed. Nothing is guessed."""
     if not isinstance(budget, dict):
         if budget is None:
             raise ShiftError("MISSING_FIELD", "budget")
         try:
             limit = int(budget)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             raise ShiftError("MISSING_FIELD", "budget") from None
         if limit < 0:
             raise ShiftError("MISSING_FIELD", "budget")
@@ -85,9 +98,14 @@ def _new_budget(budget, now):
         adoptions = _number(adoptions, "adoptions", count=True)
     if deadline is not None:
         deadline = _number(deadline, "deadline")
-    if budget.get("currency") is not None or budget.get("amount") is not None:
-        if not budget.get("currency"):
+        if deadline >= DEADLINE_MAX_EPOCH_SECS:
+            raise ShiftError("BAD_BUDGET", "deadline: epoch seconds (UTC), not milliseconds")
+    currency = budget.get("currency")
+    if currency is not None or budget.get("amount") is not None:
+        if currency is None or currency == "":
             raise ShiftError("MISSING_FIELD", "budget.currency")
+        if not isinstance(currency, str) or not currency.strip():
+            raise ShiftError("BAD_BUDGET", "budget.currency")
         if budget.get("amount") is None:
             raise ShiftError("MISSING_FIELD", "budget.amount")
         amount = _number(budget["amount"], "amount")
@@ -96,11 +114,14 @@ def _new_budget(budget, now):
         if not 0 < freeze_at <= amount:
             raise ShiftError("BAD_BUDGET", "0 < freeze_at <= amount")
         baseline = budget.get("baseline")
-        money = {"currency": budget["currency"], "limit": amount, "freeze_at": freeze_at,
+        money = {"currency": currency, "limit": amount, "freeze_at": freeze_at,
                  "baseline": None if baseline is None else _number(baseline, "baseline"),
                  "spent": 0.0,
                  "measured_at": None if baseline is None else now,
-                 "source": budget.get("source")}
+                 "source": budget.get("source"),
+                 # set by the first reading the meter cannot explain; only the principal's
+                 # rebaseline_spend clears it
+                 "inconsistent_at": None}
     if adoptions is None and money is None and deadline is None:
         raise ShiftError("MISSING_FIELD", "budget")
     return {"limit": adoptions, "spent": 0,
@@ -182,9 +203,16 @@ def open_shift(*, shift_id, principal, scope, backlog, capacity, budget, holder,
         "wakeup": classify_wakeup(capabilities or {}, supervisor_target),
         "heartbeat": _heartbeat(capabilities),
         "stop": None,  # how the shift ended: cutoff (holder) or principal stop / revoke
-        "log": [{"at": now, "event": "shift_opened", "holder": holder}],
+        "log": [_opened_entry(now, holder, budget)],
     }
     return state
+
+
+def _opened_entry(now, holder, budget):
+    entry = {"at": now, "event": "shift_opened", "holder": holder}
+    if budget["deadline"] is not None:
+        entry["deadline_utc"] = _utc(budget["deadline"])  # echo: the unit and zone are visible
+    return entry
 
 
 def save(state, path):
@@ -204,14 +232,18 @@ def save(state, path):
 
 
 def migrate(state):
-    """Bring a v0.2.0 state file to the current shape: additive and idempotent. Anything that
-    is not an on-call-shift state of this schema is refused, never migrated."""
-    if (not isinstance(state, dict) or state.get("schema") != SCHEMA
+    """Bring a state@1 (v0.2.0) file to state@2: additive and idempotent. Anything that is
+    not an on-call-shift state of a known schema is refused, never migrated."""
+    if (not isinstance(state, dict)
+            or state.get("schema") not in (SCHEMA,) + LEGACY_SCHEMAS
             or not isinstance(state.get("budget"), dict)):
         raise ShiftError("SCHEMA_MISMATCH", str(state.get("schema") if isinstance(state, dict)
                                                 else type(state).__name__))
+    state["schema"] = SCHEMA
     state["budget"].setdefault("money", None)
     state["budget"].setdefault("deadline", None)
+    if isinstance(state["budget"]["money"], dict):
+        state["budget"]["money"].setdefault("inconsistent_at", None)
     state.setdefault("heartbeat", _heartbeat(None))
     state.setdefault("stop", None)
     return state
@@ -280,10 +312,12 @@ def apply_tick(state, actor, event_id, now, *, generation, spend_total=None):
     """A tick is evidence the clock ran and the holder is alive. It notifies nobody. A new tick
     renews the lease, consumes the heartbeat it came from, records the spend the host measured
     (`spend_total`, a running total) and freezes admission at the cutoff. A replayed id has no
-    effect."""
+    effect. Everything is validated before the first change, so a tick is never half applied:
+    a reading that is not a number freezes admission like any inconsistent reading."""
     _require_holder(state, actor, now, generation)
     if spend_total is not None and not state["budget"]["money"]:
         raise ShiftError("NO_MONEY_BUDGET", "the principal gave no money cap")
+    reading = None if spend_total is None else _reading(spend_total)
     if event_id in state["processed_events"]:
         return state, None
     state["processed_events"].append(event_id)
@@ -291,8 +325,8 @@ def apply_tick(state, actor, event_id, now, *, generation, spend_total=None):
     state["lease"]["expires_at"] = now + state["lease"]["lease_secs"]
     if state["heartbeat"]["job_ref"] is not None and state["heartbeat"]["job_ref"] == event_id:
         state["heartbeat"].update(job_ref=None, armed_at=None, fires_at=None)
-    if spend_total is not None:
-        _record_spend(state, spend_total, now)
+    if reading is not None:
+        _record_spend(state, reading, now)
     _freeze_at_cutoff(state, now)
     effect = {"signal": "tick", "event_id": event_id, "at": now,
               "notification": "NOT_SENT_BY_TIMER", "execution": "NOT_REQUESTED"}
@@ -309,17 +343,20 @@ def cutoff_reason(state, now):
     if budget.get("deadline") is not None and now >= budget["deadline"]:
         return "DEADLINE_REACHED"
     money = budget.get("money")
-    if money and money["measured_at"] is not None and money["spent"] >= money["freeze_at"]:
+    if money and money["spent"] >= money["freeze_at"]:
         return "SPEND_CAP_REACHED"
     return None
 
 
 def _spend_block(state, now):
-    """A money cap counts only on a fresh measurement: none yet, or one older than a lease,
-    blocks new work (fail closed)."""
+    """A money cap counts only on a fresh, trusted measurement. An inconsistent or unreadable
+    meter (sticky until the principal's rebaseline_spend), none yet, or one older than a
+    lease blocks new work (fail closed)."""
     money = state["budget"].get("money")
     if not money:
         return None
+    if money["inconsistent_at"] is not None:
+        return "SPEND_UNMEASURABLE"
     if money["measured_at"] is None:
         return "SPEND_NOT_MEASURED"
     if now - money["measured_at"] > state["lease"]["lease_secs"]:
@@ -343,8 +380,10 @@ def _admission_block(state, now):
 
 
 def _freeze(state, reason):
-    """Close admission, never overwriting an earlier freeze reason."""
-    if state["admission"]["open"]:
+    """Close admission, never overwriting an earlier freeze reason, except POSTFLIGHT: that is
+    the holder's own end-of-turn bookkeeping, which the next turn lifts, so a later safety
+    freeze (spend, cutoff) replaces it and the lift can no longer reopen admission."""
+    if state["admission"]["open"] or state["admission"]["reason"] == "POSTFLIGHT":
         state["admission"] = {"open": False, "reason": reason}
 
 
@@ -355,26 +394,42 @@ def _freeze_at_cutoff(state, now):
     return reason
 
 
+def _reading(value):
+    """A meter reading as a float, or NaN for anything that is not one (None, text,
+    overflow). Never raises, so a caller can validate before it changes anything."""
+    try:
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return math.nan
+
+
+def _unmeasurable(state, now):
+    money = state["budget"]["money"]
+    if money["inconsistent_at"] is None:
+        money["inconsistent_at"] = now
+    _freeze(state, "SPEND_MEASUREMENT_INCONSISTENT")
+    return {"recorded": False, "reason": "SPEND_MEASUREMENT_INCONSISTENT",
+            "spent": money["spent"]}
+
+
 def _record_spend(state, measured_total, now, source=None):
     money = state["budget"]["money"]
-    try:
-        total = float(measured_total)
-    except (TypeError, ValueError):
-        total = math.nan
+    total = _reading(measured_total)
+    if money["inconsistent_at"] is not None:
+        # sticky: only the principal's rebaseline_spend trusts this meter again
+        return {"recorded": False, "reason": "SPEND_UNMEASURABLE", "spent": money["spent"]}
     if not math.isfinite(total) or total < 0:
-        # NaN, infinity or a negative running total is not a measurement. Fail closed.
-        _freeze(state, "SPEND_MEASUREMENT_INCONSISTENT")
-        return {"recorded": False, "reason": "SPEND_MEASUREMENT_INCONSISTENT",
-                "spent": money["spent"]}
-    if money["baseline"] is None:  # the first reading is the baseline: spend is a delta
-        money.update(baseline=total, spent=0.0, measured_at=now)
+        # NaN, infinity, a negative or an unreadable total is not a measurement. Fail closed.
+        return _unmeasurable(state, now)
+    if money["baseline"] is None:
+        # first reading of this meter (at open, or the new holder's after relief/takeover):
+        # spend so far is kept and the delta continues from it
+        money.update(baseline=round(total - money["spent"], 6), measured_at=now)
     else:
         spent = round(total - money["baseline"], 6)
         if spent < money["spent"]:
             # a running total never goes down: another source or a reset. Fail closed.
-            _freeze(state, "SPEND_MEASUREMENT_INCONSISTENT")
-            return {"recorded": False, "reason": "SPEND_MEASUREMENT_INCONSISTENT",
-                    "spent": money["spent"]}
+            return _unmeasurable(state, now)
         money.update(spent=spent, measured_at=now)
     if source:
         money["source"] = source
@@ -386,14 +441,68 @@ def _record_spend(state, measured_total, now, source=None):
 def record_spend(state, actor, measured_total, now, *, generation, source=None):
     """Record the host's measured running total of spend (for example the session cost
     ledger). The first reading is the baseline; spend is the delta from it. At the freeze
-    threshold admission closes by itself; a reading that goes down freezes admission."""
+    threshold admission closes by itself. A reading that goes down, or one that is not a
+    number (pass None when the meter cannot be read), makes the meter SPEND_UNMEASURABLE
+    until the principal's rebaseline_spend."""
     _require_holder(state, actor, now, generation)
     if not state["budget"]["money"]:
         raise ShiftError("NO_MONEY_BUDGET", "the principal gave no money cap")
     return _record_spend(state, measured_total, now, source)
 
 
+def rebaseline_spend(state, by, measured_total, now, *, generation):
+    """The principal trusts the meter again: this reading becomes the new baseline and the
+    spend already counted is KEPT (baseline = reading - spent), so a reset or a new ledger
+    never refunds the cap. Clears SPEND_UNMEASURABLE and lifts only the freeze it caused."""
+    if by != state["principal"]:
+        return {"rebaselined": False, "reason": "NOT_AUTHORIZED_TO_REBASELINE"}
+    if generation != state["generation"]:
+        return {"rebaselined": False, "reason": "STALE_GENERATION"}
+    if state["status"] not in (ACTIVE, HANDOFF_PENDING):
+        return {"rebaselined": False, "reason": "SHIFT_NOT_ACTIVE"}
+    money = state["budget"]["money"]
+    if not money:
+        return {"rebaselined": False, "reason": "NO_MONEY_BUDGET"}
+    total = _reading(measured_total)
+    if not math.isfinite(total) or total < 0:
+        return {"rebaselined": False, "reason": "SPEND_MEASUREMENT_INCONSISTENT"}
+    money.update(baseline=round(total - money["spent"], 6), measured_at=now,
+                 inconsistent_at=None)
+    state["log"].append({"at": now, "event": "spend_rebaselined", "by": by,
+                         "spent": money["spent"]})
+    if state["admission"]["reason"] == "SPEND_MEASUREMENT_INCONSISTENT":
+        cutoff = cutoff_reason(state, now)
+        if cutoff:
+            state["admission"] = {"open": False, "reason": cutoff}
+        elif any(child.get("pending") for child in state["children"].values()):
+            # a child failure hid behind this freeze: it is now the cause (recover_child)
+            state["admission"] = {"open": False, "reason": "CHILD_PERSISTENCE_FAILED"}
+        else:
+            state["admission"] = {"open": True, "reason": None}
+    else:
+        _freeze_at_cutoff(state, now)
+    return {"rebaselined": True, "reason": None, "spent": money["spent"]}
+
+
+def _new_holder_meter(state):
+    """Relief or takeover: the new holder reads its own ledger (on OMP each session has one),
+    so its first reading re-baselines and keeps the spend already counted. An unmeasurable
+    meter stays unmeasurable: only the principal's rebaseline_spend clears it."""
+    money = state["budget"]["money"]
+    if money:
+        money.update(baseline=None, measured_at=None)
+
+
 # --------------------------------------------------------------------------- work loop
+
+def heartbeat_armed(state, now):
+    """An armed heartbeat that will wake the holder before its lease lapses and no later than
+    the deadline. Anything else counts as not armed."""
+    heartbeat, deadline = state["heartbeat"], state["budget"]["deadline"]
+    return (heartbeat["job_ref"] is not None
+            and now < heartbeat["fires_at"] < state["lease"]["expires_at"]
+            and (deadline is None or heartbeat["fires_at"] <= deadline))
+
 
 def arm_heartbeat(state, actor, now, *, generation, transport, job_ref, fires_at,
                   bound_target=None):
@@ -410,6 +519,9 @@ def arm_heartbeat(state, actor, now, *, generation, transport, job_ref, fires_at
         raise ShiftError("HEARTBEAT_NOT_IN_FUTURE", str(fires_at))
     if fires_at - now > state["lease"]["lease_secs"] / 2:
         raise ShiftError("HEARTBEAT_AFTER_HALF_LEASE", str(fires_at))
+    deadline = state["budget"]["deadline"]
+    if deadline is not None and fires_at > deadline:
+        raise ShiftError("HEARTBEAT_AFTER_DEADLINE", "the deadline is the last wake: close then")
     state["lease"]["expires_at"] = now + state["lease"]["lease_secs"]
     state["heartbeat"] = {"transport": transport, "job_ref": job_ref, "armed_at": now,
                           "fires_at": fires_at, "bound_target": bound_target}
@@ -425,7 +537,9 @@ def arm_heartbeat(state, actor, now, *, generation, transport, job_ref, fires_at
 def may_yield(state, actor, now, *, generation, eligible):
     """The work loop's exit gate (read-only). `eligible`: select_next just offered an item to
     start or adopt. The holder ends its turn only on {"yield": True}; otherwise it does `next`
-    (dispatch, record_spend, arm_heartbeat, close_at_cutoff) and asks again."""
+    (dispatch, record_spend, arm_heartbeat, close_at_cutoff) and asks again. A meter that is
+    only stale never blocks a yield while a heartbeat is armed: the wake re-measures. An
+    unmeasurable meter is a degraded exit, never a loop."""
     if generation is None:
         raise ShiftError("GENERATION_REQUIRED", actor)
     if state["status"] not in (ACTIVE, HANDOFF_PENDING):
@@ -438,20 +552,27 @@ def may_yield(state, actor, now, *, generation, eligible):
     if not lease_valid(state, actor, now):
         return {"yield": True, "reason": "LEASE_EXPIRED", "next": "report_degraded"}
     unmeasured = _spend_block(state, now)
+    if unmeasured == "SPEND_UNMEASURABLE":
+        # degraded exit: no new item and no new wake (each would be unmeasured spend) until
+        # the principal's rebaseline_spend; in-flight work and the deadline stand
+        return {"yield": True, "reason": "SPEND_UNMEASURABLE", "next": "report_degraded"}
+    if eligible:
+        if unmeasured:
+            return {"yield": False, "reason": unmeasured, "next": "record_spend"}
+        return {"yield": False, "reason": "ELIGIBLE_WORK", "next": "dispatch"}
+    if heartbeat_armed(state, now):
+        return {"yield": True, "reason": "HEARTBEAT_ARMED", "next": None,
+                "until": state["heartbeat"]["fires_at"]}
     if unmeasured:
         return {"yield": False, "reason": unmeasured, "next": "record_spend"}
-    if eligible:
-        return {"yield": False, "reason": "ELIGIBLE_WORK", "next": "dispatch"}
-    heartbeat = state["heartbeat"]
-    if (heartbeat["job_ref"] is not None
-            and now < heartbeat["fires_at"] < state["lease"]["expires_at"]):
-        return {"yield": True, "reason": "HEARTBEAT_ARMED", "next": None,
-                "until": heartbeat["fires_at"]}
-    if not heartbeat["transport"]:
-        return {"yield": True, "reason": "NO_HOST_WAKEUP", "next": "postflight"}
     fire_by = now + state["lease"]["lease_secs"] / 2
     if state["budget"]["deadline"] is not None:
         fire_by = min(fire_by, state["budget"]["deadline"])
+    if not state["heartbeat"]["transport"]:
+        # no host wakeup declared. On OMP that means `capabilities` was omitted at open: the
+        # holder arms anyway (arm_heartbeat with its transport, by fire_by), never postflight
+        return {"yield": True, "reason": "NO_HOST_WAKEUP", "next": "postflight",
+                "fire_by": fire_by}
     return {"yield": False, "reason": "NO_WAKEUP_ARMED", "next": "arm_heartbeat",
             "fire_by": fire_by}
 
@@ -624,11 +745,17 @@ def _ineligible(state, item, actor):
 
 def select_next(state, backlog, actor, now, *, generation):
     """Pick ONE eligible item, or return a reasoned wait. Never invents work. The action is
-    `start` (start_item) for the principal's given list, `adopt` otherwise."""
+    `start` (start_item) for the principal's given list, `adopt` otherwise, or
+    `reopen_admission` when only the holder's own end-of-turn POSTFLIGHT freeze from its last
+    turn stands in the way (continuity.reopen_admission, then select again)."""
     _require_holder(state, actor, now, generation)
     if state.get("incident"):
         return {"action": "handle_incident", "incident": state["incident"]["id"]}
     blocked = _admission_block(state, now)
+    if (blocked == "ADMISSION_FROZEN" and state["status"] == ACTIVE
+            and state["admission"]["reason"] == "POSTFLIGHT" and not cutoff_reason(state, now)
+            and not any(child.get("pending") for child in state["children"].values())):
+        return {"action": "reopen_admission", "reason": "POSTFLIGHT"}
     if blocked:
         return {"action": "wait", "reason": blocked}
     skipped = []
@@ -802,6 +929,7 @@ def accept_handoff(state, ack, now):
     state["continuity"] = _continuity(_live_policy(state))
     # The outgoing holder's heartbeat wakes the outgoing session, not the successor's.
     state["heartbeat"] = _heartbeat({"heartbeat_transport": state["heartbeat"]["transport"]})
+    _new_holder_meter(state)
     return {"relieved": True, "reason": None}
 
 
@@ -1282,6 +1410,7 @@ def take_over(state, claimant, now, nonce=None):
     state["continuity"] = _continuity(None)  # nobody armed for the new generation yet
     # A heartbeat armed by the lost holder would wake the lost session: never the claimant's.
     state["heartbeat"] = _heartbeat({"heartbeat_transport": state["heartbeat"]["transport"]})
+    _new_holder_meter(state)
     state["log"].append({"at": now, "event": "taken_over", "from": previous, "to": claimant,
                          "generation": state["generation"], "nonce": policy["nonce"]})
     return {"taken_over": True, "reason": None, "generation": state["generation"],

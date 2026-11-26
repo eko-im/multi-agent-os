@@ -5,9 +5,10 @@ Executable form: `../bin/shift_engine.py`. When this text and the engine disagre
 
 ## 1. Persisted state
 
-One JSON document per shift (`../templates/shift-state.schema.json`). Write it atomically
-(temporary file, fsync, rename) before and after every transition, so a crash leaves the last
-good state.
+One JSON document per shift (`../templates/shift-state.schema.json`, schema id
+`on-call-shift/state@2`; a `state@1` file from v0.2.0 is migrated on load, and a v0.2.0 engine
+refuses `state@2`). Write it atomically (temporary file, fsync, rename) before and after every
+transition, so a crash leaves the last good state.
 
 | Field | Rule |
 |---|---|
@@ -24,7 +25,7 @@ good state.
 | `successor_policy`, `continuity`, `consumed_takeovers` | successor armed by the principal for one generation (`armed_generation`, `nonce`), consumed by its takeover; `continuity.mode` is `DEGRADED` without one, `uninterrupted_claim` is always `false` |
 | `deliveries` | per item: `technical_verified`, `delivered_to_recipient`, `satisfaction` (`confirmed`, `refused`, `unknown`), `attempts`, `result_ref`, `reservations`, `reopened_as` |
 | `reopened`, `parked` | reopened intents linked to the original result; operations parked by blast radius |
-| `budget`, `capacity` | `{limit, spent, money, deadline}`: no new item when the count reaches `limit` (null = no count cap), in-flight reaches capacity, the deadline passes, or measured spend (`money.spent`, a delta from `money.baseline`) reaches `money.freeze_at`; a money cap needs a measurement no older than one lease |
+| `budget`, `capacity` | `{limit, spent, money, deadline}`: no new item when the count reaches `limit` (null = no count cap), in-flight reaches capacity, the deadline (epoch seconds, UTC) passes, or measured spend (`money.spent`, a delta from `money.baseline`) reaches `money.freeze_at`; a money cap needs a measurement no older than one lease. A reading that goes down or cannot be read sets `money.inconsistent_at`: the meter is `SPEND_UNMEASURABLE` (no new item, no new wake) until the principal's `rebaseline_spend`, which keeps `money.spent` (baseline = reading − spent). A new holder's first reading re-baselines the same way on its own ledger |
 | `heartbeat` | the holder's own scheduled wakeup `{transport, job_ref, armed_at, fires_at, bound_target}`; armed at most half a lease ahead, consumed by the tick it produces |
 | `stop` | `null` while running; `{kind: cutoff \| principal_stop \| principal_revoke, by, reason, at, in_flight_left}` |
 
