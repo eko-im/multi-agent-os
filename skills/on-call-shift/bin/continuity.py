@@ -438,3 +438,6 @@ def _budget_view(budget):
             "money": None if not money else {k: money[k] for k in (
                 "currency", "limit", "freeze_at", "spent", "measured_at", "inconsistent_at",
                 "read_failed_at")}}
+
+
+se.guard_now(globals())

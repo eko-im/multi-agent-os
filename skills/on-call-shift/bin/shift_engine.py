@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import copy
 import datetime
+import functools
+import inspect
 import json
 import math
 import os
@@ -84,6 +86,39 @@ def _number(value, field, *, count=False):
     if not number.is_integer():
         raise ShiftError("BAD_BUDGET", f"{field}: a whole number")
     return value if isinstance(value, int) else int(number)
+
+
+def _check_now(now):
+    """`now` is epoch seconds as a finite int or float: a boolean, a string (an ISO date too),
+    None, NaN or infinity is a contract error, raised before anything changes."""
+    if (isinstance(now, bool) or not isinstance(now, (int, float))
+            or not math.isfinite(now)):
+        raise ShiftError("BAD_NOW", f"epoch seconds as a finite number, not {now!r}")
+
+
+def guard_now(namespace):
+    """Wrap every public function of a module whose signature takes `now`, so `now` is
+    validated (BAD_NOW) before its body runs and before any mutation. Called at the end of
+    each engine module; `wrapper.checks_now` marks the guarded ones for the tests."""
+    for name, fn in list(namespace.items()):
+        if (name.startswith("_") or not inspect.isfunction(fn)
+                or fn.__module__ != namespace["__name__"] or getattr(fn, "checks_now", False)
+                or "now" not in inspect.signature(fn).parameters):
+            continue
+        namespace[name] = _now_checked(fn)
+
+
+def _now_checked(fn):
+    sig = inspect.signature(fn)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        if "now" in bound.arguments:  # a missing `now` stays Python's own TypeError
+            _check_now(bound.arguments["now"])
+        return fn(*args, **kwargs)
+    wrapper.checks_now = True
+    return wrapper
 
 
 def _utc(epoch_secs):
@@ -245,20 +280,79 @@ def save(state, path):
         raise
 
 
+def _iso_epoch(value):
+    """An ISO-8601 timestamp WITH an offset as epoch seconds (UTC), else None. A naive
+    timestamp is refused: its zone would be a guess."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.timestamp()
+
+
+def _legacy_terms(state):
+    """A v0.2.0 holder recorded the principal's money cap and deadline only in the log
+    (`usd_ledger_armed`). Returns (budget fields to promote, log entry) from the most recent
+    such event; the entry names what was skipped and why when nothing is promoted."""
+    events = [e for e in state.get("log") or []
+              if isinstance(e, dict) and e.get("event") == "usd_ledger_armed"]
+    if not events:
+        return None, None
+    latest = events[-1]
+    skipped = {"at": latest.get("at"), "event": "legacy_budget_not_promoted",
+               "source_event": "usd_ledger_armed"}
+    deadline = _iso_epoch(latest.get("until"))
+    if deadline is None:
+        return None, dict(skipped, reason="until: an ISO-8601 timestamp with an offset",
+                          value=latest.get("until"))
+    try:
+        limit = _number(latest.get("cap_delta_usd"), "cap_delta_usd")
+        baseline = _number(latest.get("baseline_usd"), "baseline_usd")
+        freeze_at = (limit if latest.get("freeze_at_delta_usd") is None
+                     else _number(latest["freeze_at_delta_usd"], "freeze_at_delta_usd"))
+    except ShiftError as err:
+        return None, dict(skipped, reason=str(err))
+    if deadline >= DEADLINE_MAX_EPOCH_SECS or not 0 < freeze_at <= limit:
+        return None, dict(skipped, reason="BAD_BUDGET: deadline or 0 < freeze_at <= cap")
+    money = {"currency": "USD", "limit": limit, "freeze_at": freeze_at, "baseline": baseline,
+             "spent": 0.0, "measured_at": latest.get("at"), "source": latest.get("source"),
+             "inconsistent_at": None, "read_failed_at": None}
+    return ({"deadline": deadline, "money": money},
+            {"at": latest.get("at"), "event": "legacy_budget_promoted",
+             "source_event": "usd_ledger_armed", "deadline_utc": _utc(deadline),
+             "cap_delta_usd": limit, "baseline_usd": baseline})
+
+
 def migrate(state):
     """Bring a state@1 (v0.2.0) file to state@2: additive and idempotent. Anything that is
-    not an on-call-shift state of a known schema is refused, never migrated."""
+    not an on-call-shift state of a known schema is refused, never migrated. A state@1 whose
+    budget carries no deadline and no money gets them from its most recent `usd_ledger_armed`
+    log event (deadline = `until`, an ISO-8601 timestamp with an offset, as epoch seconds UTC;
+    money = the USD cap as a delta from `baseline_usd`); an explicit budget field is never
+    overwritten, and an event that cannot be promoted is logged, never guessed."""
     if (not isinstance(state, dict)
             or state.get("schema") not in (SCHEMA,) + LEGACY_SCHEMAS
             or not isinstance(state.get("budget"), dict)):
         raise ShiftError("SCHEMA_MISMATCH", str(state.get("schema") if isinstance(state, dict)
                                                 else type(state).__name__))
+    budget = state["budget"]
+    if (state["schema"] in LEGACY_SCHEMAS and budget.get("deadline") is None
+            and budget.get("money") is None):
+        promoted, entry = _legacy_terms(state)
+        if promoted:
+            budget.update(promoted)
+        if entry:
+            state["log"].append(entry)
     state["schema"] = SCHEMA
-    state["budget"].setdefault("money", None)
-    state["budget"].setdefault("deadline", None)
-    if isinstance(state["budget"]["money"], dict):
-        state["budget"]["money"].setdefault("inconsistent_at", None)
-        state["budget"]["money"].setdefault("read_failed_at", None)
+    budget.setdefault("money", None)
+    budget.setdefault("deadline", None)
+    if isinstance(budget["money"], dict):
+        budget["money"].setdefault("inconsistent_at", None)
+        budget["money"].setdefault("read_failed_at", None)
     state.setdefault("heartbeat", _heartbeat(None))
     state.setdefault("stop", None)
     return state
@@ -1482,3 +1576,6 @@ def take_over(state, claimant, now, nonce=None):
 
 def snapshot(state):
     return copy.deepcopy(state)
+
+
+guard_now(globals())

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `on-call-shift` 0.3.1: legacy deadline migrated; invalid `now` refused (#619)
+
+- `migrate()` (used by `load()` and `load_checked()`) promotes a v0.2.0 (`state@1`) money cap and deadline that were recorded only in the log: from the most recent `usd_ledger_armed` event, `until` (ISO-8601 with an offset) becomes `budget.deadline` in epoch seconds, UTC, and `cap_delta_usd` / `baseline_usd` / `freeze_at_delta_usd` become a USD `budget.money` delta. An explicit `deadline` or `money` is never overwritten; a malformed or naive `until`, or a missing or non-numeric field, promotes nothing and appends `legacy_budget_not_promoted` naming what was skipped. The incident's own `night-20261125` state file (fixture `tests/fixtures/night-20261125-state-v1.json`) now reaches `close_at_cutoff` and ends `STOPPED` with `stop.kind=cutoff`, instead of `NOT_AT_CUTOFF`.
+- Every public API that takes `now` (engine, `continuity`, `watchdog`) raises `ShiftError("BAD_NOW")` for a boolean, a non-number (an ISO string too), `None`, NaN or ±infinity, before any change; previously an ISO string raised a raw `TypeError` mid-transition.
+- Scenarios 126–127 (`tests/test_shift_engine.py`).
+
 ### Fixed — `on-call-shift` 0.3.0: the shift now works (postmortem night-20261125)
 
 - Incident: a v0.2.0 night shift (explicit backlog, US$ 50 cap, 09:00 deadline, OMP host) opened, reported `DEGRADED`, deferred all work to "your next turn" and delivered 0 items in 11 h; its 1 h lease lapsed and the state stayed `ACTIVE`. Root causes, each confirmed against source: no work loop; OMP's real wakeup (a pending background job starts a follow-up turn) not modelled and the recovery text pointed to "the next human turn"; no engine path from a given backlog to in-flight work (`adopt` raised `BACKLOG_GIVEN`); `budget` counted adoptions only; the holder could not close at the cutoff; intake types friction; a per-turn `postflight` would have frozen admission for good.

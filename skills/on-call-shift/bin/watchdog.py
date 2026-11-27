@@ -139,3 +139,6 @@ def terminate_disposable(record, *, timeout=5):
     return {"terminated": True, "reason": None,
             "identity_check": "process-table" if now_id else "own-child-handle-only",
             "receipt": {"pid": record["pid"]}}
+
+
+se.guard_now(globals())
