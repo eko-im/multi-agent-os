@@ -9,7 +9,7 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
 |---|---|---|
 | Tested | yes | synthetic scenarios, no network, no model, no timer |
 | Watchdog installed | no | no native supervisor with proven identity, authorization and revocation; installing one would add a second writer/signaller with no owner |
-| Wakeup live | no | without a bound notification transport (`NO_BOUND_NOTIFICATION_TRANSPORT`) nothing can wake an ended session; an existing timer only observes |
+| Wakeup live | OMP only | a background job pending at the end of a turn starts a follow-up turn in the holder's session; the armed heartbeat is that job. Other hosts: not verified, so `DEGRADED`; an existing timer only observes |
 
 ## Autosave
 
@@ -19,7 +19,14 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
 - A failed save rolls the in-memory state back to before the transition and closes admission
   (`PERSISTENCE_FAILED`). It is never reported as saved. `reopen_admission` reopens only after a
   save that reads back correctly.
-- `load_checked` loads the newest revision whose hash matches, else `.prev`, else fails.
+- `load_checked` loads the newest revision whose hash matches, else `.prev`, else fails. A
+  `state@1` (v0.2.0) file is migrated and saved at once (`migrated`; the legacy bytes stay in
+  `.prev` until the next save), so the sidecar hash matches the state returned and the next
+  preflight sees no `DIVERGED`; a failed save there is `migrated_unsaved` with admission frozen
+  (`PERSISTENCE_FAILED`). A legacy `.prev` reached by the fallback is saved the same way
+  (`previous_migrated` / `previous_migrated_unsaved`), keeping its trusted bytes as `.prev`. A
+  same-schema `previous` is returned unsaved: autosave it before passing a saved hash to
+  preflight.
 - Children keep their own checkpoint (`checkpoint_child`); the parent stores only a pointer, the
   hash and whether it was received. A child save failure closes the parent's admission.
 - Recovery (`recover_child`): the parent holder (lease + current generation) reads the new child
@@ -56,11 +63,17 @@ than the caller's threshold. `write_handoff` writes it to a stable path and keep
 Preflight at every wake checks identity and generation, lease time left, budget, in-flight
 work, the clock (time going backwards), the saved hash against the current state, progress
 since the last preflight, the watchdog greeting, and host metrics only if the adapter supplies
-them (else `unknown`). It returns one graded action: `observe` → `reduce` → `freeze` →
-`save` → `propose_handoff`. It never diagnoses mental states.
+them (else `unknown`), the cutoff and whether a heartbeat is armed. It returns one graded
+action: `observe` → `reduce` → `freeze` → `save` → `close_at_cutoff` → `propose_handoff`. It
+never diagnoses mental states.
 
-Postflight closes admission, reports hash, cursor, in-flight work, gates, events and UDV, and
-hands off only on the successor's ACK; without one the turn ends without relief, and says so.
+Postflight closes admission (`POSTFLIGHT`), reports hash, cursor, in-flight work, gates, events
+and UDV, and hands off only on the successor's ACK; without one the turn ends without relief,
+and says so. Run it only on the last turn (cutoff, handoff, or a host with no wakeup): a
+holder that wakes again lifts its own `POSTFLIGHT` freeze with `reopen_admission` (its
+`select_next` answers `reopen_admission`), which never lifts a cutoff or any other freeze. A
+later safety freeze (spend, cutoff) replaces `POSTFLIGHT`, so neither that reopen nor a relief
+can lift it; relief reopens only a `POSTFLIGHT` freeze.
 
 ## Watchdog (logic only)
 

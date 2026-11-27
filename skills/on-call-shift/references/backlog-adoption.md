@@ -1,8 +1,10 @@
 # on-call-shift — backlog adoption
 
 Adoption runs only when the shift was opened without a backlog, or every item of the given
-backlog has been accepted (`mark_backlog_exhausted`). When an explicitly assigned backlog is
-finished, reconcile again; do not fabricate tickets to stay busy.
+backlog has been accepted (`mark_backlog_exhausted`). A given backlog is worked with
+`start_item`: normalize it as one `operator-backlog` connector (`normalize_backlog`) and start
+its items with the same gate, owner, in-flight, budget and capacity checks as `adopt`. When an
+explicitly assigned backlog is finished, reconcile again; do not fabricate tickets to stay busy.
 
 ## 1. Tracker connectors
 

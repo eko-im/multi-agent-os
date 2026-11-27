@@ -6,7 +6,9 @@
   "adopted": {},
   "backlog": null,
   "budget": {
+    "deadline": null,
     "limit": 5,
+    "money": null,
     "spent": 0
   },
   "capacity": 2,
@@ -36,11 +38,18 @@
   "gates": {},
   "generation": 1,
   "handoff": null,
+  "heartbeat": {
+    "armed_at": null,
+    "bound_target": null,
+    "fires_at": null,
+    "job_ref": null,
+    "transport": null
+  },
   "holder": "agent-1",
   "in_flight": [],
   "incident": null,
   "lease": {
-    "expires_at": 1600,
+    "expires_at": 1601,
     "holder": "agent-1",
     "lease_secs": 600
   },
@@ -64,10 +73,11 @@
   ],
   "reopened": {},
   "save_seq": 0,
-  "schema": "on-call-shift/state@1",
+  "schema": "on-call-shift/state@2",
   "scope": "repo/x + team B",
   "shift_id": "shift-1",
   "status": "ACTIVE",
+  "stop": null,
   "successor_policy": null,
   "supervisor_target": "supervisor://shift-desk-1",
   "team": {
@@ -79,7 +89,7 @@
     "bound_target": null,
     "mode": "DEGRADED",
     "reason": "NO_BOUND_WAKEUP_TRANSPORT",
-    "recovery": "bind a host wakeup transport to the exact supervisor, or poll on the next human or scheduled turn; report the gap, do not claim coverage",
+    "recovery": "arm the host's self-wakeup for the holder (arm_heartbeat, at most half a lease ahead) and bind it to the exact supervisor; with no host wakeup, report what is in flight and that the shift is unobserved until the next turn; never claim coverage",
     "transport": null
   }
 }

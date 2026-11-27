@@ -5,9 +5,14 @@ Executable form: `../bin/shift_engine.py`. When this text and the engine disagre
 
 ## 1. Persisted state
 
-One JSON document per shift (`../templates/shift-state.schema.json`). Write it atomically
-(temporary file, fsync, rename) before and after every transition, so a crash leaves the last
-good state.
+One JSON document per shift (`../templates/shift-state.schema.json`, schema id
+`on-call-shift/state@2`; a `state@1` file from v0.2.0 is migrated on load). A v0.2.0 engine's
+`load()` refuses `state@2`, but its `load_checked()` checks no schema and resumes it: with a
+count cap it runs with the money cap and the deadline silently ignored (fail-open); without one,
+`select_next` raises. After a rollback to v0.2.0, never resume a `state@2` file: open a new
+shift (copy the `state@1` file before upgrading; `.prev` keeps the legacy bytes only until the
+next save). Write it atomically (temporary file, fsync, rename) before and after every
+transition, so a crash leaves the last good state.
 
 | Field | Rule |
 |---|---|
@@ -24,14 +29,17 @@ good state.
 | `successor_policy`, `continuity`, `consumed_takeovers` | successor armed by the principal for one generation (`armed_generation`, `nonce`), consumed by its takeover; `continuity.mode` is `DEGRADED` without one, `uninterrupted_claim` is always `false` |
 | `deliveries` | per item: `technical_verified`, `delivered_to_recipient`, `satisfaction` (`confirmed`, `refused`, `unknown`), `attempts`, `result_ref`, `reservations`, `reopened_as` |
 | `reopened`, `parked` | reopened intents linked to the original result; operations parked by blast radius |
-| `budget`, `capacity` | adoption stops when spent reaches the limit or in-flight reaches capacity |
+| `budget`, `capacity` | `{limit, spent, money, deadline}`: no new item when the count reaches `limit` (a whole number; null = no count cap), in-flight reaches capacity, the deadline (epoch seconds, UTC) passes, or measured spend (`money.spent`, a delta from `money.baseline`) reaches `money.freeze_at`; a money cap needs a deadline and a measurement no older than one lease. A reading that contradicts the meter (goes down, NaN, infinite, negative, not a number) sets `money.inconsistent_at`: the meter is `SPEND_UNMEASURABLE` until the principal's `rebaseline_spend`, which keeps `money.spent` (baseline = reading − spent). A read that fails (`None`) sets `money.read_failed_at` (the first failure of a run): `SPEND_NOT_READ` until the next good reading, never sticky. Either way no new item starts and the holder keeps a tick-only heartbeat chain, so the lease holds and the deadline close runs, for at most two leases from the first flag; then `may_yield` answers `METER_FLAGGED_TOO_LONG`, nothing is re-armed and the lease lapses. A new holder's first reading re-baselines on its own ledger, keeping the spend counted; the outgoing holder takes a final reading before `propose_handoff` |
+| `heartbeat` | the holder's own scheduled wakeup `{transport, job_ref, armed_at, fires_at, bound_target}`; armed at most half a lease ahead, consumed by the tick it produces |
+| `stop` | `null` while running; `{kind: cutoff \| principal_stop \| principal_revoke, by, reason, at, in_flight_left}` |
 
 ## 2. Lease
 
 - Only the lease holder may mutate state, and every mutator also requires the current
   `generation` (fencing token); a missing or older one is refused before any change.
 - Renewal requires a valid lease; an expired lease cannot be renewed by its old holder. A new
-  holder comes only through relief or a fresh shift opened by the principal.
+  holder comes only through relief or a fresh shift opened by the principal. A new tick and
+  arming a heartbeat renew the lease (the holder is acting); a replayed tick does not.
 - Concurrency: two writers compete on the lease, not on the work. The loser reads state and
   stops.
 
@@ -53,10 +61,12 @@ Before any outbound signal, `authorize_send` checks the lease and that the targe
 
 ### DEGRADED
 When the runtime does not expose a wakeup transport bound to the exact supervisor, the shift
-reports `DEGRADED` with a reason (`NO_BOUND_WAKEUP_TRANSPORT` or `NO_BOUND_TARGET`) and a
-recovery route (bind a transport, or pick up on the next human or scheduled turn). The shift
-then never claims continuous coverage. It never starts sessions or agents from a timer, and
-never keeps a model busy to simulate presence.
+reports `DEGRADED` with a reason (`NO_BOUND_WAKEUP_TRANSPORT`, `NO_BOUND_TARGET` or
+`BOUND_TARGET_MISMATCH`) and a recovery route: arm the host's self-wakeup for the holder
+(`arm_heartbeat`; OMP: a background job) and bind it to the exact supervisor, or, with no host
+wakeup, report what is in flight and that the shift is unobserved until the next turn. The
+shift never claims continuous coverage, never starts sessions or agents from a timer, and
+never keeps a model busy to simulate presence: a heartbeat fires at most every half lease.
 
 ## 4. Events and ACK
 
@@ -77,6 +87,10 @@ heartbeat is not an ACK.
 4. On timeout without ACK the outgoing holder keeps the shift (`ACTIVE`). Silence is not relief.
 5. Only the principal may stop (`STOPPED`) or revoke (`REVOKED`) without relief. The record
    lists what was left in flight so the next shift can pick it up.
+6. At the principal's own cutoff (the deadline or the spend threshold given at intake) the
+   holder closes with `close_at_cutoff`: `STOPPED`, `stop.kind=cutoff`, the reason and the
+   in-flight list. It may close after its lease lapsed, never before the cutoff, and never as
+   a stale or another holder.
 
 Use `postflight`/`signoff` to write the continuation seed that the successor reads; the seed is
 the content of the handoff, the ACK is the proof it was received.
