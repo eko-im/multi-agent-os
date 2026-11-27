@@ -960,8 +960,9 @@ class WorkLoopReviewFindings(unittest.TestCase):
     def test_106_postflight_never_masks_an_earlier_freeze(self):
         state = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
                               backlog=None, capacity=2,
-                              budget={"currency": "USD", "amount": 50}, holder="agent-1",
-                              supervisor_target=SUP, now=1000, lease_secs=LEASE)
+                              budget={"currency": "USD", "amount": 50, "deadline": 10 ** 6},
+                              holder="agent-1", supervisor_target=SUP, now=1000,
+                              lease_secs=LEASE)
         se.record_spend(state, "agent-1", 10.0, 1001, generation=1)
         se.record_spend(state, "agent-1", 5.0, 1002, generation=1)  # goes down
         co.postflight(state, "agent-1", 1003, generation=1)
@@ -996,8 +997,9 @@ class VerdictFindings(unittest.TestCase):
     def money_shift(self):
         state = se.open_shift(shift_id="shift-1", principal="owner-1", scope="repo/x",
                               backlog=None, capacity=2,
-                              budget={"currency": "USD", "amount": 50}, holder="agent-1",
-                              supervisor_target=SUP, now=1000, lease_secs=LEASE)
+                              budget={"currency": "USD", "amount": 50, "deadline": 10 ** 6},
+                              holder="agent-1", supervisor_target=SUP, now=1000,
+                              lease_secs=LEASE)
         se.record_spend(state, "agent-1", 10.0, 1001, generation=1)  # baseline
         se.record_spend(state, "agent-1", 12.0, 1001, generation=1)  # spent 2
         return state

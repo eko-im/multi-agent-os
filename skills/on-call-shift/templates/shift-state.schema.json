@@ -184,7 +184,24 @@
             "null"
           ],
           "exclusiveMaximum": 100000000000,
-          "description": "epoch SECONDS, UTC (a millisecond epoch is refused); at or after it no new work starts and the holder closes at cutoff; the opening log echoes it as deadline_utc"
+          "description": "epoch SECONDS, UTC (a millisecond epoch is refused); required (a number) whenever money is set; at or after it no new work starts and the holder closes at cutoff; the opening log echoes it as deadline_utc"
+        }
+      },
+      "if": {
+        "required": [
+          "money"
+        ],
+        "properties": {
+          "money": {
+            "type": "object"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "deadline": {
+            "type": "number"
+          }
         }
       }
     },

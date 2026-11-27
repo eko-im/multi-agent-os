@@ -27,6 +27,10 @@ SCHEMA = "on-call-shift/state@2"
 LEGACY_SCHEMAS = ("on-call-shift/state@1",)
 # A deadline at or above this is a millisecond epoch, not seconds (year 5138 in seconds).
 DEADLINE_MAX_EPOCH_SECS = 1e11
+# A money meter flagged SPEND_UNMEASURABLE or SPEND_NOT_READ keeps a tick-only heartbeat chain
+# for at most this many leases from the first flag; then may_yield arms nothing
+# (METER_FLAGGED_TOO_LONG), so unmetered wakes are bounded even without a deadline.
+FLAGGED_METER_MAX_LEASES = 2
 
 # Operator mantras used only when the operator gave none. An explicit list is kept verbatim.
 DEFAULT_MANTRAS = (
@@ -64,15 +68,22 @@ def _check_scope(scope):
 
 def _number(value, field, *, count=False):
     """A finite number from the intake, or a contract error naming the field (never a raw
-    ValueError, TypeError, OverflowError or NaN)."""
+    ValueError, TypeError, OverflowError or NaN). A boolean is not a number here, and a count
+    must be a whole number: 1.9 is refused, never truncated to 1."""
+    if isinstance(value, bool):
+        raise ShiftError("BAD_BUDGET", field)
     try:
-        number = int(value) if count else float(value)
+        number = float(value)
         finite = math.isfinite(number)  # an int too large for a float overflows here
     except (TypeError, ValueError, OverflowError):
         raise ShiftError("BAD_BUDGET", field) from None
     if not finite or number < 0:
         raise ShiftError("BAD_BUDGET", field)
-    return number
+    if not count:
+        return number
+    if not number.is_integer():
+        raise ShiftError("BAD_BUDGET", f"{field}: a whole number")
+    return value if isinstance(value, int) else int(number)
 
 
 def _utc(epoch_secs):
@@ -82,20 +93,15 @@ def _utc(epoch_secs):
 
 def _new_budget(budget, now):
     """An int is a count of adoptions (the v0.2 shape). A dict carries the principal's own
-    terms, any of: "adoptions"; a money cap ("currency", "amount", optional "freeze_at" below
-    it, optional "baseline" measured at open, optional "source"); a "deadline" in epoch
-    seconds, UTC (a millisecond epoch is refused).
+    terms, any of: "adoptions" (a whole number); a money cap ("currency", "amount", optional
+    "freeze_at" below it, optional "baseline" measured at open, optional "source"), which
+    needs a "deadline"; a "deadline" in epoch seconds, UTC (a millisecond epoch is refused).
     Money is measured as a delta from the baseline, never assumed. Nothing is guessed."""
     if not isinstance(budget, dict):
         if budget is None:
             raise ShiftError("MISSING_FIELD", "budget")
-        try:
-            limit = int(budget)
-        except (TypeError, ValueError, OverflowError):
-            raise ShiftError("MISSING_FIELD", "budget") from None
-        if limit < 0:
-            raise ShiftError("MISSING_FIELD", "budget")
-        return {"limit": limit, "spent": 0, "money": None, "deadline": None}
+        return {"limit": _number(budget, "budget", count=True), "spent": 0, "money": None,
+                "deadline": None}
     adoptions, deadline, money = budget.get("adoptions"), budget.get("deadline"), None
     if adoptions is not None:
         adoptions = _number(adoptions, "adoptions", count=True)
@@ -129,6 +135,9 @@ def _new_budget(budget, now):
                  "read_failed_at": None}
     if adoptions is None and money is None and deadline is None:
         raise ShiftError("MISSING_FIELD", "budget")
+    if money and deadline is None:
+        # bounds every wake the shift can pay for, including a tick-only chain
+        raise ShiftError("MISSING_FIELD", "budget.deadline: a money cap needs a deadline")
     return {"limit": adoptions, "spent": 0,
             "money": money, "deadline": deadline}
 
@@ -434,8 +443,10 @@ def _record_spend(state, measured_total, now, source=None):
         return {"recorded": False, "reason": "SPEND_UNMEASURABLE", "spent": money["spent"]}
     if measured_total is None:
         # the ledger could not be read: no measurement, nothing contradicted. No new item
-        # starts until the next good reading (SPEND_NOT_READ); it never sticks.
-        money["read_failed_at"] = now
+        # starts until the next good reading (SPEND_NOT_READ); it never sticks. The first
+        # failure of a run is kept, so may_yield can bound the tick-only chain from it.
+        if money["read_failed_at"] is None:
+            money["read_failed_at"] = now
         return {"recorded": False, "reason": "SPEND_NOT_READ", "spent": money["spent"]}
     total = _reading(measured_total)
     if not math.isfinite(total) or total < 0:
@@ -559,6 +570,16 @@ def arm_heartbeat(state, actor, now, *, generation, transport, job_ref, fires_at
     return state
 
 
+def _flagged_since(state, block):
+    """When the meter was first flagged (SPEND_UNMEASURABLE or SPEND_NOT_READ), else None.
+    Both stamps clear only on a good reading or a rebaseline, so the earlier one starts the
+    unbroken flagged run."""
+    if block not in ("SPEND_UNMEASURABLE", "SPEND_NOT_READ"):
+        return None
+    money = state["budget"]["money"]
+    return min(t for t in (money["inconsistent_at"], money["read_failed_at"]) if t is not None)
+
+
 def may_yield(state, actor, now, *, generation, eligible):
     """The work loop's exit gate (read-only). `eligible`: select_next just offered an item to
     start or adopt. The holder ends its turn only on {"yield": True}; otherwise it does `next`
@@ -566,8 +587,10 @@ def may_yield(state, actor, now, *, generation, eligible):
     only stale never blocks a yield while a heartbeat is armed: the wake re-measures. A meter
     that contradicted itself (SPEND_UNMEASURABLE) or a read that failed (SPEND_NOT_READ) never
     dispatches and is never read again in the same turn: the holder keeps a tick-only
-    heartbeat chain, so the lease never lapses, the deadline close still runs and the
-    principal's rebaseline_spend (or the next good reading) resumes work."""
+    heartbeat chain, so the lease holds, the deadline close still runs and the principal's
+    rebaseline_spend (or the next good reading) resumes work. The chain is bounded: after
+    FLAGGED_METER_MAX_LEASES leases flagged the answer is METER_FLAGGED_TOO_LONG
+    (report_degraded, nothing re-armed), so the lease lapses unless the principal acts."""
     if generation is None:
         raise ShiftError("GENERATION_REQUIRED", actor)
     if state["status"] not in (ACTIVE, HANDOFF_PENDING):
@@ -580,6 +603,13 @@ def may_yield(state, actor, now, *, generation, eligible):
     if not lease_valid(state, actor, now):
         return {"yield": True, "reason": "LEASE_EXPIRED", "next": "report_degraded"}
     unmeasured = _spend_block(state, now)
+    since = _flagged_since(state, unmeasured)
+    bound = FLAGGED_METER_MAX_LEASES * state["lease"]["lease_secs"]
+    if since is not None and now - since >= bound:
+        # unmetered wakes end here: report, arm nothing; the next wake is the principal's
+        return {"yield": True, "reason": "METER_FLAGGED_TOO_LONG", "next": "report_degraded",
+                "flag": unmeasured, "since": since,
+                "lease_expires_at": state["lease"]["expires_at"]}
     remeasure = unmeasured in ("SPEND_NOT_MEASURED", "SPEND_MEASUREMENT_STALE")
     if eligible and not unmeasured:
         return {"yield": False, "reason": "ELIGIBLE_WORK", "next": "dispatch"}

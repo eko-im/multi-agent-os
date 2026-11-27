@@ -57,7 +57,7 @@ irreversible actions · cross-org · spend) is a hard gate: wait and report, nev
 | `scope` | accounts, organizations, repos and trackers the shift may touch (one string or a list) |
 | `backlog` | a reference to the principal's explicit list (path#section, URL, query); its items start with `start_item`. `null` only when no list was given (then adoption rules apply) |
 | `capacity` | maximum items in flight at once |
-| `budget` | the principal's terms: a count of items (`adoptions`), a money cap (`currency`, `amount`, optional `freeze_at` and `baseline`) measured as a delta from a baseline, and/or a `deadline` in epoch seconds, UTC (a millisecond epoch is refused; the opening log echoes it as `deadline_utc`); a bare integer is a count of items |
+| `budget` | the principal's terms: a count of items (`adoptions`, a whole number), a money cap (`currency`, `amount`, optional `freeze_at` and `baseline`) measured as a delta from a baseline, which needs a `deadline`, and/or a `deadline` in epoch seconds, UTC (a millisecond epoch is refused; the opening log echoes it as `deadline_utc`); a bare whole number is a count of items. A fractional or boolean count is refused (`BAD_BUDGET`), never truncated |
 | `holder` | the one agent or person holding the lease |
 | `supervisor_target` | the exact address that a notification or wakeup must reach |
 | `capabilities` | declared by the host adapter, not chosen by the principal: the host's self-wakeup. OMP: `{"heartbeat_transport": "omp:background-job"}`. Omit it only on a host with no self-wakeup; the shift is then `DEGRADED` |
@@ -99,18 +99,20 @@ its lease lapsed after one. The holder runs this loop; `may_yield` is its only e
    |---|---|
    | `dispatch` | start the offered item; ask again |
    | `record_spend` | measure the money ledger; ask again. Pass `None` when it cannot be read: `SPEND_NOT_READ` (no new item until the next good reading) |
-   | `arm_heartbeat` | arm the host self-wakeup to fire by `fire_by` (at most half a lease ahead, never after the deadline: `HEARTBEAT_AFTER_DEADLINE`), record it with `arm_heartbeat`, ask again. With reason `SPEND_UNMEASURABLE` or `SPEND_NOT_READ` the chain is tick-only: each wake runs `apply_tick` and dispatches nothing (on `SPEND_NOT_READ` it reads the ledger again), so the lease holds and the deadline close still runs |
+   | `arm_heartbeat` | arm the host self-wakeup to fire by `fire_by` (at most half a lease ahead, never after the deadline: `HEARTBEAT_AFTER_DEADLINE`), record it with `arm_heartbeat`, ask again. With reason `SPEND_UNMEASURABLE` or `SPEND_NOT_READ` the chain is tick-only: each wake runs `apply_tick` and dispatches nothing (on `SPEND_NOT_READ` it reads the ledger again), so the lease holds and the deadline close still runs, for at most two leases from the first flag (then `METER_FLAGGED_TOO_LONG`) |
    | `close_at_cutoff` | `close_at_cutoff`, report what is left in flight, end the turn |
    | `postflight` (`NO_HOST_WAKEUP`) | on OMP this means `capabilities` was omitted at open: arm the heartbeat anyway (`arm_heartbeat` with `transport="omp:background-job"`, by `fire_by`) and ask again, never postflight. On a host with no self-wakeup: `postflight`; report DEGRADED, unobserved until the next turn, with the in-flight list |
-   | `report_degraded` | `SPEND_UNMEASURABLE` (a tick-only heartbeat is armed): the meter contradicted itself (went down, NaN, negative, not a number); no new item until the principal's `rebaseline_spend` (it keeps the spend counted); report it with the in-flight list and end the turn; the next wake ticks and asks again. The holder never supplies the principal's name: `rebaseline_spend`, `stop_shift` and `arm_successor` run only on the principal's explicit order. `LEASE_EXPIRED`: report DEGRADED, end the turn |
+   | `report_degraded` | `SPEND_UNMEASURABLE` (a tick-only heartbeat is armed): the meter contradicted itself (went down, NaN, negative, not a number); no new item until the principal's `rebaseline_spend` (it keeps the spend counted); report it with the in-flight list and end the turn; the next wake ticks and asks again. `METER_FLAGGED_TOO_LONG`: the meter has been flagged (`SPEND_UNMEASURABLE` or `SPEND_NOT_READ`) for two leases; report it with the in-flight list, arm nothing and end the turn: the lease lapses on purpose, so unmetered wakes stop. Then only the principal restarts work (`stop_shift` and a new shift, or a pre-armed successor's `take_over`); an overdue wake past the deadline still closes (`close_at_cutoff` needs no lease). The holder never supplies the principal's name: `rebaseline_spend`, `stop_shift` and `arm_successor` run only on the principal's explicit order. `LEASE_EXPIRED`: report DEGRADED, end the turn |
    | none (`yield: true`) | end the turn: `HEARTBEAT_ARMED`, `SHIFT_ENDED` or `FENCED` |
 
    Never end a turn while admission is open, budget and time remain and an item is eligible.
-   Never end a turn with the shift `ACTIVE` and no wakeup armed on a host that has one.
+   Never end a turn with the shift `ACTIVE` and no wakeup armed on a host that has one, except
+   on `METER_FLAGGED_TOO_LONG`: a flagged meter's unmetered wakes end there.
 4. **A heartbeat is not busy-work.** One armed at a time, at most every half lease; a wake with
    nothing eligible only ticks, re-measures and re-arms. Its cost counts against the money
-   budget. It resumes the holder's own session; it never launches sessions or agents and never
-   works around caps.
+   budget, and a money cap needs a deadline, so every paid wake is bounded; a flagged meter's
+   tick-only chain lasts at most two leases (`FLAGGED_METER_MAX_LEASES`). It resumes the
+   holder's own session; it never launches sessions or agents and never works around caps.
 5. **Cutoff.** At the deadline or the spend threshold no new item starts and the holder closes
    (`close_at_cutoff`: `STOPPED`, `stop.kind=cutoff`, reason, in-flight list), even after its
    lease lapsed. Ending earlier stays the principal's (`stop_shift`). Set `freeze_at` below
@@ -369,7 +371,7 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 83. A valid recovery after restart reopens once and keeps the item.
 84. The save counter never goes back; an equal count is not newer.
 
-Work loop (postmortem night-20261125; `test_92`–`test_122`; 112–114 and 121 are in `tests/test_continuity.py`):
+Work loop (postmortem night-20261125; `test_92`–`test_125`; 112–114 and 121 are in `tests/test_continuity.py`):
 
 92. Items of a given list start in flight (`start_item`) with the adopt checks; adoption stays closed.
 93. A money cap is a measured delta from a baseline; no fresh measurement → no new work; admission freezes at the threshold; a reading that goes down freezes it.
@@ -398,10 +400,13 @@ Work loop (postmortem night-20261125; `test_92`–`test_122`; 112–114 and 121 
 116. The deadline is epoch seconds, UTC (a millisecond epoch is refused; the log echoes `deadline_utc`); the scenario ranges in this file are current.
 117. A tick whose ledger could not be read (`spend_total=None`) blocks new work at once (`SPEND_NOT_READ`) until the next good reading, never sticky; a wake that does not measure omits it.
 118. One unreadable read on the incident night does not halt it: the next good reading resumes the work and the holder closes at the deadline.
-119. A contradiction keeps a tick-only heartbeat chain: the lease never lapses and the holder closes at the deadline.
-120. The principal's `rebaseline_spend` mid-freeze resumes the work; the shift still closes at the deadline.
+119. A contradiction keeps a tick-only heartbeat chain for two leases (the lease holds meanwhile), then `METER_FLAGGED_TOO_LONG` arms nothing; an overdue wake past the deadline still closes.
+120. The principal's `rebaseline_spend` inside that window resumes the work; the shift closes at the deadline.
 121. A legacy `.prev` reached by the `load_checked` fallback is saved migrated (`previous_migrated`), keeping its trusted bytes as `.prev`.
 122. The holder's limits are written down: it never supplies the principal's name, takes a final `record_spend` before `propose_handoff`, and `start_item` trusts the list it is handed.
+123. A money cap needs a deadline (`MISSING_FIELD`, `budget.deadline`).
+124. A ledger that stays unreadable ends the tick-only chain two leases after its first failure (`METER_FLAGGED_TOO_LONG`, nothing re-armed, even with a heartbeat still armed).
+125. A count is a whole number: `1.9`, `2.5`, `True` or `"2.7"` is `BAD_BUDGET`, never truncated; `3.0` and `"4"` are whole.
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
@@ -427,7 +432,7 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
-| 0.3.0 | 2026-11-26 | Postmortem night-20261125 (v0.2.0 opened a shift and delivered 0 items in 11 h). Mandatory work loop with `may_yield` as the only exit; OMP host adapter (background job = wakeup, async `sleep` ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session); `start_item` for a given list; money budget measured as a delta plus deadline with automatic freeze; holder `close_at_cutoff` (`stop.kind=cutoff`); lease renewed on tick and on arming; one-call intake (scope list, typed backlog, budget dict); POSTFLIGHT freeze liftable on the next turn; `load`/`load_checked` migrate v0.2.0 files. Independent-verdict fixes: a spend reading that contradicts the meter (down, NaN, negative, not a number) makes it `SPEND_UNMEASURABLE` (sticky) until the principal's `rebaseline_spend`, which keeps the spend counted, and a new holder re-baselines on its own ledger; a failed read (`None`, on `record_spend` or `apply_tick`) is `SPEND_NOT_READ` until the next good reading; while either holds, a tick-only heartbeat chain keeps the lease and the deadline close; `capabilities` is an intake field; `HEARTBEAT_AFTER_DEADLINE`; a later safety freeze replaces `POSTFLIGHT` and relief lifts only `POSTFLIGHT`; `select_next` answers `reopen_admission`; `load_checked` saves a migrated file, including a legacy `.prev` it falls back to; schema id `state@2` (a v0.2.0 engine's `load()` refuses it); deadline in epoch seconds, UTC; the holder never supplies the principal's name. Scenarios 92–122. |
+| 0.3.0 | 2026-11-26 | Postmortem night-20261125 (v0.2.0 opened a shift and delivered 0 items in 11 h). Mandatory work loop with `may_yield` as the only exit; OMP host adapter (background job = wakeup, async `sleep` ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session); `start_item` for a given list; money budget measured as a delta plus deadline with automatic freeze; holder `close_at_cutoff` (`stop.kind=cutoff`); lease renewed on tick and on arming; one-call intake (scope list, typed backlog, budget dict); POSTFLIGHT freeze liftable on the next turn; `load`/`load_checked` migrate v0.2.0 files. Independent-verdict fixes: a spend reading that contradicts the meter (down, NaN, negative, not a number) makes it `SPEND_UNMEASURABLE` (sticky) until the principal's `rebaseline_spend`, which keeps the spend counted, and a new holder re-baselines on its own ledger; a failed read (`None`, on `record_spend` or `apply_tick`) is `SPEND_NOT_READ` until the next good reading; while either holds, a tick-only heartbeat chain keeps the lease and the deadline close, for at most two leases (`METER_FLAGGED_TOO_LONG`); a money cap needs a deadline; counts are whole numbers; `capabilities` is an intake field; `HEARTBEAT_AFTER_DEADLINE`; a later safety freeze replaces `POSTFLIGHT` and relief lifts only `POSTFLIGHT`; `select_next` answers `reopen_admission`; `load_checked` saves a migrated file, including a legacy `.prev` it falls back to; schema id `state@2` (a v0.2.0 engine's `load()` refuses it); deadline in epoch seconds, UTC; the holder never supplies the principal's name. Scenarios 92–125. |
 | 0.2.0 | 2026-11-23 | Continuity: autosave per transition (children too), handoff derived from the snapshot, preflight/postflight, diagnosis, a separate logic-only watchdog (nonce + ACK, timeout, one per scope, logical fencing, disposable-only stop). Conflict resolver. Judge fixes: holder never grants a human gate; every connector gate kept; delivery dedupe over all sent results; linked keys merge; digest echo. 72 numbered scenarios. Own team and own tools: admission, drain, idempotent retirement, shared resources parked. |
 | 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 46 numbered scenarios. |
 | 0.1.0 | 2026-11-23 | Genesis via `agentic-tool-forge`; name by `anima` (`on-call-shift`, runner-up `shift-handoff` rejected as covering only the end of a shift). Reference engine plus 23 acceptance scenarios (13 shift + UDV, blast radius, holder loss), stdlib only. |
