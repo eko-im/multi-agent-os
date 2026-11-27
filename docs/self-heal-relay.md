@@ -102,7 +102,7 @@ observed. **Only verified harnesses are in the default chain**; the rest run onl
 
 | Variable | Effect |
 |---|---|
-| `MAOS_SELFHEAL=0` | disable entirely (default `1`) |
+| `MAOS_SELFHEAL=0` | disable entirely (default `1`; `worktree-gate.sh` defaults to `0`: its relay is opt-in with `MAOS_SELFHEAL=1`) |
 | `MAOS_SELFHEAL_MODE` | `relay` (default) · `seed` |
 | `MAOS_SELFHEAL_TIER` | `propose` (default) · `apply` (ignored under `SHR_TIER_LOCK`) |
 | `MAOS_AI_HARNESS="claude codex"` | explicit chain — the only way to use an unverified harness |
@@ -158,7 +158,7 @@ observed. **Only verified harnesses are in the default chain**; the rest run onl
 | Script | Language | Block | Never relays |
 |---|---|---|---|
 | [`bin/kirocrew-extras`](../bin/kirocrew-extras) | bash | v1 (reference impl) | — |
-| [`plugin-scripts/governance/worktree-gate.sh`](../plugin-scripts/governance/worktree-gate.sh) | bash | v1 | `exit 2` (BLOCK), `exit 0` |
+| [`plugin-scripts/governance/worktree-gate.sh`](../plugin-scripts/governance/worktree-gate.sh) | bash | v1, relay **opt-in only** (`MAOS_SELFHEAL=1`); a fault on a git command exits `2` (fail closed) | `exit 2` (BLOCK), `exit 0` |
 | [`bin/work-compass-aggregate.py`](../bin/work-compass-aggregate.py) | python | v1 | any `SystemExit` |
 | [`bin/research-dossier-render.mjs`](../bin/research-dossier-render.mjs) | node | v1 | `exit 1` (GATE FAILURE) |
 
