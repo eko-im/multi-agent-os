@@ -3,6 +3,7 @@
 Run: python3 -m unittest discover -s skills/on-call-shift/tests -v
 Each test name starts with its scenario number from SKILL.md "Acceptance scenarios".
 """
+import copy
 import json
 import os
 import sys
@@ -1745,6 +1746,142 @@ class VerdictRound3(unittest.TestCase):
                               ({"adoptions": "4"}, 4), (5, 5), (0, 0)):
             got = night_shift(budget=budget)["budget"]["limit"]
             self.assertEqual((got, type(got)), (limit, int), repr(budget))
+
+
+def v1_state(*events, budget=None):
+    """A state@1 (v0.2.0) file whose money cap and deadline live only in the log."""
+    legacy = new_shift()
+    for key in ("heartbeat", "stop"):
+        legacy.pop(key, None)
+    legacy["schema"] = "on-call-shift/state@1"
+    legacy["budget"] = budget or {"limit": 5, "spent": 0}
+    legacy["log"].extend(events)
+    return legacy
+
+
+def armed(until, at=1100, **over):
+    event = {"at": at, "event": "usd_ledger_armed", "until": until, "cap_delta_usd": 50,
+             "baseline_usd": 149.15, "freeze_at_delta_usd": 40, "source": "ledger"}
+    event.update(over)
+    return event
+
+
+class Issue619(unittest.TestCase):
+    """eko-im/multi-agent-os#619: legacy deadline not migrated; a non-numeric `now`."""
+
+    def test_126_a_v1_deadline_in_the_log_is_promoted_never_guessed(self):
+        state = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00")))
+        self.assertEqual(state["budget"]["deadline"], 1795694400)  # 12:00Z, epoch seconds
+        money = state["budget"]["money"]
+        self.assertEqual({k: money[k] for k in ("currency", "limit", "baseline", "freeze_at",
+                                                "spent", "inconsistent_at", "read_failed_at")},
+                         {"currency": "USD", "limit": 50, "baseline": 149.15, "freeze_at": 40,
+                          "spent": 0, "inconsistent_at": None, "read_failed_at": None})
+        self.assertEqual(state["log"][-1]["event"], "legacy_budget_promoted")
+        self.assertEqual(state["log"][-1]["deadline_utc"], "2026-11-26T12:00:00Z")
+        self.assertEqual(se.migrate(copy.deepcopy(state)), state)  # idempotent
+        no_freeze = se.migrate(v1_state(armed("2026-11-26T09:00:00Z",
+                                              freeze_at_delta_usd=None)))
+        self.assertEqual(no_freeze["budget"]["money"]["freeze_at"], 50)
+        # several events: only the most recent one counts
+        latest = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00", at=1100),
+                                     armed("2026-11-26T07:00:00+00:00", at=1200,
+                                           cap_delta_usd=20, freeze_at_delta_usd=15,
+                                           baseline_usd=10)))
+        self.assertEqual(latest["budget"]["deadline"], 1795676400)
+        self.assertEqual((latest["budget"]["money"]["limit"],
+                          latest["budget"]["money"]["baseline"]), (20, 10))
+        # malformed, naive or incomplete: nothing promoted, the skip is logged and named
+        for event, why in ((armed("26/11/2026 09:00"), "until"),
+                           (armed("2026-11-26T09:00:00"), "until"),  # naive: zone unknown
+                           (armed(None), "until"),
+                           (armed("2026-11-26T09:00:00-03:00", cap_delta_usd=None),
+                            "cap_delta_usd"),
+                           (armed("2026-11-26T09:00:00-03:00", baseline_usd="x"),
+                            "baseline_usd")):
+            skipped = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00", at=1), event))
+            self.assertEqual((skipped["budget"]["deadline"], skipped["budget"]["money"]),
+                             (None, None), repr(event))
+            entry = skipped["log"][-1]
+            self.assertEqual((entry["event"], entry["source_event"]),
+                             ("legacy_budget_not_promoted", "usd_ledger_armed"))
+            self.assertIn(why, entry["reason"])
+        # an explicit budget field is never overwritten; only the missing one is promoted
+        explicit = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00"),
+                                       budget={"limit": 5, "spent": 0, "deadline": 5000}))
+        self.assertEqual(explicit["budget"]["deadline"], 5000)
+        self.assertEqual(explicit["budget"]["money"]["limit"], 50)
+        self.assertEqual((explicit["log"][-1]["promoted"], explicit["log"][-1]["kept"]),
+                         (["money"], ["deadline"]))
+        capped = {"currency": "EUR", "limit": 9, "freeze_at": 9, "baseline": 1, "spent": 0.0,
+                  "measured_at": 1, "source": None}
+        kept = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00"),
+                                   budget={"limit": 5, "spent": 0, "money": dict(capped)}))
+        self.assertEqual(kept["budget"]["deadline"], 1795694400)
+        self.assertEqual(kept["budget"]["money"]["currency"], "EUR")
+        both = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00"), budget={
+            "limit": 5, "spent": 0, "deadline": 5000, "money": dict(capped)}))
+        self.assertEqual(both["budget"]["deadline"], 5000)
+        self.assertNotIn("legacy_budget", both["log"][-1]["event"])
+        # a non-numeric `at` is not a measurement: the meter waits for a reading
+        odd_at = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00", at="yesterday")))
+        self.assertIsNone(odd_at["budget"]["money"]["measured_at"])
+        self.assertEqual(se._spend_block(odd_at, 2000), "SPEND_NOT_MEASURED")
+        plain = se.migrate(v1_state())  # no event: nothing to promote, nothing logged
+        self.assertEqual(plain["log"], new_shift()["log"])
+
+    def test_126b_the_incident_s_own_v1_file_closes_at_its_cutoff(self):
+        state = se.load(os.path.join(HERE, "fixtures", "night-20261125-state-v1.json"))
+        self.assertEqual(state["budget"]["deadline"], 1795694400)
+        with self.assertRaises(se.ShiftError) as err:  # never before the cutoff
+            se.close_at_cutoff(state, state["holder"], 1795694399, generation=1)
+        self.assertEqual(err.exception.code, "NOT_AT_CUTOFF")
+        out = se.close_at_cutoff(state, state["holder"], 1795695090, generation=1)
+        self.assertEqual(out["reason"], "DEADLINE_REACHED")
+        self.assertEqual((state["status"], state["stop"]["kind"]), (se.STOPPED, "cutoff"))
+
+    def test_127_a_bad_now_is_refused_before_any_change(self):
+        import continuity as co
+        import watchdog as wdg
+        import inspect
+        for module in (se, co, wdg):
+            for name, fn in inspect.getmembers(module, inspect.isfunction):
+                if (not name.startswith("_") and fn.__module__ == module.__name__
+                        and "now" in inspect.signature(fn).parameters):
+                    self.assertTrue(getattr(fn, "checks_now", False), f"{module.__name__}.{name}")
+        backlog = given_backlog()
+        calls = (
+            lambda s, now: se.apply_tick(s, "agent-1", "t-1", now, generation=1),
+            lambda s, now: se.close_at_cutoff(s, "agent-1", now, generation=1),
+            lambda s, now: se.stop_shift(s, "owner-1", now),
+            lambda s, now: se.record_spend(s, "agent-1", 150.0, now, generation=1),
+            lambda s, now: se.start_item(s, "agent-1", "b-517", backlog, now, generation=1),
+            lambda s, now: se.select_next(s, backlog, "agent-1", now, generation=1),
+            lambda s, now: se.may_yield(s, "agent-1", now, generation=1, eligible=False),
+            lambda s, now: se.renew_lease(s, "agent-1", now, generation=1),
+            lambda s, now: co.postflight(s, "agent-1", now, generation=1),
+            lambda s, now: se.rebaseline_spend(s, "owner-1", 150.0, now, generation=1),
+        )
+        for bad in ("2026-11-26T09:00:00-03:00", True, float("nan"), float("inf"),
+                    float("-inf"), None, 10 ** 400):
+            with self.assertRaises(se.ShiftError, msg=repr(bad)) as err:
+                night_shift(now=bad)
+            self.assertEqual(err.exception.code, "BAD_NOW", repr(bad))
+            for call in calls:
+                state = night_shift()
+                se.record_spend(state, "agent-1", 149.15, 1000, generation=1)
+                before = se.snapshot(state)
+                with self.assertRaises(se.ShiftError, msg=repr(bad)) as err:
+                    call(state, bad)
+                self.assertEqual(err.exception.code, "BAD_NOW", repr(bad))
+                self.assertEqual(state, before, repr(bad))
+            wd = wdg.new_watchdog(watchdog_id="w", scope="x", target_holder="agent-1",
+                                  generation=1, ack_timeout_secs=5, misses_to_confirm=2, now=1)
+            with self.assertRaises(se.ShiftError) as err:
+                wdg.observe(wd, now=bad)
+            self.assertEqual(err.exception.code, "BAD_NOW")
+        state = night_shift(now=1000.5)  # a float or an int epoch is fine
+        self.assertEqual(se.cutoff_reason(state, DEADLINE), "DEADLINE_REACHED")
 
 
 if __name__ == "__main__":

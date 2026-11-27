@@ -19,7 +19,7 @@ description: |
 allowed-tools: "Read Write Edit Bash Grep Glob"
 compatibility: "Portable Agent Skills core. Host-neutral: every runtime maps timer, wakeup, tracker connectors and identity through an adapter that declares its capabilities; a missing capability fails closed or reports DEGRADED. No vendor runtime is required."
 metadata:
-  version: "0.3.0"
+  version: "0.3.1"
   scope: AAIF cross-vendor
   family: orchestration-convergence
   cross_link_slug: on-call-shift
@@ -371,7 +371,7 @@ python3 -m unittest discover -s skills/on-call-shift/tests -v
 83. A valid recovery after restart reopens once and keeps the item.
 84. The save counter never goes back; an equal count is not newer.
 
-Work loop (postmortem night-20261125; `test_92`–`test_125`; 112–114 and 121 are in `tests/test_continuity.py`):
+Work loop (postmortem night-20261125; `test_92`–`test_127`; 112–114 and 121 are in `tests/test_continuity.py`):
 
 92. Items of a given list start in flight (`start_item`) with the adopt checks; adoption stays closed.
 93. A money cap is a measured delta from a baseline; no fresh measurement → no new work; admission freezes at the threshold; a reading that goes down freezes it.
@@ -407,6 +407,8 @@ Work loop (postmortem night-20261125; `test_92`–`test_125`; 112–114 and 121 
 123. A money cap needs a deadline (`MISSING_FIELD`, `budget.deadline`).
 124. A ledger that stays unreadable ends the tick-only chain two leases after its first failure (`METER_FLAGGED_TOO_LONG`, nothing re-armed, even with a heartbeat still armed).
 125. A count is a whole number: `1.9`, `2.5`, `True` or `"2.7"` is `BAD_BUDGET`, never truncated; `3.0` and `"4"` are whole.
+126. A v0.2.0 state whose money cap or deadline lives only in its log (`usd_ledger_armed`) is migrated from the most recent such event: `until` (ISO-8601 with an offset) becomes the deadline in epoch seconds, UTC, and the cap a USD `money` delta from `baseline_usd`; each missing field is promoted on its own and an explicit one is never overwritten (`promoted` / `kept`); a malformed or naive `until` or a missing field promotes nothing and is logged (`legacy_budget_not_promoted`); a non-numeric `at` leaves the meter `SPEND_NOT_MEASURED`. The incident's own file then closes at its cutoff (#619).
+127. Every public API that takes `now` refuses a boolean, a non-number (an ISO string too), an integer too large for a float, NaN or ±infinity with `BAD_NOW` before any change (#619).
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
@@ -432,6 +434,7 @@ false relief or false adoption incidents (E5).
 ## Changelog
 | Version | Date | Change |
 |---|---|---|
+| 0.3.1 | 2026-11-27 | #619: `migrate()` promotes a v0.2.0 deadline and USD cap recorded only in the log (most recent `usd_ledger_armed`; explicit budget kept; malformed or naive `until` logged, never guessed), so the incident's file closes at its cutoff; every public API that takes `now` raises `BAD_NOW` for a boolean, non-number, NaN or infinity before any change. Scenarios 92–127 (126–127 new). |
 | 0.3.0 | 2026-11-26 | Postmortem night-20261125 (v0.2.0 opened a shift and delivered 0 items in 11 h). Mandatory work loop with `may_yield` as the only exit; OMP host adapter (background job = wakeup, async `sleep` ≤ half a lease = heartbeat, `SUPPORTED` when bound to the supervisor's session); `start_item` for a given list; money budget measured as a delta plus deadline with automatic freeze; holder `close_at_cutoff` (`stop.kind=cutoff`); lease renewed on tick and on arming; one-call intake (scope list, typed backlog, budget dict); POSTFLIGHT freeze liftable on the next turn; `load`/`load_checked` migrate v0.2.0 files. Independent-verdict fixes: a spend reading that contradicts the meter (down, NaN, negative, not a number) makes it `SPEND_UNMEASURABLE` (sticky) until the principal's `rebaseline_spend`, which keeps the spend counted, and a new holder re-baselines on its own ledger; a failed read (`None`, on `record_spend` or `apply_tick`) is `SPEND_NOT_READ` until the next good reading; while either holds, a tick-only heartbeat chain keeps the lease and the deadline close, for at most two leases (`METER_FLAGGED_TOO_LONG`); a money cap needs a deadline; counts are whole numbers; `capabilities` is an intake field; `HEARTBEAT_AFTER_DEADLINE`; a later safety freeze replaces `POSTFLIGHT` and relief lifts only `POSTFLIGHT`; `select_next` answers `reopen_admission`; `load_checked` saves a migrated file, including a legacy `.prev` it falls back to; schema id `state@2` (a v0.2.0 engine's `load()` refuses it); deadline in epoch seconds, UTC; the holder never supplies the principal's name. Scenarios 92–125. |
 | 0.2.0 | 2026-11-23 | Continuity: autosave per transition (children too), handoff derived from the snapshot, preflight/postflight, diagnosis, a separate logic-only watchdog (nonce + ACK, timeout, one per scope, logical fencing, disposable-only stop). Conflict resolver. Judge fixes: holder never grants a human gate; every connector gate kept; delivery dedupe over all sent results; linked keys merge; digest echo. 72 numbered scenarios. Own team and own tools: admission, drain, idempotent retirement, shared resources parked. |
 | 0.1.1 | 2026-11-23 | Review-thread fixes: adopt re-checks limits; generation required on every mutator; live handoff ACK; event ACK by recipient; late receipt; UDV reset on result change; exact wakeup target. Decision-point lenses, incident preemption, route change only on new evidence, precedence of stop/revocation. Succession hardening: successor policy bound to one generation and consumed by its takeover; replay, self-succession and stale arming refused; `arm_successor` for the principal; wakeup limits stated; schema/example sync test. 46 numbered scenarios. |

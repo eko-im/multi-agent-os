@@ -1,0 +1,98 @@
+{
+  "admission": {
+    "open": false,
+    "reason": "CUTOFF_0900_REACHED (operator budget window ended 2026-11-26T09:00-03:00)"
+  },
+  "adopted": {},
+  "backlog": "~/tmp/night-shift-opening-prompt.md \u00a72 (sha256 203e5669)",
+  "budget": {
+    "limit": 50,
+    "spent": 0
+  },
+  "capacity": 2,
+  "children": {},
+  "conflict_log": {},
+  "consumed_takeovers": [],
+  "continuity": {
+    "mode": "DEGRADED",
+    "reason": "NO_PREAUTHORIZED_SUCCESSOR",
+    "uninterrupted_claim": false
+  },
+  "cursor": {
+    "last_event_id": null,
+    "seq": 0
+  },
+  "decisions": {},
+  "deliveries": {},
+  "effects": [],
+  "gates": {},
+  "generation": 1,
+  "handoff": null,
+  "holder": "omp:01a20e56-ecbe-7673-8116-76600e63ce53",
+  "in_flight": [],
+  "incident": null,
+  "lease": {
+    "expires_at": 1795657699.734354,
+    "holder": "omp:01a20e56-ecbe-7673-8116-76600e63ce53",
+    "lease_secs": 3600
+  },
+  "log": [
+    {
+      "at": 1795654045.286189,
+      "event": "shift_opened",
+      "holder": "omp:01a20e56-ecbe-7673-8116-76600e63ce53"
+    },
+    {
+      "at": 1795654045.286189,
+      "event": "reopened_gen1",
+      "note": "estado anterior (backlog null + ado\u00e7\u00e3o) descartado; PostMergeVerdictG1 cancelado; budget engine = ado\u00e7\u00f5es",
+      "until": "2026-11-26T09:00:00-03:00",
+      "usd_cap": 50,
+      "usd_spent": "nm"
+    },
+    {
+      "at": 1795654099.734354,
+      "baseline_usd": 149.15,
+      "cap_delta_usd": 50,
+      "event": "usd_ledger_armed",
+      "freeze_at_delta_usd": 40,
+      "source": "PI_SESSION_FILE sum(cost.total)",
+      "until": "2026-11-26T09:00:00-03:00"
+    },
+    {
+      "at": 1795695090.7435489,
+      "event": "admission_frozen_cutoff",
+      "items_done": 0,
+      "usd_delta_last_measured": 1.17
+    }
+  ],
+  "mantras": [
+    "change the decision when the evidence changes",
+    "a verifiable increment beats an announced plan"
+  ],
+  "mantras_source": "default",
+  "parked": [],
+  "pending_events": {},
+  "principal": "operador",
+  "processed_events": [],
+  "reopened": {},
+  "save_seq": 0,
+  "schema": "on-call-shift/state@1",
+  "scope": "ekson73/*, eko-im/*, vek-im/* (prod somente leitura), Jira VKS, sess\u00f5es locais",
+  "shift_id": "night-20261125",
+  "status": "ACTIVE",
+  "successor_policy": null,
+  "supervisor_target": "operador neste chat OMP (omp:01a20e56)",
+  "team": {
+    "members": {},
+    "seats": 2
+  },
+  "wakeup": {
+    "always_on_claim": false,
+    "bound_target": null,
+    "mode": "DEGRADED",
+    "reason": "NO_BOUND_WAKEUP_TRANSPORT",
+    "recovery": "bind a host wakeup transport to the exact supervisor, or poll on the next human or scheduled turn; report the gap, do not claim coverage",
+    "transport": null
+  }
+}
