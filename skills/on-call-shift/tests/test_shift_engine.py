@@ -1806,12 +1806,27 @@ class Issue619(unittest.TestCase):
             self.assertEqual((entry["event"], entry["source_event"]),
                              ("legacy_budget_not_promoted", "usd_ledger_armed"))
             self.assertIn(why, entry["reason"])
-        # an explicit budget is never overwritten by the log
+        # an explicit budget field is never overwritten; only the missing one is promoted
         explicit = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00"),
                                        budget={"limit": 5, "spent": 0, "deadline": 5000}))
-        self.assertEqual((explicit["budget"]["deadline"], explicit["budget"]["money"]),
-                         (5000, None))
-        self.assertNotIn("legacy_budget", explicit["log"][-1]["event"])
+        self.assertEqual(explicit["budget"]["deadline"], 5000)
+        self.assertEqual(explicit["budget"]["money"]["limit"], 50)
+        self.assertEqual((explicit["log"][-1]["promoted"], explicit["log"][-1]["kept"]),
+                         (["money"], ["deadline"]))
+        capped = {"currency": "EUR", "limit": 9, "freeze_at": 9, "baseline": 1, "spent": 0.0,
+                  "measured_at": 1, "source": None}
+        kept = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00"),
+                                   budget={"limit": 5, "spent": 0, "money": dict(capped)}))
+        self.assertEqual(kept["budget"]["deadline"], 1795694400)
+        self.assertEqual(kept["budget"]["money"]["currency"], "EUR")
+        both = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00"), budget={
+            "limit": 5, "spent": 0, "deadline": 5000, "money": dict(capped)}))
+        self.assertEqual(both["budget"]["deadline"], 5000)
+        self.assertNotIn("legacy_budget", both["log"][-1]["event"])
+        # a non-numeric `at` is not a measurement: the meter waits for a reading
+        odd_at = se.migrate(v1_state(armed("2026-11-26T09:00:00-03:00", at="yesterday")))
+        self.assertIsNone(odd_at["budget"]["money"]["measured_at"])
+        self.assertEqual(se._spend_block(odd_at, 2000), "SPEND_NOT_MEASURED")
         plain = se.migrate(v1_state())  # no event: nothing to promote, nothing logged
         self.assertEqual(plain["log"], new_shift()["log"])
 
@@ -1845,9 +1860,10 @@ class Issue619(unittest.TestCase):
             lambda s, now: se.may_yield(s, "agent-1", now, generation=1, eligible=False),
             lambda s, now: se.renew_lease(s, "agent-1", now, generation=1),
             lambda s, now: co.postflight(s, "agent-1", now, generation=1),
+            lambda s, now: se.rebaseline_spend(s, "owner-1", 150.0, now, generation=1),
         )
         for bad in ("2026-11-26T09:00:00-03:00", True, float("nan"), float("inf"),
-                    float("-inf"), None):
+                    float("-inf"), None, 10 ** 400):
             with self.assertRaises(se.ShiftError, msg=repr(bad)) as err:
                 night_shift(now=bad)
             self.assertEqual(err.exception.code, "BAD_NOW", repr(bad))

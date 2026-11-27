@@ -91,8 +91,12 @@ def _number(value, field, *, count=False):
 def _check_now(now):
     """`now` is epoch seconds as a finite int or float: a boolean, a string (an ISO date too),
     None, NaN or infinity is a contract error, raised before anything changes."""
-    if (isinstance(now, bool) or not isinstance(now, (int, float))
-            or not math.isfinite(now)):
+    try:
+        finite = (not isinstance(now, bool) and isinstance(now, (int, float))
+                  and math.isfinite(now))
+    except OverflowError:  # an int too large for a float
+        finite = False
+    if not finite:
         raise ShiftError("BAD_NOW", f"epoch seconds as a finite number, not {now!r}")
 
 
@@ -285,6 +289,8 @@ def _iso_epoch(value):
     timestamp is refused: its zone would be a guess."""
     if not isinstance(value, str):
         return None
+    if value.endswith(("Z", "z")):  # fromisoformat accepts "Z" only from Python 3.11
+        value = value[:-1] + "+00:00"
     try:
         parsed = datetime.datetime.fromisoformat(value)
     except ValueError:
@@ -318,19 +324,24 @@ def _legacy_terms(state):
         return None, dict(skipped, reason=str(err))
     if deadline >= DEADLINE_MAX_EPOCH_SECS or not 0 < freeze_at <= limit:
         return None, dict(skipped, reason="BAD_BUDGET: deadline or 0 < freeze_at <= cap")
+    at = latest.get("at")
+    try:
+        measured_at = None if at is None else _number(at, "at")
+    except ShiftError:
+        measured_at = None  # unknown: SPEND_NOT_MEASURED until the next reading (fail closed)
     money = {"currency": "USD", "limit": limit, "freeze_at": freeze_at, "baseline": baseline,
-             "spent": 0.0, "measured_at": latest.get("at"), "source": latest.get("source"),
+             "spent": 0.0, "measured_at": measured_at, "source": latest.get("source"),
              "inconsistent_at": None, "read_failed_at": None}
     return ({"deadline": deadline, "money": money},
-            {"at": latest.get("at"), "event": "legacy_budget_promoted",
+            {"at": measured_at, "event": "legacy_budget_promoted",
              "source_event": "usd_ledger_armed", "deadline_utc": _utc(deadline),
              "cap_delta_usd": limit, "baseline_usd": baseline})
 
 
 def migrate(state):
     """Bring a state@1 (v0.2.0) file to state@2: additive and idempotent. Anything that is
-    not an on-call-shift state of a known schema is refused, never migrated. A state@1 whose
-    budget carries no deadline and no money gets them from its most recent `usd_ledger_armed`
+    not an on-call-shift state of a known schema is refused, never migrated. A state@1 budget
+    field that is missing (deadline, money) is filled from the most recent `usd_ledger_armed`
     log event (deadline = `until`, an ISO-8601 timestamp with an offset, as epoch seconds UTC;
     money = the USD cap as a delta from `baseline_usd`); an explicit budget field is never
     overwritten, and an event that cannot be promoted is logged, never guessed."""
@@ -340,11 +351,13 @@ def migrate(state):
         raise ShiftError("SCHEMA_MISMATCH", str(state.get("schema") if isinstance(state, dict)
                                                 else type(state).__name__))
     budget = state["budget"]
-    if (state["schema"] in LEGACY_SCHEMAS and budget.get("deadline") is None
-            and budget.get("money") is None):
+    missing = [k for k in ("deadline", "money") if budget.get(k) is None]
+    if state["schema"] in LEGACY_SCHEMAS and missing:
         promoted, entry = _legacy_terms(state)
         if promoted:
-            budget.update(promoted)
+            budget.update({k: promoted[k] for k in missing})
+            entry["promoted"] = missing
+            entry["kept"] = [k for k in ("deadline", "money") if k not in missing]
         if entry:
             state["log"].append(entry)
     state["schema"] = SCHEMA

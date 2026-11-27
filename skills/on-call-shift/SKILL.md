@@ -407,8 +407,8 @@ Work loop (postmortem night-20261125; `test_92`–`test_127`; 112–114 and 121 
 123. A money cap needs a deadline (`MISSING_FIELD`, `budget.deadline`).
 124. A ledger that stays unreadable ends the tick-only chain two leases after its first failure (`METER_FLAGGED_TOO_LONG`, nothing re-armed, even with a heartbeat still armed).
 125. A count is a whole number: `1.9`, `2.5`, `True` or `"2.7"` is `BAD_BUDGET`, never truncated; `3.0` and `"4"` are whole.
-126. A v0.2.0 state whose money cap and deadline live only in its log (`usd_ledger_armed`) is migrated from the most recent such event: `until` (ISO-8601 with an offset) becomes the deadline in epoch seconds, UTC, and the cap a USD `money` delta from `baseline_usd`; an explicit budget field is never overwritten; a malformed or naive `until` or a missing field promotes nothing and is logged (`legacy_budget_not_promoted`). The incident's own file then closes at its cutoff (#619).
-127. Every public API that takes `now` refuses a boolean, a non-number (an ISO string too), NaN or ±infinity with `BAD_NOW` before any change (#619).
+126. A v0.2.0 state whose money cap or deadline lives only in its log (`usd_ledger_armed`) is migrated from the most recent such event: `until` (ISO-8601 with an offset) becomes the deadline in epoch seconds, UTC, and the cap a USD `money` delta from `baseline_usd`; each missing field is promoted on its own and an explicit one is never overwritten (`promoted` / `kept`); a malformed or naive `until` or a missing field promotes nothing and is logged (`legacy_budget_not_promoted`); a non-numeric `at` leaves the meter `SPEND_NOT_MEASURED`. The incident's own file then closes at its cutoff (#619).
+127. Every public API that takes `now` refuses a boolean, a non-number (an ISO string too), an integer too large for a float, NaN or ±infinity with `BAD_NOW` before any change (#619).
 
 ## Files
 - `references/shift-contract.md` — state, lease, cursor, the four signals, handoff, stop.
