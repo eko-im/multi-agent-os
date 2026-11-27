@@ -11,4 +11,4 @@
 # password default in an insights doc. Rotated and invalidated on 2026-10-26
 # (HITL H-0033 in the operator's private ledger). Current tree redacted by #473.
 # Remove this line if that rotation is ever reverted.
-44501845428e9a8762f242d573d5f230d7e5130b:docs/insights/secret-management-strategy.md:vek-db-password:46
+44501845428e9a8762f242d573d5f230d7e5130b:docs/insights/secret-management-strategy.md:app-db-password:46

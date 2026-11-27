@@ -101,7 +101,7 @@ def find_work_compass() -> Path | None:
 
 def find_hitl_script() -> Path | None:
     cands = [
-        Path.home() / "Projects" / "eko-engram" / "scripts" / "hitl-punch-list.py",
+        Path.home() / "Projects" / "notes-vault" / "scripts" / "hitl-punch-list.py",
     ]
     hit = _first_existing(cands)
     if hit:
