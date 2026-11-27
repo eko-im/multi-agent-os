@@ -32,6 +32,8 @@ Agent definitions for the multi-agent-os plugin. These define specialized person
 | secops-engineer | `secops-engineer.md` | SecOps/AppSec: exposure response, rotation runbooks for the owner, secret-scan triage (locations only), CVE fix PRs (v0.1.0, dogfooding) |
 | release-engineer | `release-engineer.md` | Release/CI: merge convergence across repos, fail-closed CI gates, pipeline parity, branch/release model (v0.1.0, dogfooding) |
 | person-agent-creator | `person-agent-creator.md` | Creates/elevates person-agents (sourced dossier, 33 person-questions, lint gate); first three: `consultants/elon-musk`, `consultants/sam-altman`, `consultants/amodei-siblings` (v2.0.0) |
+| site-reliability-engineer | `site-reliability-engineer.md` | SRE: SLOs, alerting, incident triage, postmortems, runbooks (v0.1.0 draft) |
+| technical-writer | `technical-writer.md` | Docs, runbooks, release notes, doc-drift fixes (v0.1.0 draft) |
 
 ## Agent Categories
 
@@ -73,11 +75,12 @@ Generic, product-agnostic delivery specialists materializing the standard softwa
 roles. Compose with the existing registry (most roles already covered — these fill the genuine
 per-stack/role gaps; see "Role Coverage Map" below).
 
-**Autonomy posture** (all 11): per [`COWORK-AUTONOMY-POLICY.md`](./COWORK-AUTONOMY-POLICY.md) —
+**Autonomy posture** (all 13): per [`COWORK-AUTONOMY-POLICY.md`](./COWORK-AUTONOMY-POLICY.md) —
 co-work as peers and **substitute over the human with NO-HITL when `autonomy_score ≥ 0.90`** in
 their own domain (a stricter bar than the default HIGH ≥0.85). ⛔ Carve-outs HOLD even at ≥0.90
 (HUMAN_DOMAIN · merge→main/prod = HITL human-owner · ABSOLUTE guardrails); council-before-HITL first. Seats still
-`latent` (`solution-architect`, `devsecops-engineer`, `devops-engineer` until promoted) hold no
+`latent` (`solution-architect`, `devsecops-engineer`, `devops-engineer`, `site-reliability-engineer`,
+`technical-writer` until promoted) hold no
 NO-HITL grant: every domain decision goes to the human owner.
 
 - `angular-frontend-engineer` — Angular SPA implementation/review
@@ -91,6 +94,8 @@ NO-HITL grant: every domain decision goes to the human owner.
 - `devsecops-engineer` — threat modeling, supply chain, IAM, authz review (generic; privacy stays with DPO)
 - `devops-engineer` — hosted CI/CD + PaaS (`specialty`); Kubernetes/GitOps stays with `gitops-engineer`
 - `security-incident-responder` — secrets exposure / CSIRT lifecycle, prepares and verifies (generic)
+- `site-reliability-engineer` — SLOs, alerting, incidents, postmortems
+- `technical-writer` — docs, runbooks, release notes
 
 #### Role Coverage Map (reuse-first — most cowork roles already exist)
 
@@ -124,11 +129,18 @@ that used them keeps working.
 | DPO / Privacy | **GAP→NEW** | `data-privacy-officer` |
 | QA / Tester | EXISTS | `architecture:qa-engineer` · `test-generator` · `maos:qa-validator` |
 | Solution Architect | **GAP→NEW** | `solution-architect` · optional: `architecture:architect` · `system-designer` |
+| SRE / Incident | **GAP→NEW** | `site-reliability-engineer` |
+| Technical Writer | **GAP→NEW** | `technical-writer` |
 | CEO / Founder | EXISTS (persona-lens — no standalone agent) | `maos:founder-coach` (lifecycle diagnosis + exit gates) + C-suite consultant archetypes: `maos:consultants:steve-jobs` · `maos:consultants:sam-altman` · `maos:consultants:bill-gates` · `maos:consultants:sundar-pichai` · `maos:consultants:mark-zuckerberg` |
 | Chairman / Board | EXISTS (persona-lens — no standalone agent) | `maos:governance-auditor` (board/governance oversight) + chairman-class consultant archetypes: `maos:consultants:eric-jing` (Ant Group chairman) · `maos:consultants:bill-gates` |
 | Auditor | EXISTS | `maos:governance-auditor` · `validation-auditor` |
 | Agent-Orchestrator / Task-Orchestrator | EXISTS | `maos:orchestrator` · `taskmaster:task-orchestrator` |
 | Git workflow (add/branch/pr/merge…) | EXISTS | `maos:gitops-engineer` (K8s) · `maos:devops-engineer` (hosted CI/CD, PaaS) + `deployment-engineer` (verb-set covered) |
+
+### Organizational roles (levels + RACI)
+
+Role contracts (all `latent`, ADR-019) live in `roles/`, bound to the agents above; the six-level map
+(political → operational) and the RACI by decision type are in [`docs/org/agentic-org-raci.md`](../docs/org/agentic-org-raci.md).
 
 ## Agent Naming Convention
 

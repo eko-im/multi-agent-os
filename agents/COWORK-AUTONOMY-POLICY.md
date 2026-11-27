@@ -4,8 +4,9 @@
 > (`angular-frontend-engineer` · `react-frontend-engineer` · `quarkus-backend-engineer` ·
 > `supabase-engineer` · `prompt-context-engineer` · `agile-product-lead` ·
 > `data-privacy-officer` · `solution-architect` · `devsecops-engineer` · `devops-engineer` ·
-> `security-incident-responder`). Each agent references this file (DRY — the bar + carve-outs
-> live here once, not copied into 11 frontmatters). Levels and seat attributes: [`SEAT-PROFILE.md`](./SEAT-PROFILE.md).
+> `security-incident-responder` · `site-reliability-engineer` · `technical-writer`).
+> Each agent references this file (DRY — the bar + carve-outs live here once, not copied
+> into 13 frontmatters). Levels and seat attributes: [`SEAT-PROFILE.md`](./SEAT-PROFILE.md).
 
 ## The principle — co-work as peers; substitute over the human at ≥0.90
 
