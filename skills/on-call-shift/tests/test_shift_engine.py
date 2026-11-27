@@ -1795,6 +1795,7 @@ class Issue619(unittest.TestCase):
         for event, why in ((armed("26/11/2026 09:00"), "until"),
                            (armed("2026-11-26T09:00:00"), "until"),  # naive: zone unknown
                            (armed(None), "until"),
+                           (armed("1900-01-01T00:00:00+00:00"), "deadline"),  # #622
                            (armed("2026-11-26T09:00:00-03:00", cap_delta_usd=None),
                             "cap_delta_usd"),
                            (armed("2026-11-26T09:00:00-03:00", baseline_usd="x"),
