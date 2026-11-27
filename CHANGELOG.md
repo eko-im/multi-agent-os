@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `on-call-shift` 0.3.2: legacy deadline validated like `open_shift` (#622)
+
+- `migrate()` now validates a promoted legacy `until` with the same `_deadline` check `open_shift` uses (finite, non-negative epoch seconds, below the millisecond bound); a pre-1970 `until` (e.g. `1900-01-01`, deadline -2208988800) is no longer promoted and `legacy_budget_not_promoted` logs the `BAD_BUDGET: deadline` reason. A valid `until` is still promoted.
+- Scenario 126 extended (`tests/test_shift_engine.py`).
+
 ### Fixed — `on-call-shift` 0.3.1: legacy deadline migrated; invalid `now` refused (#619)
 
 - `migrate()` (used by `load()` and `load_checked()`) promotes a v0.2.0 (`state@1`) money cap and deadline that were recorded only in the log: from the most recent `usd_ledger_armed` event, `until` (ISO-8601 with an offset) becomes `budget.deadline` in epoch seconds, UTC, and `cap_delta_usd` / `baseline_usd` / `freeze_at_delta_usd` become a USD `budget.money` delta. Each missing field is promoted on its own and an explicit `deadline` or `money` is never overwritten (the log entry lists `promoted` and `kept`); a malformed or naive `until`, or a missing or non-numeric field, promotes nothing and appends `legacy_budget_not_promoted` naming what was skipped; a non-numeric `at` leaves the meter `SPEND_NOT_MEASURED` (fail closed). The incident's own `night-20261125` state file (fixture `tests/fixtures/night-20261125-state-v1.json`) now reaches `close_at_cutoff` and ends `STOPPED` with `stop.kind=cutoff`, instead of `NOT_AT_CUTOFF`.

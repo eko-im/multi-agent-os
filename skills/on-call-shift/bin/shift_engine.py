@@ -130,6 +130,15 @@ def _utc(epoch_secs):
         "%Y-%m-%dT%H:%M:%SZ")
 
 
+def _deadline(value):
+    """The principal's deadline as open_shift accepts it: a finite, non-negative epoch in
+    seconds, UTC (a millisecond epoch is refused). The one check, shared with migrate()."""
+    deadline = _number(value, "deadline")
+    if deadline >= DEADLINE_MAX_EPOCH_SECS:
+        raise ShiftError("BAD_BUDGET", "deadline: epoch seconds (UTC), not milliseconds")
+    return deadline
+
+
 def _new_budget(budget, now):
     """An int is a count of adoptions (the v0.2 shape). A dict carries the principal's own
     terms, any of: "adoptions" (a whole number); a money cap ("currency", "amount", optional
@@ -145,9 +154,7 @@ def _new_budget(budget, now):
     if adoptions is not None:
         adoptions = _number(adoptions, "adoptions", count=True)
     if deadline is not None:
-        deadline = _number(deadline, "deadline")
-        if deadline >= DEADLINE_MAX_EPOCH_SECS:
-            raise ShiftError("BAD_BUDGET", "deadline: epoch seconds (UTC), not milliseconds")
+        deadline = _deadline(deadline)
     currency = budget.get("currency")
     if currency is not None or budget.get("amount") is not None:
         if currency is None or currency == "":
@@ -316,14 +323,15 @@ def _legacy_terms(state):
         return None, dict(skipped, reason="until: an ISO-8601 timestamp with an offset",
                           value=latest.get("until"))
     try:
+        deadline = _deadline(deadline)  # the same check open_shift applies (#622)
         limit = _number(latest.get("cap_delta_usd"), "cap_delta_usd")
         baseline = _number(latest.get("baseline_usd"), "baseline_usd")
         freeze_at = (limit if latest.get("freeze_at_delta_usd") is None
                      else _number(latest["freeze_at_delta_usd"], "freeze_at_delta_usd"))
     except ShiftError as err:
         return None, dict(skipped, reason=str(err))
-    if deadline >= DEADLINE_MAX_EPOCH_SECS or not 0 < freeze_at <= limit:
-        return None, dict(skipped, reason="BAD_BUDGET: deadline or 0 < freeze_at <= cap")
+    if not 0 < freeze_at <= limit:
+        return None, dict(skipped, reason="BAD_BUDGET: 0 < freeze_at <= cap")
     at = latest.get("at")
     try:
         measured_at = None if at is None else _number(at, "at")
