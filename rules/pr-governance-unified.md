@@ -328,6 +328,9 @@ só nele deixa o defeito entrar.
 > `skills/bot-finding-arbiter` (*Praetor*) — the default handler that elevates this 5-way menu to a
 > per-finding 7-way disposition (+ the teach-the-bot edict when the bot is verifiably wrong).
 > See § Bot-Config Correction Discipline below for the binding policy.
+> Snyk is **DISCONTINUED since 2026-11-27** (subscription cancelled): `code/snyk` ERROR/quota does not
+> block merge and does not count toward convergence; do not reinstall without an operator decision.
+> SSOT: `ekson73/akasha-claude` `docs/rules-full/pr-review-protocol.md` §0 (PR #470).
 
 ## Step 9: Merge
 
