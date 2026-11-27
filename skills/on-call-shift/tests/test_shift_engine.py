@@ -1307,7 +1307,7 @@ class WorkLoop(unittest.TestCase):
             "limit": None, "spent": 0, "deadline": DEADLINE,
             "money": {"currency": "USD", "limit": 50.0, "freeze_at": 40.0, "baseline": None,
                       "spent": 0.0, "measured_at": None, "source": None,
-                      "inconsistent_at": None}})
+                      "inconsistent_at": None, "read_failed_at": None}})
         self.assertEqual(new_shift()["budget"],
                          {"limit": 5, "spent": 0, "money": None, "deadline": None})
         for bad, code in ((dict(backlog=[]), "BAD_BACKLOG"), (dict(backlog=""), "BAD_BACKLOG"),
@@ -1443,19 +1443,25 @@ class WorkLoopReviewFindings(unittest.TestCase):
         se.record_spend(ok, "agent-1", 149.15, 1001, generation=1)
         self.assertTrue(admit(ok)["admitted"])
 
-    def test_117_an_unreadable_ledger_on_a_tick_freezes_an_omitted_reading_does_not(self):
-        # codex @8bca8951: spend_total=None is a failed reading, as in record_spend(None)
+    def test_117_an_unreadable_ledger_blocks_new_work_until_a_good_reading_never_sticky(self):
+        # codex @8bca8951: a None reading must stop new work at once; verdict r2: a failed
+        # read is not a contradiction, so it never sticks and never stalls the shift
         state = night_shift()
         money = state["budget"]["money"]
         se.record_spend(state, "agent-1", 149.15, 1001, generation=1)
         se.apply_tick(state, "agent-1", "t1", 1100, generation=1)  # this wake did not measure
         self.assertEqual((state["admission"]["open"], money["measured_at"]), (True, 1001))
         se.apply_tick(state, "agent-1", "t2", 1200, generation=1, spend_total=None)
-        self.assertEqual((state["admission"]["reason"], money["inconsistent_at"],
-                          state["cursor"]["last_event_id"]),
-                         ("SPEND_MEASUREMENT_INCONSISTENT", 1200, "t2"))  # applied whole
-        self.assertEqual(se.may_yield(state, "agent-1", 1201, generation=1,
-                                      eligible=False)["reason"], "SPEND_UNMEASURABLE")
+        self.assertEqual((money["read_failed_at"], money["inconsistent_at"],
+                          state["cursor"]["last_event_id"]), (1200, None, "t2"))  # applied whole
+        self.assertEqual(se.select_next(state, given_backlog(), "agent-1", 1201,
+                                        generation=1)["reason"], "SPEND_NOT_READ")
+        gate = se.may_yield(state, "agent-1", 1201, generation=1, eligible=True)
+        self.assertEqual((gate["next"], gate["reason"]), ("arm_heartbeat", "SPEND_NOT_READ"))
+        se.apply_tick(state, "agent-1", "t3", 1300, generation=1, spend_total=150.0)
+        self.assertEqual((money["read_failed_at"], money["spent"]), (None, 0.85))
+        self.assertEqual(se.select_next(state, given_backlog(), "agent-1", 1301,
+                                        generation=1)["action"], "start")
         plain = night_shift(budget=5)  # no money cap: any reading is refused, like record_spend
         with self.assertRaises(se.ShiftError) as err:
             se.apply_tick(plain, "agent-1", "t1", 1001, generation=1, spend_total=None)
@@ -1478,10 +1484,12 @@ class VerdictFindings(unittest.TestCase):
                                       eligible=True)["next"], "record_spend")
         out = se.record_spend(state, "agent-1", 100.0, 1701, generation=1)  # goes down
         self.assertEqual(out["reason"], "SPEND_MEASUREMENT_INCONSISTENT")
-        for now in (1702, 1702 + LEASE // 2):
-            gate = se.may_yield(state, "agent-1", now, generation=1, eligible=False)
-            self.assertEqual((gate["yield"], gate["reason"], gate["next"]),
-                             (True, "SPEND_UNMEASURABLE", "report_degraded"))
+        gate = se.may_yield(state, "agent-1", 1702, generation=1, eligible=True)
+        self.assertEqual((gate["yield"], gate["reason"], gate["next"], gate["until"]),
+                         (True, "SPEND_UNMEASURABLE", "report_degraded", 1900))  # no dispatch
+        gate = se.may_yield(state, "agent-1", 1702 + LEASE // 2, generation=1, eligible=False)
+        self.assertEqual((gate["yield"], gate["reason"], gate["next"]),
+                         (False, "SPEND_UNMEASURABLE", "arm_heartbeat"))  # tick-only, no spin
         self.assertEqual(se.record_spend(state, "agent-1", 200.0, 1703, generation=1)["reason"],
                          "SPEND_UNMEASURABLE")  # sticky until the principal re-baselines
         self.assertEqual(se.select_next(state, given_backlog(), "agent-1", 1704,
@@ -1593,6 +1601,87 @@ class VerdictFindings(unittest.TestCase):
         listed = {int(line.split(".", 1)[0]) for line in text.splitlines()
                   if re.match(r"^\d+\. ", line)}
         self.assertLessEqual(set(range(92, top + 1)), listed)
+
+
+OMIT = object()  # a tick-only wake: apply_tick without spend_total
+
+
+class VerdictRound2(unittest.TestCase):
+    """Independent verdict r2 on PR #618 @cb839548: a meter failure never stalls the shift."""
+
+    def night(self, reading, rebaseline_at=None):
+        """test_99's incident night. `reading(wake, total)` is what the host passes at each
+        wake: the true running total, None (the ledger could not be read), a contradicting
+        number, or OMIT. Returns the state, the (wake, item) starts and the gate reasons."""
+        backlog = given_backlog()
+        state = night_shift(now=0, lease_secs=3600, budget={
+            "currency": "USD", "amount": 50, "freeze_at": 40, "deadline": 11 * 3600})
+        se.record_spend(state, "agent-1", 149.15, 1, generation=1)
+        now, total, wakes, rebased, started, reasons = 2, 149.15, 0, False, [], set()
+        for _ in range(500):
+            pick = se.select_next(state, backlog, "agent-1", now, generation=1)
+            if pick["action"] == "start":
+                se.start_item(state, "agent-1", pick["intent_key"], backlog, now, generation=1)
+                started.append((wakes, pick["intent_key"]))
+                continue
+            gate = se.may_yield(state, "agent-1", now, generation=1, eligible=False)
+            reasons.add(gate["reason"])
+            if gate["next"] == "close_at_cutoff":
+                se.close_at_cutoff(state, "agent-1", now, generation=1)
+                break
+            if gate["next"] == "arm_heartbeat":
+                arm(state, now, gate["fire_by"], job_ref=f"bg_{wakes + 1}")
+                continue
+            self.assertTrue(gate["yield"])
+            now, total, wakes = gate["until"], total + 0.5, wakes + 1  # a wake costs
+            self.assertTrue(se.lease_valid(state, "agent-1", now), now)  # never lapses
+            if rebaseline_at is not None and now >= rebaseline_at and not rebased:
+                # on the principal's explicit order (the holder never supplies its name)
+                self.assertTrue(se.rebaseline_spend(state, "owner-1", total, now,
+                                                    generation=1)["rebaselined"])
+                rebased = True
+            value = reading(wakes, total)
+            extra = {} if value is OMIT else {"spend_total": value}
+            se.apply_tick(state, "agent-1", f"bg_{wakes}", now, generation=1, **extra)
+            for key in list(state["in_flight"]):
+                se.complete_item(state, "agent-1", key, author="worker", reviewer="judge",
+                                 now=now, generation=1)
+        else:
+            self.fail("the loop never reached the cutoff")
+        self.assertEqual((state["status"], state["stop"]["kind"], state["stop"]["reason"]),
+                         (se.STOPPED, "cutoff", "DEADLINE_REACHED"))
+        self.assertEqual(wakes, 22)  # one wake per half lease to the deadline, as test_99
+        return state, started, reasons
+
+    def test_118_one_unreadable_read_does_not_halt_the_shift(self):
+        state, started, reasons = self.night(lambda wake, total: None if wake == 1 else total)
+        self.assertEqual(started, [(0, "b-517"), (0, "b-516"), (2, "d-8")])  # none at wake 1
+        self.assertIn("SPEND_NOT_READ", reasons)
+        self.assertIsNone(state["budget"]["money"]["inconsistent_at"])
+
+    def test_119_a_contradiction_keeps_a_tick_only_chain_to_the_deadline_close(self):
+        state, started, reasons = self.night(
+            lambda wake, total: 100.0 if wake == 1 else OMIT)  # wake 1: the total went down
+        self.assertEqual(started, [(0, "b-517"), (0, "b-516")])  # nothing after it
+        self.assertIn("SPEND_UNMEASURABLE", reasons)
+        self.assertEqual(state["budget"]["money"]["inconsistent_at"], 1802)
+
+    def test_120_a_rebaseline_mid_freeze_resumes_the_work(self):
+        state, started, _ = self.night(
+            lambda wake, total: 100.0 if wake == 1 else (total if wake >= 10 else OMIT),
+            rebaseline_at=5 * 3600)
+        self.assertEqual(started, [(0, "b-517"), (0, "b-516"), (10, "d-8")])
+        self.assertIsNone(state["budget"]["money"]["inconsistent_at"])
+        self.assertEqual(state["log"][-1]["event"], "closed_at_cutoff")
+
+    def test_122_the_holder_s_limits_are_written_down(self):  # verdict r2 findings 3 and 4
+        with open(os.path.join(HERE, "..", "SKILL.md"), encoding="utf-8") as handle:
+            text = handle.read()
+        loop = text.split("## Work loop", 1)[1].split("### Host adapters", 1)[0]
+        self.assertIn("never supplies the principal's name", loop)
+        self.assertIn("final `record_spend` before `propose_handoff`", loop)
+        self.assertIn("trusts the list it is handed", text)
+        self.assertIn("Caller-trusted", se.start_item.__doc__)
 
 
 if __name__ == "__main__":

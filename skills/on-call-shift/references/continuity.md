@@ -21,9 +21,12 @@ Executable form: `../bin/continuity.py`, `../bin/watchdog.py`, `resolve_conflict
   save that reads back correctly.
 - `load_checked` loads the newest revision whose hash matches, else `.prev`, else fails. A
   `state@1` (v0.2.0) file is migrated and saved at once (`migrated`; the legacy bytes stay in
-  `.prev`), so the sidecar hash matches the state returned and the next preflight sees no
-  `DIVERGED`; a failed save there is `migrated_unsaved` with admission frozen
-  (`PERSISTENCE_FAILED`).
+  `.prev` until the next save), so the sidecar hash matches the state returned and the next
+  preflight sees no `DIVERGED`; a failed save there is `migrated_unsaved` with admission frozen
+  (`PERSISTENCE_FAILED`). A legacy `.prev` reached by the fallback is saved the same way
+  (`previous_migrated` / `previous_migrated_unsaved`), keeping its trusted bytes as `.prev`. A
+  same-schema `previous` is returned unsaved: autosave it before passing a saved hash to
+  preflight.
 - Children keep their own checkpoint (`checkpoint_child`); the parent stores only a pointer, the
   hash and whether it was received. A child save failure closes the parent's admission.
 - Recovery (`recover_child`): the parent holder (lease + current generation) reads the new child

@@ -101,7 +101,10 @@ def load_checked(path, *, writer=None):
     migration changes (a state@1 / v0.2.0 file) is saved at once, so the sidecar hash matches
     the state returned and the next preflight sees no DIVERGED; that revision is reported as
     "migrated" (the legacy bytes stay in `.prev`), or "migrated_unsaved" when the save failed
-    (admission then frozen PERSISTENCE_FAILED, like any failed save)."""
+    (admission then frozen PERSISTENCE_FAILED, like any failed save). A legacy `.prev` reached
+    by the fallback is saved the same way ("previous_migrated" / "previous_migrated_unsaved"),
+    keeping its trusted bytes as `.prev`. A same-schema "previous" is returned unsaved: the
+    caller autosaves it before passing a saved hash to preflight."""
     try:
         with open(path, "rb") as handle:
             data = handle.read()
@@ -118,9 +121,22 @@ def load_checked(path, *, writer=None):
         pass
     try:
         with open(path + ".prev", "rb") as handle:
-            return se.migrate(json.loads(handle.read())), "previous"
+            data = handle.read()
+        raw = json.loads(data)
     except (OSError, ValueError):
         raise se.ShiftError("NO_VALID_CHECKPOINT", path)
+    state = se.migrate(copy.deepcopy(raw))
+    if state == raw:
+        return state, "previous"
+    # A legacy `.prev`: its trusted bytes go back in place first, so autosave keeps them as
+    # `.prev` (never the current file that failed its hash), then the migrated state is saved.
+    try:
+        (writer or _atomic_write)(path, data)
+    except OSError:
+        state["admission"] = {"open": False, "reason": "PERSISTENCE_FAILED"}
+        return state, "previous_migrated_unsaved"
+    saved = autosave(state, path, writer=writer)
+    return state, "previous_migrated" if saved["saved"] else "previous_migrated_unsaved"
 
 
 def checkpoint_child(parent, child_id, child_state, child_path, *, writer=None):
@@ -420,4 +436,5 @@ def _budget_view(budget):
     money = budget.get("money")
     return {"limit": budget["limit"], "spent": budget["spent"], "deadline": budget["deadline"],
             "money": None if not money else {k: money[k] for k in (
-                "currency", "limit", "freeze_at", "spent", "measured_at", "inconsistent_at")}}
+                "currency", "limit", "freeze_at", "spent", "measured_at", "inconsistent_at",
+                "read_failed_at")}}

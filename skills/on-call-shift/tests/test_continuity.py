@@ -1084,6 +1084,32 @@ class VerdictFindings(unittest.TestCase):
                 se.migrate(dict(shift(), schema=schema))
             self.assertEqual(err.exception.code, "SCHEMA_MISMATCH")
 
+    def test_121_a_legacy_prev_reached_by_the_fallback_is_saved_migrated(self):  # r2 finding 5
+        legacy = shift()
+        for key in ("heartbeat", "stop"):
+            legacy.pop(key, None)
+        legacy["budget"] = {"limit": 5, "spent": 0}
+        legacy["schema"] = "on-call-shift/state@1"
+        co.autosave(legacy, self.path)
+        co.autosave(legacy, self.path)  # `.prev` holds legacy bytes too
+        with open(self.path, "w") as handle:  # a torn current file
+            handle.write('{"schema": "on-call-shift/state@1", "trunc')
+        state, revision = co.load_checked(self.path)
+        self.assertEqual((revision, state["schema"]),
+                         ("previous_migrated", "on-call-shift/state@2"))
+        sidecar = read(self.path + ".sha256").strip()
+        self.assertEqual(sidecar, co.snapshot_sha(state))
+        self.assertEqual(co.preflight(state, "agent-1", 1001, generation=1,
+                                      saved_sha=sidecar)["findings"]["saved_sha"], "match")
+        self.assertEqual(json.loads(read(self.path + ".prev"))["schema"],
+                         "on-call-shift/state@1")  # the trusted legacy bytes, not the torn file
+        self.assertEqual(co.load_checked(self.path), (state, "current"))
+        with open(self.path, "w") as handle:
+            handle.write("{torn")
+        unsaved, revision = co.load_checked(self.path, writer=failing_writer)
+        self.assertEqual((revision, unsaved["admission"]["reason"]),
+                         ("previous_migrated_unsaved", "PERSISTENCE_FAILED"))
+
 
 if __name__ == "__main__":
     unittest.main()
